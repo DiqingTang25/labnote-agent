@@ -53,6 +53,8 @@ export type Experiment = {
   lastParsedAt: string | null;
   /** pgvector embedding (1024-dim), 用于语义相似度 */
   embedding: number[] | null;
+  /** AI 发现的非结构化洞察（关联、建议、风险、后续步骤等） */
+  aiInsights: string;
 };
 
 const newId = () => "exp_" + Math.random().toString(36).slice(2, 9);

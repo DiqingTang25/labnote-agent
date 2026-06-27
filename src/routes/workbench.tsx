@@ -103,6 +103,7 @@ function createBlank(add: (e: Experiment) => void): string {
     attachedFiles: [],
     lastParsedAt: null,
     embedding: null,
+    aiInsights: "",
   };
   add(blank);
   return blank.id;

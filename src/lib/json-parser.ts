@@ -157,6 +157,7 @@ function asPartialExperiment(item: unknown): Partial<Experiment> {
     attachedFiles: [],
     lastParsedAt: null,
     embedding: null,
+    aiInsights: asString(obj.aiInsights) || asString(obj.ai_insights),
   };
 }
 
@@ -217,5 +218,6 @@ export function normalizeExperiment(
     attachedFiles: raw.attachedFiles || defaults?.attachedFiles || [],
     lastParsedAt: raw.lastParsedAt ?? defaults?.lastParsedAt ?? null,
     embedding: (raw as Experiment).embedding ?? defaults?.embedding ?? null,
+    aiInsights: (raw as Experiment).aiInsights || defaults?.aiInsights || "",
   };
 }

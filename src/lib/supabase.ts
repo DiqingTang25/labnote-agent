@@ -114,6 +114,7 @@ function fromRow(r: Record<string, unknown>): Experiment {
     attachedFiles: (r.attached_files as AttachedFile[]) ?? [],
     lastParsedAt: (r.lastParsedAt as string) ?? null,
     embedding: parseEmbedding(r.embedding),
+    aiInsights: (r.ai_insights as string) ?? "",
   };
 }
 
