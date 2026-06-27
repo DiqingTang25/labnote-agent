@@ -94,12 +94,158 @@ export async function parseTextFile(text: string, fileName: string): Promise<str
   ], 4096);
 }
 
-// ===== CSV 数据解析 =====
+// ===== CSV 预分析引擎 =====
+
+type ColumnAnalysis = {
+  name: string;
+  type: "number" | "datetime" | "text";
+  count: number;
+  // numeric stats
+  min?: number;
+  max?: number;
+  mean?: number;
+  trend?: "上升" | "下降" | "稳定" | "波动";
+  // text stats
+  uniqueCount?: number;
+  samples?: string[];
+  // anomalies
+  anomalies?: string[];
+};
+
+function analyzeCSV(csvContent: string): {
+  headers: string[];
+  rowCount: number;
+  columns: ColumnAnalysis[];
+  summary: string;
+} {
+  const lines = csvContent.trim().split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) {
+    return { headers: [], rowCount: 0, columns: [], summary: "CSV 文件为空或只有一行" };
+  }
+
+  // 检测分隔符
+  const firstLine = lines[0];
+  let sep = ",";
+  const sepCounts = { ",": 0, "\t": 0, ";": 0 };
+  for (const s of [",", "\t", ";"]) {
+    sepCounts[s as keyof typeof sepCounts] = firstLine.split(s).length;
+  }
+  const bestSep = Object.entries(sepCounts).sort((a, b) => b[1] - a[1])[0];
+  if (bestSep[1] > 1) sep = bestSep[0];
+
+  // 解析
+  const headers = lines[0].split(sep).map((h) => h.trim().replace(/^"|"$/g, ""));
+  const rows: string[][] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
+    if (cells.length >= headers.length) rows.push(cells);
+    else if (cells.length > 1) {
+      // 补齐缺失列
+      while (cells.length < headers.length) cells.push("");
+      rows.push(cells);
+    }
+  }
+
+  const rowCount = rows.length;
+
+  // 逐列分析
+  const columns: ColumnAnalysis[] = headers.map((name, ci) => {
+    const values = rows.map((r) => r[ci] ?? "");
+    const nonEmpty = values.filter((v) => v !== "" && v !== "-" && v !== "NA");
+
+    // 类型检测
+    const numValues = nonEmpty
+      .map((v) => parseFloat(v))
+      .filter((n) => !isNaN(n));
+
+    const isNumeric = numValues.length > nonEmpty.length * 0.7;
+
+    if (isNumeric) {
+      const min = Math.min(...numValues);
+      const max = Math.max(...numValues);
+      const mean = numValues.reduce((a, b) => a + b, 0) / numValues.length;
+
+      // 趋势检测
+      let trend: ColumnAnalysis["trend"] = "稳定";
+      const firstHalf = numValues.slice(0, Math.floor(numValues.length / 2));
+      const secondHalf = numValues.slice(Math.floor(numValues.length / 2));
+      const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+      const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+      const change = secondAvg - firstAvg;
+      const range = max - min;
+      if (range > 0) {
+        const pctChange = Math.abs(change) / range;
+        if (pctChange > 0.3) trend = change > 0 ? "上升" : "下降";
+        else if (pctChange > 0.1) trend = "波动";
+      }
+
+      // 异常检测
+      const anomalies: string[] = [];
+      const stdDev = Math.sqrt(
+        numValues.reduce((s, n) => s + (n - mean) ** 2, 0) / numValues.length,
+      );
+      for (let i = 0; i < numValues.length; i++) {
+        if (Math.abs(numValues[i] - mean) > 2 * stdDev && stdDev > 0) {
+          anomalies.push(`第${i + 1}行 值=${numValues[i]} (偏离均值 ${Math.abs(numValues[i] - mean).toFixed(1)})`);
+        }
+      }
+      if (anomalies.length > 0 && anomalies.length <= 5) {
+        // only report if few anomalies
+      } else if (anomalies.length > 5) {
+        anomalies.length = 0; // too many to be useful
+      }
+
+      return { name, type: "number" as const, count: numValues.length, min, max, mean, trend, anomalies };
+    }
+
+    // 文本列
+    const unique = [...new Set(nonEmpty)];
+    return {
+      name,
+      type: "text" as const,
+      count: nonEmpty.length,
+      uniqueCount: unique.length,
+      samples: unique.slice(0, 5),
+    };
+  });
+
+  // 生成人类可读的分析摘要
+  const parts: string[] = [];
+  parts.push(`CSV 文件分析：${rowCount} 行数据，${headers.length} 列\n`);
+
+  for (const col of columns) {
+    if (col.type === "number") {
+      parts.push(`列 [${col.name}]: 数值型, 范围 ${col.min} ~ ${col.max}, 均值 ${col.mean?.toFixed(2)}, 趋势: ${col.trend}`);
+      if (col.anomalies && col.anomalies.length > 0) {
+        parts.push(`  ⚠️ 异常点: ${col.anomalies.join("; ")}`);
+      }
+    } else {
+      parts.push(`列 [${col.name}]: 文本型, ${col.uniqueCount} 种不同值, 示例: ${col.samples?.join(", ")}`);
+    }
+  }
+
+  return { headers, rowCount, columns, summary: parts.join("\n") };
+}
+
+// ===== CSV 数据解析（带预分析）=====
 export async function parseCSV(csvContent: string, fileName: string): Promise<string> {
+  const analysis = analyzeCSV(csvContent);
+  const rawSample = csvContent.slice(0, 600); // 只给前几行作样本
+
   return chat(MODEL_TEXT, [
     {
       role: "user",
-      content: `分析这个科研CSV数据文件（${fileName}），识别：数据类型、测量参数、关键数据点、趋势、异常值。同时提取可转化为实验卡片的信息。输出为中文JSON。\n\n${csvContent.slice(0, 4000)}`,
+      content: `分析这个科研 CSV 数据文件（${fileName}）。
+
+【数据预分析结果】
+${analysis.summary}
+
+【原始数据样本（前几行）】
+${rawSample}
+
+请根据预分析结果，判断这是什么类型的实验数据（如：炉温记录、CV曲线、XRD谱、色谱等），提取可转化为实验卡片的信息。
+输出格式（纯JSON，不要markdown代码块）：
+${EXTRACT_PROMPT.slice(EXTRACT_PROMPT.indexOf("{"))}`,
     },
   ], 4096);
 }
