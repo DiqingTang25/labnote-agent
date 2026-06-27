@@ -4,6 +4,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useLab } from "../lib/labStore";
 import { UserCheck, FileText, ListChecks, BookOpen, AlertTriangle, ArrowRight, Clock, Sparkles } from "lucide-react";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/handoff")({
   head: () => ({
@@ -28,6 +29,7 @@ function HandoffPage() {
   const readingOrder = ["MAT-041", "MAT-052", "MAT-056"];
 
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex items-center gap-3 mb-6">
         <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white"><UserCheck size={20}/></div>
@@ -140,6 +142,7 @@ function HandoffPage() {
         </div>
       </div>
     </div>
+    </RequireAuth>
   );
 }
 

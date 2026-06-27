@@ -1,0 +1,87 @@
+[
+  {
+    "experiment": "Plant Electrophysiology",
+    "timestamp": "2026-06-27T18:26:52.294Z",
+    "overallScore": 98,
+    "scores": {
+      "nameMatch": 85,
+      "disciplineMatch": 100,
+      "purposeMatch": 100,
+      "operatorMatch": 100,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [],
+    "elapsed": "29.1"
+  },
+  {
+    "experiment": "T Cell Migration",
+    "timestamp": "2026-06-27T18:26:52.294Z",
+    "overallScore": 76,
+    "scores": {
+      "nameMatch": 65,
+      "disciplineMatch": 100,
+      "purposeMatch": 100,
+      "operatorMatch": 50,
+      "deviceMatch": 20,
+      "sampleMatch": 10,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "操作人不匹配(50): \"未提及\"",
+      "设备不匹配(20): \"显微镜\"",
+      "样品不匹配(10): \"未提及\""
+    ],
+    "elapsed": "25.0"
+  },
+  {
+    "experiment": "Spatial Transcriptomics",
+    "timestamp": "2026-06-27T18:26:52.294Z",
+    "overallScore": 89,
+    "scores": {
+      "nameMatch": 85,
+      "disciplineMatch": 100,
+      "purposeMatch": 100,
+      "operatorMatch": 50,
+      "deviceMatch": 50,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "操作人不匹配(50): \"未提及\"",
+      "设备不匹配(50): \"NanoZoomer S60扫描仪\""
+    ],
+    "elapsed": "30.2"
+  },
+  {
+    "experiment": "Materials Characterization",
+    "timestamp": "2026-06-27T18:26:52.294Z",
+    "overallScore": 94,
+    "scores": {
+      "nameMatch": 85,
+      "disciplineMatch": 100,
+      "purposeMatch": 100,
+      "operatorMatch": 50,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "操作人不匹配(50): \"未提及\""
+    ],
+    "elapsed": "27.4"
+  }
+]

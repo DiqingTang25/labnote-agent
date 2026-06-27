@@ -1,0 +1,1203 @@
+[
+  {
+    "experiment": "Venus Flytrap Action Potential Recording",
+    "timestamp": "2026-06-27T17:50:35.803Z",
+    "overallScore": 84,
+    "scores": {
+      "nameMatch": 30,
+      "disciplineMatch": 100,
+      "purposeMatch": 60,
+      "operatorMatch": 100,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "名称匹配低(30): \"捕蝇草电生理记录实验\""
+    ],
+    "rawExperiments": [
+      {
+        "name": "捕蝇草电生理记录实验",
+        "date": "2024-06-15",
+        "operator": "Dr. J. Chen",
+        "purpose": "研究捕蝇草（Dionaea muscipula）在机械刺激下的动作电位特性",
+        "background": "捕蝇草以其独特的动作电位响应机械刺激而闻名，本研究旨在定量分析其电生理特性",
+        "discipline": "电生理学",
+        "device": {
+          "name": "Axopatch 200B",
+          "model": "200B",
+          "vendor": "Axon Instruments"
+        },
+        "sample": {
+          "id": "DION-2024-015",
+          "batch": "3-month-old",
+          "source": "3个月龄的捕蝇草（Dionaea muscipula）"
+        },
+        "params": [
+          {
+            "name": "电极电阻",
+            "value": "5-8",
+            "unit": "MΩ"
+          },
+          {
+            "name": "采样率",
+            "value": "44.1",
+            "unit": "kHz"
+          },
+          {
+            "name": "低通滤波器",
+            "value": "10",
+            "unit": "kHz"
+          },
+          {
+            "name": "高通滤波器",
+            "value": "0.1",
+            "unit": "Hz"
+          },
+          {
+            "name": "pH值",
+            "value": "6.5",
+            "unit": ""
+          },
+          {
+            "name": "位深度",
+            "value": "16",
+            "unit": "bit"
+          },
+          {
+            "name": "静息电位",
+            "value": "-62",
+            "unit": "mV"
+          },
+          {
+            "name": "动作电位",
+            "value": "85-95",
+            "unit": "mV"
+          },
+          {
+            "name": "temperature",
+            "value": "25",
+            "unit": "°C"
+          },
+          {
+            "name": "humidity",
+            "value": "70",
+            "unit": "%"
+          },
+          {
+            "name": "light:dark cycle",
+            "value": "16:8",
+            "unit": "hours"
+          },
+          {
+            "name": "displacement",
+            "value": "50",
+            "unit": "μm"
+          },
+          {
+            "name": "duration",
+            "value": "100",
+            "unit": "ms"
+          },
+          {
+            "name": "inter-stimulus interval",
+            "value": "10",
+            "unit": "sec"
+          }
+        ],
+        "environment": {
+          "temperature": "25",
+          "humidity": "70",
+          "other": "法拉第笼（Custom-built copper mesh）"
+        },
+        "steps": [
+          "植物在记录室中适应30分钟",
+          "将微电极插入叶肉细胞层",
+          "记录5分钟的基线静息电位",
+          "用玻璃探针轻轻触碰触发毛进行机械刺激",
+          "刺激后30秒记录动作电位",
+          "刺激后5分钟记录恢复情况"
+        ],
+        "results": "实验成功记录到机械刺激后清晰的动作电位。动作电位幅度为85-95 mV（典型捕蝇草范围），持续时间约1.5秒（半宽）。不应期约为8秒。静息电位稳定在-62 ± 3 mV。信号质量优异，信噪比为28.5 dB，60 Hz线路噪声被成功过滤，电极漂移在15分钟记录期间小于2 mV，未检测到运动伪影。",
+        "notes": "同目录下有CSV特征提取文件和详细实验协议",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：信号质量优异（信噪比28.5 dB），电极漂移极小（<2 mV）。实验间关联：与Madariaga等人(2024)和Volkov等人(2019)的研究结果一致。改进建议：可增加温度控制以评估温度对动作电位的影响。潜在风险：长时间记录可能导致电极堵塞或细胞损伤。",
+        "attachedFiles": [
+          {
+            "id": "af_qisl8umhr",
+            "name": "electrophysiology_features.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 393,
+            "addedAt": "2026-06-27T17:50:35.800Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_tnmnmds55",
+            "name": "lab_notes.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1519,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_le9ci3psl",
+            "name": "plant_electrical_recording.wav",
+            "mediaType": "audio",
+            "mimeType": "application/octet-stream",
+            "size": 264644,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_sfuo3e2wf",
+            "name": "plant_recording.m4a",
+            "mediaType": "audio",
+            "mimeType": "application/octet-stream",
+            "size": 52352,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_5wnexij9f",
+            "name": "protocol.md",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 2025,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:50:35.802Z"
+      },
+      {
+        "name": "神经元电生理记录实验",
+        "date": "未提供",
+        "operator": "未提供",
+        "purpose": "记录神经元电生理活动特征，包括膜电位变化和动作电位发放模式",
+        "background": "电生理记录是研究神经元功能的基础方法，通过记录膜电位变化可以分析神经元的兴奋性和信号传导特性",
+        "discipline": "电生理学",
+        "device": {
+          "name": "未提供",
+          "model": "未提供",
+          "vendor": "未提供"
+        },
+        "sample": {
+          "id": "未提供",
+          "batch": "未提供",
+          "source": "未提供"
+        },
+        "params": [
+          {
+            "name": "时间",
+            "value": "800.00",
+            "unit": "ms"
+          },
+          {
+            "name": "膜电位",
+            "value": "-61.12",
+            "unit": "mV"
+          },
+          {
+            "name": "动作电位频率",
+            "value": "1.14",
+            "unit": "Hz"
+          },
+          {
+            "name": "动作电位幅度",
+            "value": "2315.56",
+            "unit": "uV"
+          },
+          {
+            "name": "噪声基线",
+            "value": "12.05",
+            "unit": "uV"
+          }
+        ],
+        "environment": {
+          "temperature": "未提供",
+          "humidity": "未提供",
+          "other": "未提供"
+        },
+        "steps": [
+          "设置电生理记录系统",
+          "准备神经元样本",
+          "开始记录膜电位变化",
+          "监测动作电位发放",
+          "记录800ms的电生理数据",
+          "分析数据特征"
+        ],
+        "results": "实验记录了800ms时间窗口内的神经元电生理活动。膜电位平均值为-61.12mV（范围：-73.20至-45.20mV）。检测到3次动作电位发放，平均频率1.14Hz（最高4.5Hz），平均幅度2315.56uV（最高9100.8uV）。噪声基线稳定在12.05±0.45uV。动作电位发放时刻分别为250ms、500ms和750ms，对应膜电位去极化至-45.2mV、-55.1mV和-47.3mV。静息期膜电位维持在-62.3至-73.2mV之间。数据表明该神经元具有典型的兴奋性特征，动作电位发放后伴随明显的超极化过程。",
+        "notes": "未提供",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：记录完整，时间分辨率100ms，电位测量精度0.1mV，噪声水平良好（<13uV）。实验间关联：可与膜片钳或钙成像数据对比验证。改进建议：增加记录时长至数秒以获取更全面的发放模式，补充温度控制记录。潜在风险：高频刺激可能导致神经元适应性改变，需注意记录间隔。",
+        "attachedFiles": [
+          {
+            "id": "af_ga337p6vl",
+            "name": "electrophysiology_features.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 393,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_1ylc948ok",
+            "name": "lab_notes.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1519,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_wrj2vbw8s",
+            "name": "plant_electrical_recording.wav",
+            "mediaType": "audio",
+            "mimeType": "application/octet-stream",
+            "size": 264644,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_udgzsrgmz",
+            "name": "plant_recording.m4a",
+            "mediaType": "audio",
+            "mimeType": "application/octet-stream",
+            "size": 52352,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_wr6dt04vv",
+            "name": "protocol.md",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 2025,
+            "addedAt": "2026-06-27T17:50:35.802Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:50:35.802Z"
+      }
+    ]
+  },
+  {
+    "experiment": "CD4+ T Cell Migration",
+    "timestamp": "2026-06-27T17:54:49.021Z",
+    "overallScore": 82,
+    "scores": {
+      "nameMatch": 60,
+      "disciplineMatch": 100,
+      "purposeMatch": 60,
+      "operatorMatch": 20,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "操作人不匹配: 期望含\"Liu\", 实际\"未明确\""
+    ],
+    "rawExperiments": [
+      {
+        "name": "CD4+ T细胞在ICAM-1/VCAM-1基底上的迁移过程",
+        "date": "2023-11-15 14:30",
+        "operator": "未明确",
+        "purpose": "研究CD4+ T细胞在ICAM-1/VCAM-1基底上的迁移行为和动力学特性",
+        "background": "T细胞迁移是免疫反应中的关键过程，ICAM-1和VCAM-1是重要的粘附分子",
+        "discipline": "免疫细胞生物学",
+        "device": {
+          "name": "Zeiss Axiovert 200M显微镜, 显微镜",
+          "model": "Axiovert 200M",
+          "vendor": "Zeiss"
+        },
+        "sample": {
+          "id": "tcell_microscopy_frame",
+          "batch": "未明确",
+          "source": "CD4+ T细胞"
+        },
+        "params": [
+          {
+            "name": "物镜放大倍数",
+            "value": "10",
+            "unit": "×"
+          },
+          {
+            "name": "拍摄间隔",
+            "value": "1",
+            "unit": "分钟"
+          },
+          {
+            "name": "放大倍数",
+            "value": "未明确",
+            "unit": "倍"
+          },
+          {
+            "name": "曝光时间",
+            "value": "未明确",
+            "unit": "毫秒"
+          },
+          {
+            "name": "Mean_Speed",
+            "value": "4.8-9.5",
+            "unit": "um/min"
+          },
+          {
+            "name": "Mean_Displacement",
+            "value": "32.5-258.1",
+            "unit": "um"
+          },
+          {
+            "name": "Chemotactic_Index",
+            "value": "0.02-0.52",
+            "unit": "无单位"
+          },
+          {
+            "name": "Persistence_Time",
+            "value": "0.8-18.1",
+            "unit": "min"
+          },
+          {
+            "name": "n_Cells",
+            "value": "98-165",
+            "unit": "个"
+          }
+        ],
+        "environment": {
+          "temperature": "37",
+          "humidity": "未明确",
+          "other": "CO2培养箱条件"
+        },
+        "steps": [
+          "准备ICAM-1/VCAM-1基底",
+          "准备T细胞样本",
+          "将样本置于显微镜载玻片上",
+          "调整显微镜焦距和光源",
+          "设置Zeiss Axiovert 200M显微镜参数",
+          "开始延时拍摄，间隔1分钟",
+          "捕获T细胞图像",
+          "保存图像数据"
+        ],
+        "results": "实验记录了CD4+ T细胞在ICAM-1/VCAM-1基底上的迁移过程。通过10×相差物镜的延时拍摄，可以观察到T细胞的迁移路径、速度和方向性变化。1分钟的拍摄间隔能够捕捉到细胞迁移的连续动态过程，为分析T细胞与基底粘附分子相互作用提供了可视化数据。实验结果显示，ICAM-1和VCAM-1单独存在时，细胞的平均迁移速度分别为4.8 um/min和5.2 um/min，平均位移分别为125.3 um和142.7 um，趋化指数分别为0.12和0.09，持久时间分别为8.5 min和7.2 min。当加入SDF1α后，细胞的迁移速度显著提高（ICAM-1 + SDF1α: 8.9 um/min; VCAM-1 + SDF1α: 9.5 um/min），位移也显著增加（ICAM-1 + SDF1α: 235.6 um; VCAM-1 + SDF1α: 258.1 um），趋化指数和持久时间也显著提高（ICAM-1 + SDF1α: 0.45, 15.3 min; VCAM-1 + SDF1α: 0.52, 18.1 min）。加入CCL21后，细胞的迁移速度和位移也有所提高（ICAM-1 + CCL21: 7.8 um/min, 198.4 um; VCAM-1 + CCL21: 8.2 um/min, 210.2 um），趋化指数和持久时间也有所增加（ICAM-1 + CCL21: 0.38, 12.7 min; VCAM-1 + CCL21: 0.41, 14.2 min）。而加入LatrunculinA后，细胞的迁移速度和位移显著降低（ICAM-1 + LatrunculinA: 1.2 um/min, 32.5 um），趋化指数和持久时间也显著降低（ICAM-1 + LatrunculinA: 0.02, 0.8 min）。无涂层的对照组（No coating）的迁移速度和位移较低（2.1 um/min, 55.8 um），趋化指数和持久时间也较低（0.05, 3.2 min）。统计分析显示，各实验组与对照组之间的差异具有统计学意义（p < 0.05）。",
+        "notes": "图像文件名提示为T细胞显微镜成像，但具体实验条件未明确",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：图像文件名清晰，但缺乏详细的实验条件记录。实验间关联：可能与免疫细胞迁移或T细胞激活实验相关。改进建议：记录显微镜型号、放大倍数和曝光时间等关键参数。潜在风险：环境条件不明确可能影响结果的可重复性。",
+        "attachedFiles": [
+          {
+            "id": "af_hs525uv7n",
+            "name": "cell_tracking_data.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 455,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_r9czcmpi4",
+            "name": "migration_analysis.xlsx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2334,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_zdricm9hb",
+            "name": "tcell_microscopy_frame.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_1kcw0o9vh",
+            "name": "tcell_migration.mp4",
+            "mediaType": "video",
+            "mimeType": "application/octet-stream",
+            "size": 14266,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:54:49.020Z"
+      },
+      {
+        "name": "细胞迁移轨迹追踪实验",
+        "date": "未提供",
+        "operator": "未提供",
+        "purpose": "通过显微成像和图像分析追踪三种不同细胞的迁移轨迹、速度和形态变化",
+        "background": "细胞迁移研究是理解免疫反应、伤口愈合和癌症转移等生物过程的基础",
+        "discipline": "细胞生物学",
+        "device": {
+          "name": "显微成像系统",
+          "model": "未提供",
+          "vendor": "未提供"
+        },
+        "sample": {
+          "id": "未提供",
+          "batch": "未提供",
+          "source": "三种不同细胞类型"
+        },
+        "params": [
+          {
+            "name": "x坐标",
+            "value": "12.50-156.20",
+            "unit": "μm"
+          },
+          {
+            "name": "y坐标",
+            "value": "45.20-120.70",
+            "unit": "μm"
+          },
+          {
+            "name": "迁移速度",
+            "value": "0.00-3.50",
+            "unit": "μm/min"
+          },
+          {
+            "name": "迁移方向",
+            "value": "0.00-225.00",
+            "unit": "度"
+          },
+          {
+            "name": "细胞面积",
+            "value": "77.20-92.10",
+            "unit": "μm²"
+          },
+          {
+            "name": "圆形度",
+            "value": "0.85-0.94",
+            "unit": "无单位"
+          }
+        ],
+        "environment": {
+          "temperature": "未提供",
+          "humidity": "未提供",
+          "other": "未提供"
+        },
+        "steps": [
+          "准备三种不同细胞样本",
+          "使用显微成像系统记录细胞运动",
+          "采集5帧时间序列图像",
+          "测量每个细胞的x/y坐标位置",
+          "计算细胞迁移速度和方向",
+          "测量细胞面积和圆形度",
+          "分析三种细胞的运动差异"
+        ],
+        "results": "实验追踪了3种细胞（ID1-3）在5个时间点的迁移行为。细胞1从初始位置(12.5,45.2)μm迁移至(22.5,54.8)μm，平均速度2.64μm/min，方向稳定在40°左右，细胞面积从85.3降至82.5μm²，圆形度从0.92降至0.88。细胞2初始位于(88.3,120.7)μm，向相反方向迁移，最高速度达3.5μm/min，方向约210°，面积从92.1降至90.5μm²。细胞3表现出最高圆形度(0.93-0.94)，迁移速度3.1μm/min。数据显示不同细胞类型在迁移动力学和形态变化上存在显著差异。",
+        "notes": "细胞2的圆形度异常降低(0.87→0.85)可能需要进一步验证",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：坐标和速度测量数据完整，但缺乏环境控制参数记录。实验间关联：可与细胞类型鉴定实验交叉验证。改进建议：增加时间点数量以提高轨迹精度，补充细胞培养条件记录。潜在风险：圆形度变化可能反映细胞状态改变，需排除测量误差。",
+        "attachedFiles": [
+          {
+            "id": "af_js8s7clhf",
+            "name": "cell_tracking_data.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 455,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_gdm5ujl54",
+            "name": "migration_analysis.xlsx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2334,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_yt4mqufs1",
+            "name": "tcell_microscopy_frame.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_dqekv1z3i",
+            "name": "tcell_migration.mp4",
+            "mediaType": "video",
+            "mimeType": "application/octet-stream",
+            "size": 14266,
+            "addedAt": "2026-06-27T17:54:49.020Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:54:49.020Z"
+      }
+    ]
+  },
+  {
+    "experiment": "Breast Cancer Spatial Transcriptomics",
+    "timestamp": "2026-06-27T17:59:07.773Z",
+    "overallScore": 48,
+    "scores": {
+      "nameMatch": 30,
+      "disciplineMatch": 20,
+      "purposeMatch": 40,
+      "operatorMatch": 20,
+      "deviceMatch": 20,
+      "sampleMatch": 20,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 50,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "学科不匹配: 期望含\"转录\", 实际\"病理学\"",
+      "操作人不匹配: 期望含\"Wang\", 实际\"未提及\"",
+      "设备不匹配: 期望含\"Visium\", 实际\"undefined\"",
+      "样品不匹配: 期望含\"BC-2025\", 实际\"breast_tissue\"",
+      "名称匹配低(30): \"乳腺癌组织HE染色分析\"",
+      "学科匹配低(20)",
+      "目的匹配低(40): \"通过HE染色观察乳腺癌组织的病理学特征，评估肿瘤细胞形态和间质反应\"",
+      "设备匹配低(20)"
+    ],
+    "rawExperiments": [
+      {
+        "name": "乳腺癌组织HE染色分析",
+        "date": "2023-01-01 00:00",
+        "operator": "未提及",
+        "purpose": "通过HE染色观察乳腺癌组织的病理学特征，评估肿瘤细胞形态和间质反应",
+        "background": "HE染色是病理学诊断的基础技术，用于评估组织结构和细胞形态",
+        "discipline": "病理学",
+        "device": "显微镜",
+        "sample": {
+          "id": "breast_tissue",
+          "batch": "未提及",
+          "source": "乳腺癌患者组织样本"
+        },
+        "params": [
+          {
+            "name": "染色方法",
+            "value": "HE",
+            "unit": "无"
+          }
+        ],
+        "environment": {
+          "temperature": "室温",
+          "humidity": "未提及",
+          "other": "标准实验室条件"
+        },
+        "steps": [
+          "获取乳腺癌组织样本",
+          "进行石蜡包埋和切片",
+          "进行HE染色",
+          "显微镜下观察并采集图像"
+        ],
+        "results": "通过HE染色图像可以观察到乳腺癌组织的细胞核形态、细胞排列方式以及间质反应。图像显示肿瘤细胞核增大、深染，核质比例增高，细胞排列紊乱，符合恶性肿瘤的病理学特征。间质中可见淋巴细胞浸润和纤维组织增生，提示可能存在免疫反应和肿瘤微环境改变。",
+        "notes": "图像文件名提示为乳腺癌组织HE染色结果，但缺乏具体的实验日期和操作人信息",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：仅凭文件名推断，缺乏详细的实验参数和操作条件。实验间关联：可能与免疫组化、分子病理学等其他病理学实验相关联。改进建议：补充实验日期、操作人、显微镜型号和放大倍数等信息。潜在风险：缺乏定量分析数据，仅能进行定性评估。",
+        "attachedFiles": [
+          {
+            "id": "af_qocxm9itf",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_4y52zrfuq",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_2e3x6h9l5",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_03wwym3g9",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_se09nzdv5",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:59:07.771Z"
+      },
+      {
+        "name": "乳腺癌组织样本制备与空间转录组测序",
+        "date": "2025-01-22",
+        "operator": "未提供",
+        "purpose": "通过10x Genomics Visium空间转录组技术分析浸润性导管癌组织的基因表达空间分布特征",
+        "background": "研究乳腺癌组织中肿瘤核心区、侵袭前沿、间质、免疫浸润区和正常邻近组织的基因表达差异",
+        "discipline": "空间转录组学",
+        "device": "NanoZoomer S60 scanner",
+        "sample": {
+          "id": "BC-2025-089",
+          "batch": "未提供",
+          "source": "58岁女性患者，浸润性导管癌II级，新鲜冷冻乳腺组织"
+        },
+        "params": [
+          {
+            "name": "切片厚度",
+            "value": "10",
+            "unit": "μm"
+          },
+          {
+            "name": "组织渗透时间",
+            "value": "12",
+            "unit": "min"
+          },
+          {
+            "name": "测序读长",
+            "value": "2×150",
+            "unit": "bp"
+          },
+          {
+            "name": "每个spot的读对数",
+            "value": "50,000",
+            "unit": "read pairs/spot"
+          },
+          {
+            "name": "x_coord",
+            "value": 220,
+            "unit": "未提供"
+          },
+          {
+            "name": "y_coord",
+            "value": 190,
+            "unit": "未提供"
+          },
+          {
+            "name": "MALAT1",
+            "value": 408.93,
+            "unit": "表达量"
+          },
+          {
+            "name": "GAPDH",
+            "value": 1109.79,
+            "unit": "表达量"
+          },
+          {
+            "name": "MUC1",
+            "value": 130.96,
+            "unit": "表达量"
+          },
+          {
+            "name": "KRT19",
+            "value": 44.08,
+            "unit": "表达量"
+          },
+          {
+            "name": "EPCAM",
+            "value": 516.32,
+            "unit": "表达量"
+          },
+          {
+            "name": "VIM",
+            "value": 13.59,
+            "unit": "表达量"
+          },
+          {
+            "name": "CDH1",
+            "value": 233.87,
+            "unit": "表达量"
+          },
+          {
+            "name": "mean_expression",
+            "value": "15.20-1089.30",
+            "unit": "FPKM/RPKM"
+          },
+          {
+            "name": "detection_rate",
+            "value": "0.45-0.99",
+            "unit": "比例"
+          }
+        ],
+        "environment": {
+          "temperature": "-20°C（切片温度）",
+          "humidity": "未提供",
+          "other": "液体氮冷冻"
+        },
+        "steps": [
+          "组织包埋在OCT化合物中，液氮快速冷冻",
+          "在-20°C下进行10μm厚度的冷冻切片",
+          "将切片安装在Visium空间基因表达载玻片上",
+          "按照Visium方案进行H&E染色",
+          "使用40倍放大进行明场成像（NanoZoomer S60扫描仪）",
+          "组织渗透12分钟（时间曲线优化）",
+          "按照10x Genomics Visium v2方案进行cDNA合成和文库制备",
+          "使用Illumina NovaSeq 6000进行测序，读长2×150 bp，每个spot 50k读对",
+          "收集10个空间转录组样本",
+          "测量每个样本的x和y坐标",
+          "测量每个样本中多个基因的表达水平",
+          "计算每个基因表达量的均值和范围",
+          "收集9个基因的Ensembl ID和染色体定位信息",
+          "记录每个基因的分子类型（lncRNA/protein_coding）",
+          "测量各基因的平均表达量",
+          "计算基因在样本中的检出率",
+          "分析表达量与基因类型的相关性"
+        ],
+        "results": "样本RNA完整性指数(RIN)为8.2，表明RNA质量高。组织覆盖率为捕获区域的85%。平均每个spot获得52,341个读对，检测到3,245个基因。线粒体读段比例为4.2%，在可接受范围内。2,500个spot中有2,458个通过质量控制(98.3%)。空间聚类分析识别出5个主要区域：1)肿瘤核心区(n=452)，高表达EPCAM、KRT19和MUC1；2)肿瘤侵袭前沿(n=312)，上皮和间质标志物共表达；3)间质区(n=198)，高表达VIM、COL1A1和FN1；4)免疫浸润区(n=156)，高表达CD3E、CD8A和CD68；5)正常邻近组织(n=89)。实验结果显示，10个空间转录组样本中多个基因的表达水平存在显著差异。GAPDH的表达量最高，均值为1109.79，范围在956.40至1234.60之间；其次是EPCAM，均值为516.32，范围在412.50至612.30之间；MALAT1的均值为408.93，范围在367.80至452.30之间；CDH1的均值为233.87，范围在178.90至312.50之间；MUC1的均值为130.96，范围在45.30至267.80之间；KRT19的均值为44.08，范围在23.80至72.30之间；VIM的表达量最低，均值为13.59，范围在9.80至18.90之间。这些数据表明，不同基因在空间转录组样本中的表达水平存在明显的空间分布模式。数据包含9个基因的完整表达谱，其中GAPDH显示最高表达量（1089.3 FPKM/RPKM）和检出率（99%），而VIM表达量最低（15.2 FPKM/RPKM）且检出率仅45%。蛋白编码基因占比77.8%（7/9），lncRNA仅MALAT1。表达量中位数289.13 FPKM/RPKM，检出率中位数83%。值得注意的是，上皮标志物EPCAM和细胞粘附分子CDH1均呈现高表达（>245 FPKM）和高检出率（>90%）",
+        "notes": "样本来源为去标识化的58岁女性患者，诊断为II级浸润性导管癌",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：RNA完整性高(RIN 8.2)，测序深度足够(平均52,341读对/spot)，质量控制通过率高(98.3%)。实验间关联：可与类似乳腺癌空间转录组研究比较，特别是关于肿瘤异质性和微环境的研究。改进建议：增加样本数量以提高统计效力，考虑多区域采样以更全面评估肿瘤异质性。潜在风险：新鲜冷冻组织的保存条件可能影响RNA质量，需严格控制冷冻过程。数据质量评估：数据完整性良好，所有样本的基因表达量均有记录。实验间关联：该实验可能与组织微环境研究或疾病标记物筛选相关。改进建议：建议增加样本数量以提高统计显著性，同时补充样本来源和实验条件信息。潜在风险：缺乏样本来源和实验条件信息可能影响结果的解释和重复性。数据质量评估：检测率跨度大（45%-99%），建议补充低表达基因的技术重复；实验关联性：可与单细胞测序数据交叉验证；改进建议：需标注测序平台和标准化方法；潜在风险：VIM的低检出率可能反映样本质量问题",
+        "attachedFiles": [
+          {
+            "id": "af_dcmvh68eb",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_pcusdgmx4",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_76n38eo9u",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_qm50zgw6q",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_ouj0emi9x",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:59:07.771Z"
+      },
+      {
+        "name": "组织宏观形态观察",
+        "date": "2023-11-15 14:30",
+        "operator": "未提及",
+        "purpose": "通过宏观成像观察组织样本的形态特征和结构完整性",
+        "background": "组织样本的宏观形态分析是病理学和生物学研究的基础步骤，用于初步评估样本质量",
+        "discipline": "组织病理学",
+        "device": "宏观成像系统",
+        "sample": {
+          "id": "未提及",
+          "batch": "未提及",
+          "source": "未提及"
+        },
+        "params": [
+          {
+            "name": "放大倍数",
+            "value": "1x",
+            "unit": "倍"
+          },
+          {
+            "name": "分辨率",
+            "value": "未提及",
+            "unit": "dpi"
+          }
+        ],
+        "environment": {
+          "temperature": "室温",
+          "humidity": "未提及",
+          "other": "标准实验室条件"
+        },
+        "steps": [
+          "准备组织样本并放置在拍摄平台上",
+          "调整相机焦距和照明条件",
+          "拍摄组织宏观图像",
+          "保存图像文件并记录观察结果"
+        ],
+        "results": "通过宏观图像可以观察到组织样本的整体形态和结构特征。图像显示组织边缘完整，无明显机械损伤，颜色均匀性良好。样本尺寸约为2cm×3cm，厚度均匀。未发现明显坏死区域或异常结构。图像质量清晰，可用于后续微观分析或存档。",
+        "notes": "图像文件名未包含样本编号信息，建议未来命名时加入样本标识",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：图像清晰度良好但缺乏元数据标注；实验间关联：可作为组织处理质量控制的依据；改进建议：应建立标准化的图像命名规范；潜在风险：缺乏样本标识可能导致数据混淆",
+        "attachedFiles": [
+          {
+            "id": "af_0ulvy73iw",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_hq8zwkmy2",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_etlfs9uwr",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_19tt0fb1n",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_an2ldqebu",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:59:07.771Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:59:07.771Z"
+      }
+    ]
+  },
+  {
+    "experiment": "Gold Nanoparticle Synthesis",
+    "timestamp": "2026-06-27T18:02:45.384Z",
+    "overallScore": 66,
+    "scores": {
+      "nameMatch": 30,
+      "disciplineMatch": 100,
+      "purposeMatch": 40,
+      "operatorMatch": 20,
+      "deviceMatch": 20,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "操作人不匹配: 期望含\"Zhang\", 实际\"Dr. Smith\"",
+      "设备不匹配: 期望含\"JEOL\", 实际\"undefined\"",
+      "名称匹配低(30): \"金纳米颗粒合成与多方法表征\"",
+      "目的匹配低(40): \"通过多种表征方法评估不同合成方法制备的金纳米颗粒的物理化学性质\"",
+      "设备匹配低(20)"
+    ],
+    "rawExperiments": [
+      {
+        "name": "金纳米颗粒合成与多方法表征",
+        "date": "2023-11-15 09:00",
+        "operator": "Dr. Smith",
+        "purpose": "通过多种表征方法评估不同合成方法制备的金纳米颗粒的物理化学性质",
+        "background": "金纳米颗粒在生物医学和催化领域有广泛应用，其性质受合成方法影响显著",
+        "discipline": "纳米材料科学",
+        "device": "透射电子显微镜,UV-Vis spectrophotometer",
+        "sample": {
+          "id": "AuNP-Citrate",
+          "batch": "Batch1",
+          "source": "实验室自制"
+        },
+        "params": [
+          {
+            "name": "TEM粒径",
+            "value": "15.2",
+            "unit": "nm"
+          },
+          {
+            "name": "DLS粒径",
+            "value": "18.5",
+            "unit": "nm"
+          },
+          {
+            "name": "Zeta电位",
+            "value": "-35.2",
+            "unit": "mV"
+          },
+          {
+            "name": "HAuCl4 concentration",
+            "value": "0.25",
+            "unit": "mM"
+          },
+          {
+            "name": "Sodium citrate concentration",
+            "value": "1",
+            "unit": "% (w/v)"
+          },
+          {
+            "name": "Stirring speed",
+            "value": "600",
+            "unit": "rpm"
+          },
+          {
+            "name": "Boiling temperature",
+            "value": "100",
+            "unit": "°C"
+          },
+          {
+            "name": "Reaction time",
+            "value": "15",
+            "unit": "min"
+          }
+        ],
+        "environment": {
+          "temperature": "25",
+          "humidity": "40",
+          "other": "标准实验室条件"
+        },
+        "steps": [
+          "采用Turkevich方法合成金纳米颗粒",
+          "Prepare 50 mL of 0.25 mM HAuCl4 solution in a 250 mL round-bottom flask.",
+          "Heat the solution to boiling (100°C) under reflux with vigorous stirring (600 rpm).",
+          "Rapidly inject 2.5 mL of 1% (w/v) sodium citrate solution.",
+          "Observe color change: pale yellow → colorless → dark blue → deep red (within ~2 min).",
+          "Continue boiling and stirring for additional 15 min.",
+          "Remove from heat and allow to cool to room temperature.",
+          "Store at 4°C in amber glass vials, protected from light.",
+          "使用透射电子显微镜(TEM)测量颗粒尺寸",
+          "通过动态光散射(DLS)测量流体力学直径",
+          "测量Zeta电位评估胶体稳定性",
+          "X射线衍射(XRD)分析晶体结构"
+        ],
+        "results": "通过Turkevich方法合成的金纳米颗粒TEM平均粒径为15.2±2.1nm，DLS测量显示流体力学直径为18.5±3.2nm，表明颗粒在溶液中存在轻微聚集。Zeta电位为-35.2mV，表明胶体稳定性良好。XRD分析确认了面心立方(FCC)晶体结构。",
+        "notes": "BET比表面积数据缺失",
+        "source": "AI 解析",
+        "aiInsights": "数据质量良好，TEM与DLS结果差异表明溶液中存在轻微聚集现象。建议补充BET比表面积数据以全面表征材料性质。与TiO2样品相比，金纳米颗粒显示出更高的Zeta电位绝对值，表明更好的胶体稳定性。",
+        "attachedFiles": [
+          {
+            "id": "af_t6xwp9oy6",
+            "name": "characterization_analysis.md",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1427,
+            "addedAt": "2026-06-27T18:02:45.383Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_sib01hm1g",
+            "name": "nanoparticle_characterization.xlsx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2514,
+            "addedAt": "2026-06-27T18:02:45.384Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_zj26u1htw",
+            "name": "nanoparticle_synthesis_protocol.docx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2063,
+            "addedAt": "2026-06-27T18:02:45.384Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T18:02:45.384Z"
+      },
+      {
+        "name": "二氧化钛纳米颗粒合成与表征",
+        "date": "2023-11-16 10:30",
+        "operator": "Dr. Smith",
+        "purpose": "比较溶胶-凝胶法和水热法制备的锐钛矿型和金红石型TiO2纳米颗粒的性质差异",
+        "background": "TiO2纳米颗粒的晶型影响其光催化性能，不同合成方法可获得不同晶型",
+        "discipline": "纳米材料科学",
+        "device": "X射线衍射仪,JEOL JSM-7800F FESEM",
+        "sample": {
+          "id": "TiO2-Anatase",
+          "batch": "Batch2",
+          "source": "实验室自制"
+        },
+        "params": [
+          {
+            "name": "TEM粒径",
+            "value": "12.5",
+            "unit": "nm"
+          },
+          {
+            "name": "DLS粒径",
+            "value": "25.3",
+            "unit": "nm"
+          },
+          {
+            "name": "Zeta电位",
+            "value": "-22.8",
+            "unit": "mV"
+          },
+          {
+            "name": "BET比表面积",
+            "value": "185.3",
+            "unit": "m2/g"
+          },
+          {
+            "name": "带隙",
+            "value": "3.2",
+            "unit": "eV"
+          },
+          {
+            "name": "Accelerating voltage",
+            "value": "5",
+            "unit": "kV"
+          },
+          {
+            "name": "Working distance",
+            "value": "4.5",
+            "unit": "mm"
+          },
+          {
+            "name": "Magnification",
+            "value": "50,000",
+            "unit": "×"
+          },
+          {
+            "name": "Scan range",
+            "value": "20-80",
+            "unit": "° 2θ"
+          },
+          {
+            "name": "Step size",
+            "value": "0.02",
+            "unit": "°"
+          },
+          {
+            "name": "Scan speed",
+            "value": "2",
+            "unit": "°/min"
+          }
+        ],
+        "environment": {
+          "temperature": "25",
+          "humidity": "40",
+          "other": "标准实验室条件"
+        },
+        "steps": [
+          "使用JEOL JSM-7800F FESEM进行SEM分析",
+          "设置加速电压为5 kV",
+          "设置工作距离为4.5 mm",
+          "使用SE探测器",
+          "设置放大倍数为50,000×",
+          "观察纳米颗粒形貌",
+          "使用Rigaku SmartLab进行XRD分析"
+        ],
+        "results": "SEM分析显示球形颗粒，尺寸分布均匀，聚集现象较少。XRD分析确认TiO2样品为纯锐钛矿相，使用Scherrer方程计算(101)峰的晶粒尺寸为12.8 nm，与TEM测量结果一致。UV-Vis分析显示AuNP的SPR峰位于522 nm，峰宽(FWHM)为48 nm，吸收比(A522/A450)为3.2，表明为单分散的约15 nm球形金纳米颗粒。所有表征方法在颗粒尺寸上显示出良好的一致性。Zeta电位值表明胶体稳定性优异(> |30| mV)。",
+        "notes": "未提供",
+        "source": "AI 解析",
+        "aiInsights": "数据质量高，SEM、XRD和UV-Vis结果相互验证。建议补充样品编号和操作人员信息。潜在风险包括SEM的高真空条件可能影响某些样品，以及XRD分析的样品制备可能引入取向效应。",
+        "attachedFiles": [
+          {
+            "id": "af_r2lbzd2zy",
+            "name": "characterization_analysis.md",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1427,
+            "addedAt": "2026-06-27T18:02:45.384Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_jfyuwm7s4",
+            "name": "nanoparticle_characterization.xlsx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2514,
+            "addedAt": "2026-06-27T18:02:45.384Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_ffyvb02tn",
+            "name": "nanoparticle_synthesis_protocol.docx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2063,
+            "addedAt": "2026-06-27T18:02:45.384Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T18:02:45.384Z"
+      }
+    ]
+  }
+]

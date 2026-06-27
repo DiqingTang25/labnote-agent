@@ -1,0 +1,35 @@
+=== Tissue Sample Preparation Log ===
+Date: 2025-01-22
+Sample ID: BC-2025-089
+Patient: De-identified, female, 58yr
+Diagnosis: Invasive ductal carcinoma, Grade II
+Tissue: Breast, fresh-frozen
+
+Processing:
+1. Tissue embedded in OCT compound, flash-frozen in liquid nitrogen
+2. Cryosectioned at 10 μm thickness (-20°C)
+3. Sections mounted on Visium Spatial Gene Expression slides
+4. H&E staining performed per Visium protocol
+5. Bright-field imaging at 40× (NanoZoomer S60 scanner)
+6. Tissue permeabilization: 12 min (optimal from time-course)
+7. cDNA synthesis and library preparation per 10x Genomics Visium v2 protocol
+8. Sequencing: Illumina NovaSeq 6000, 2×150 bp, 50k read pairs/spot
+
+Quality Control:
+- RNA Integrity Number (RIN): 8.2 (high quality)
+- Tissue coverage: 85% of capture area
+- Mean reads per spot: 52,341
+- Mean genes per spot: 3,245
+- Mitochondrial read fraction: 4.2% (acceptable)
+- Spots passing QC: 2,458 / 2,500 (98.3%)
+
+Spatial clusters identified:
+- Cluster 1 (n=452): Tumor core — high EPCAM, KRT19, MUC1
+- Cluster 2 (n=312): Tumor invasive front — co-expression epithelial + mesenchymal
+- Cluster 3 (n=198): Stroma — high VIM, COL1A1, FN1
+- Cluster 4 (n=156): Immune infiltrate — high CD3E, CD8A, CD68
+- Cluster 5 (n=89): Normal adjacent tissue
+
+References:
+- STimage-1K4M: https://huggingface.co/datasets/jiawennnn/STimage-1K4M
+- 10x Visium protocol: CG000239 Rev L

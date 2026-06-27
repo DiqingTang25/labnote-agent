@@ -1,462 +1,976 @@
 /**
- * Checklist 复现模式 — 人工逐项勾选 + 详细指导 + AI 动态提醒
+ * Reproduction Audit — 复现审计页面
+ *
+ * 核心功能：
+ *   1. 论文 Methods 输入 → AI 拆解为结构化参数
+ *   2. 参数确定性标注（论文明确/隐含/推断/未知）
+ *   3. 缺口识别 + 置信度推断 + 领域知识增强
+ *   4. 研究者审核/修改/补全
+ *   5. 生成可执行复现协议
+ *
+ * 所有测试数据使用真实论文：SrTiO₃/rGO/g-C₃N₄ (Sci Rep 2024)
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
-import { useLab, checkCompleteness } from "../lib/labStore";
+import { useState, useMemo, useCallback } from "react";
 import {
-  ListChecks, CheckCircle2, AlertTriangle, Lightbulb,
-  RotateCcw, ChevronDown, ChevronUp, ArrowRight, Sparkles,
+  ListChecks, Sparkles, Upload, FileText, AlertTriangle,
+  CheckCircle2, Lightbulb, RotateCcw, ChevronDown, ChevronUp,
+  Download, Loader2, Search, X, Target, Shield, Zap,
+  ArrowRight, BookOpen, Beaker, Gauge, Eye, EyeOff, Copy,
+  Info, ExternalLink, Filter,
 } from "lucide-react";
 import { toast } from "sonner";
+import type {
+  ReproductionAudit,
+  ReproductionParameter,
+  ReproductionGap,
+  ParameterCategory,
+  CertaintyLevel,
+} from "../lib/reproduction-audit";
+import {
+  prioritizeGaps,
+  generateReproductionProtocol,
+  calculateReproducibilityScore,
+} from "../lib/reproduction-audit";
+import { decomposePaperMethods } from "../lib/paper-decomposer";
+import { queryDomainKnowledge } from "../lib/domain-knowledge";
+import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS } from "../lib/paper-test-data";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [
-      { title: "复现 Checklist – LabNote Agent" },
-      { name: "description", content: "人工逐项验证的实验复现清单，含详细操作指导和 AI 动态提醒。" },
+      { title: "复现审计 – LabNote Agent" },
+      { name: "description", content: "论文实验方法拆解、复现参数提取、缺口分析、置信度评估——让实验真正可复现。" },
     ],
   }),
-  component: ChecklistPage,
+  component: ReproductionAuditPage,
 });
 
-// 每步不仅有标题，还有详细操作指导
-type StepItem = {
-  text: string;
-  guidance: string; // 详细操作指导
-};
+// ═══════════════════════════════════════════════════════
+// 主页面
+// ═══════════════════════════════════════════════════════
 
-type Group = {
-  key: string;
-  title: string;
-  icon: string;
-  items: StepItem[];
-};
+function ReproductionAuditPage() {
+  // 输入状态
+  const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "custom">("preset-srtio3");
+  const [customPaperTitle, setCustomPaperTitle] = useState("");
+  const [customPaperDoi, setCustomPaperDoi] = useState("");
+  const [customMethods, setCustomMethods] = useState("");
+  const [discipline, setDiscipline] = useState("材料科学");
 
-function ChecklistPage() {
-  const { experiments, updateExperiment } = useLab();
-  const [activeId, setActiveId] = useState(experiments[0]?.id);
-  const active = experiments.find((e) => e.id === activeId) ?? experiments[0];
-  const [done, setDone] = useState<Record<string, boolean>>({});
-  const [expandedGuidance, setExpandedGuidance] = useState<Record<string, boolean>>({});
+  // 处理状态
+  const [decomposing, setDecomposing] = useState(false);
+  const [audit, setAudit] = useState<ReproductionAudit | null>(null);
+  const [showPreset, setShowPreset] = useState(true);
 
-  const missing = useMemo(() => active ? checkCompleteness(active) : [], [active]);
+  // UI 状态
+  const [activeTab, setActiveTab] = useState<"params" | "gaps" | "protocol">("params");
+  const [filterCategory, setFilterCategory] = useState<ParameterCategory | "all">("all");
+  const [filterCertainty, setFilterCertainty] = useState<CertaintyLevel | "all">("all");
+  const [expandedParam, setExpandedParam] = useState<Set<string>>(new Set());
+  const [editingParam, setEditingParam] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [gapFillValues, setGapFillValues] = useState<Record<string, string>>({});
 
-  const groups: Group[] = useMemo(() => active ? [
-    {
-      key: "prep", title: "实验准备", icon: "🔬",
-      items: [
-        {
-          text: "查阅 SOP 与上一次实验记录",
-          guidance: "打开实验室标准操作流程文档，对比上次相同实验的记录，确认本次实验的参数是否有调整。如果参数有变化，在工作台的实验卡片中注明变更原因。",
-        },
-        {
-          text: `确认样品 ${active.sample.id || ""} 信息正确`,
-          guidance: `核对样品编号「${active.sample.id || "待填写"}」、批次「${active.sample.batch || "待填写"}」是否与实物标签一致。检查来源「${active.sample.source || "待填写"}」，确保样品在有效期内、储存条件正确。如信息缺失，请先到工作台补全。`,
-        },
-        {
-          text: "明确实验目的与预期结果",
-          guidance: `本次实验目的：${active.purpose || "（待填写）"}。请在实验记录本中写下 2-3 个明确的预期结果，例如"预计降解率 ≥ 85%"、"预计晶粒尺寸 10-20nm"。这有助于实验后判断结果是否合理。`,
-        },
-        {
-          text: "准备安全防护装备并检查实验室环境",
-          guidance: "穿好实验服、戴防护手套和护目镜。检查通风橱是否正常、废液桶是否有空余容量、灭火器是否在位。记录实验室温湿度：温度约 25℃，湿度约 50%。",
-        },
-      ],
-    },
-    {
-      key: "device", title: "设备校准", icon: "⚙️",
-      items: [
-        {
-          text: `校准 ${active.device.name || "主要设备"}`,
-          guidance: `检查 ${active.device.name || "设备"}（型号 ${active.device.model || "未知"}）上次校准日期是否在有效期内。运行设备自检程序，确认所有指示灯正常、无报错代码。预热至少 30 分钟（根据设备类型调整）。`,
-        },
-        {
-          text: "设置实验参数并运行空白对照",
-          guidance: `按实验方案设置参数：${active.params.slice(0, 4).map(p => `${p.name}=${p.value}${p.unit}`).join("，") || "（待填写）"}。运行一次空白测试（不加样品），确认基线平稳、无异常波动。`,
-        },
-        {
-          text: "记录设备信息与软件版本",
-          guidance: `在工作台的「设备信息」区域填完整：设备名称「${active.device.name || ""}」、型号「${active.device.model || ""}」、厂家「${active.device.vendor || ""}」。拍照保存设备序列号标签，记录控制软件的版本号。`,
-        },
-      ],
-    },
-    {
-      key: "sample", title: "样品处理", icon: "🧪",
-      items: [
-        {
-          text: "核对样品编号与批次，拍摄留档照片",
-          guidance: `用手机拍摄样品瓶标签（含编号「${active.sample.id || ""}」和批次「${active.sample.batch || ""}」）。照片需清晰显示标签文字，存入实验文件夹的「样品照片」子目录。`,
-        },
-        {
-          text: `精确称量 ${active.sample.id || "样品"} 并记录质量`,
-          guidance: "使用分析天平（精度 0.1mg），先校准天平，然后称量。记录初始质量到工作台的实验参数中。建议称量 3 次取平均值，减少称量误差。",
-        },
-        {
-          text: "检查样品外观与储存条件",
-          guidance: "观察样品颜色、状态是否正常（如 Fe₃O₄ 应为黑色粉末，无结块）。检查储存容器的密封性，确认未受潮或氧化。如有异常，拍照并在工作台备注中记录。",
-        },
-      ],
-    },
-    {
-      key: "steps", title: "实验操作", icon: "📋",
-      items: active.steps.length
-        ? active.steps.map((s, i) => ({
-            text: `步骤 ${i + 1}：${s}`,
-            guidance: `执行本步骤时注意：① 严格按照操作顺序 ② 实时记录任何偏离计划的操作 ③ 使用计时器确保时间准确 ④ 在实验记录本上打勾标记完成。如遇异常（如颜色变化异常、温度波动），立即在工作台「异常与备注」中记录。`,
-          }))
-        : [{ text: "实验步骤待补全", guidance: "当前实验卡片尚未填写步骤。请先到工作台完善实验步骤，然后再进行复现验证。步骤应包含：具体操作、时间、用量、条件等关键信息。" }],
-    },
-    {
-      key: "qc", title: "数据核验", icon: "✅",
-      items: [
-        {
-          text: "保存所有仪器原始数据文件",
-          guidance: "从仪器电脑导出原始数据文件（如 CSV、TXT、仪器专用格式），不要只保存处理后的数据。文件名应包含日期和样品编号，例如「UV-Vis-20260515-Fe3O4-MB.csv」。备份到实验文件夹和云盘各一份。",
-        },
-        {
-          text: "核对结果数据与实验预期",
-          guidance: `将实测结果与实验目的对比：${active.purpose || "（待填写）"}。如果结果与预期偏差超过 15%，检查是否存在操作失误、设备故障或试剂问题，并在备注中记录可能原因。`,
-        },
-        {
-          text: "将数据与发现更新到实验卡片",
-          guidance: "在工作台中找到本次实验卡片，更新「结果数据」和「异常与备注」字段。补充新的参数（如发现额外的重要条件），确保卡片内容完整、可用于后续论文写作。",
-        },
-        {
-          text: "标记复现完成并生成复现报告",
-          guidance: "确认所有步骤已完成、数据已保存、卡片已更新后，点击「导出复现包」下载包含完整实验条件、步骤和结果的 Markdown 文件，作为复现凭证。",
-        },
-      ],
-    },
-  ] : [], [active]);
-
-  // 展开所有步骤到扁平列表
-  const allSteps = useMemo(() => {
-    const flat: Array<{ groupKey: string; groupTitle: string; item: StepItem; globalIdx: number }> = [];
-    groups.forEach((g) => {
-      g.items.forEach((item, i) => {
-        flat.push({ groupKey: g.key, groupTitle: g.title, item, globalIdx: flat.length });
-      });
-    });
-    return flat;
-  }, [groups]);
-
-  const totalItems = allSteps.length;
-  const doneCount = Object.values(done).filter(Boolean).length;
-  const pct = totalItems ? Math.round((doneCount / totalItems) * 100) : 0;
-
-  // 哪些分组已完成/进行中
-  const groupProgress = useMemo(() => {
-    return groups.map((g) => {
-      const total = g.items.length;
-      const finished = g.items.filter((it) => done[g.key + it.text]).length;
-      return { key: g.key, title: g.title, total, finished, done: finished === total };
-    });
-  }, [groups, done]);
-
-  const allDone = doneCount === totalItems && totalItems > 0;
-
-  // 切换指导展开
-  const toggleGuidance = (key: string) => {
-    setExpandedGuidance((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // ===== AI 动态提醒：随勾选进度变化 =====
-  const aiReminder = useMemo(() => {
-    if (!active) return null;
-    const items = allSteps;
-
-    if (doneCount === 0) {
+  // ===== 获取当前论文内容 =====
+  const getCurrentPaperData = useCallback(() => {
+    if (paperSource === "preset-srtio3") {
       return {
-        tone: "info" as const,
-        title: "👋 开始复现验证",
-        lines: [
-          "请从「实验准备」开始，逐项勾选完成。每项都配有详细操作指导，点击「查看指导」展开。",
-          `当前实验卡片有 ${missing.length} 项字段待补全，建议先完善卡片再开始复现。`,
-          "预计完整复现需要 4-6 小时，请合理安排时间。",
-        ],
+        title: SRTIO3_PAPER.title,
+        doi: SRTIO3_PAPER.doi,
+        methods: SRTIO3_PAPER.methods,
       };
     }
+    if (paperSource === "preset-co3o4") {
+      const paper = REAL_PAPERS[1];
+      return {
+        title: paper.title,
+        doi: paper.doi,
+        methods: paper.methods,
+      };
+    }
+    return {
+      title: customPaperTitle || "未命名论文",
+      doi: customPaperDoi || "手动输入",
+      methods: customMethods,
+    };
+  }, [paperSource, customPaperTitle, customPaperDoi, customMethods]);
 
-    if (doneCount < totalItems) {
-      // 找到第一个未完成的分组
-      const nextGroup = groupProgress.find((g) => !g.done);
-      const nextItem = items.find((it) => !done[it.groupKey + it.item.text]);
+  // ===== 使用预设 Audit =====
+  const loadPresetAudit = useCallback(() => {
+    setAudit(SRTIO3_PRESET_AUDIT);
+    setShowPreset(false);
+    toast.success("已加载真实论文预设 Audit（SrTiO₃/rGO/g-C₃N₄）");
+  }, []);
 
-      const lines: string[] = [];
-      if (nextGroup) {
-        lines.push(`📌 当前进度 ${pct}%，接下来请完成「${nextGroup.title}」分组（${nextGroup.finished}/${nextGroup.total}）。`);
-      }
-      if (nextItem) {
-        lines.push(`👉 下一步：${nextItem.item.text}`);
-      }
-
-      // 根据已完成的内容给出具体建议
-      const prepDone = groupProgress.find((g) => g.key === "prep")?.done;
-      const deviceDone = groupProgress.find((g) => g.key === "device")?.done;
-      const sampleDone = groupProgress.find((g) => g.key === "sample")?.done;
-      const stepsDone = groupProgress.find((g) => g.key === "steps")?.done;
-
-      if (prepDone && !deviceDone) {
-        lines.push("💡 实验准备已完成，现在确保所有设备在校准有效期内——这会影响数据可靠性。");
-      }
-      if (deviceDone && !sampleDone) {
-        lines.push("💡 设备已就绪，仔细称量样品——称量误差是实验误差的主要来源之一。");
-      }
-      if (sampleDone && !stepsDone) {
-        lines.push("💡 样品已确认，开始操作时注意严格按步骤顺序执行，遇到任何异常立即记录。");
-      }
-      if (stepsDone && !groupProgress.find((g) => g.key === "qc")?.done) {
-        lines.push("💡 实验操作完成！现在是数据核验阶段——原始数据比处理后的数据更有价值，务必保存。");
-      }
-
-      // 缺失字段提醒
-      const stillMissing = missing.filter((m) => {
-        return !Object.entries(done).some(([k, v]) => v && k.includes(m));
-      });
-      if (stillMissing.length > 0) {
-        lines.push(`⚠️ 仍有 ${stillMissing.length} 项卡片字段缺失：${stillMissing.slice(0, 3).join("、")}。`);
-      }
-
-      return { tone: "info" as const, title: `进度 ${pct}% — 持续复现中`, lines };
+  // ===== AI 拆解 =====
+  const runDecomposition = useCallback(async () => {
+    const paper = getCurrentPaperData();
+    if (!paper.methods.trim()) {
+      toast.error("请先输入论文的实验方法段落");
+      return;
     }
 
-    // all done
-    return {
-      tone: "success" as const,
-      title: "🎉 复现验证完成！",
-      lines: [
-        `全部 ${totalItems} 项步骤已确认完成。实验「${active.name}」可复现。`,
-        "✅ 实验卡片数据完整，可直接用于论文 Materials and Methods 部分。",
-        "📦 建议导出复现包（JSON + Markdown），作为课题归档和论文支撑材料。",
-        "📊 如果这是重复实验，建议与历史数据进行对比分析。",
-      ],
-    };
-  }, [doneCount, totalItems, pct, allSteps, groupProgress, active, missing]);
+    setDecomposing(true);
+    setShowPreset(false);
+    try {
+      const result = await decomposePaperMethods(
+        paper.title,
+        paper.doi,
+        paper.methods,
+        discipline,
+      );
+      setAudit(result);
+      toast.success(`拆解完成：${result.parameters.length} 个参数，${result.gaps.length} 个缺口`);
+    } catch (err) {
+      console.error("[Audit] decomposition failed:", err);
+      toast.error(`拆解失败: ${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setDecomposing(false);
+    }
+  }, [getCurrentPaperData, discipline]);
 
-  const resetAll = () => {
-    setDone({});
-    setExpandedGuidance({});
-    toast.info("已重置所有步骤");
+  // ===== 参数操作 =====
+  const confirmParam = useCallback((paramName: string, value: string) => {
+    if (!audit) return;
+    const updated = {
+      ...audit,
+      parameters: audit.parameters.map((p) =>
+        p.name === paramName
+          ? { ...p, userConfirmed: true, userValue: value || p.value }
+          : p,
+      ),
+    };
+    const { score, breakdown } = calculateReproducibilityScore(updated.parameters, updated.gaps);
+    updated.reproducibilityScore = score;
+    updated.scoreBreakdown = breakdown;
+    setAudit(updated);
+    toast.success(`已确认: ${paramName}`);
+  }, [audit]);
+
+  const fillGap = useCallback((gapDesc: string, value: string) => {
+    if (!audit) return;
+    const updated = {
+      ...audit,
+      gaps: audit.gaps.map((g) =>
+        g.description === gapDesc
+          ? { ...g, userFill: value, status: "user-filled" as const }
+          : g,
+      ),
+    };
+    const { score, breakdown } = calculateReproducibilityScore(updated.parameters, updated.gaps);
+    updated.reproducibilityScore = score;
+    updated.scoreBreakdown = breakdown;
+    setAudit(updated);
+    setGapFillValues((prev) => ({ ...prev, [gapDesc]: "" }));
+    toast.success("缺口已补全");
+  }, [audit]);
+
+  const acceptAISuggestion = useCallback((gapDesc: string) => {
+    if (!audit) return;
+    const gap = audit.gaps.find((g) => g.description === gapDesc);
+    if (!gap?.aiSuggestion) return;
+    fillGap(gapDesc, gap.aiSuggestion);
+  }, [audit, fillGap]);
+
+  // ===== 导出协议 =====
+  const exportProtocol = useCallback(() => {
+    if (!audit) return;
+    const md = generateReproductionProtocol(audit);
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `复现协议-${audit.paperTitle.slice(0, 40)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("复现协议已下载");
+  }, [audit]);
+
+  // ===== 过滤后的参数 =====
+  const filteredParams = useMemo(() => {
+    if (!audit) return [];
+    return audit.parameters.filter((p) => {
+      if (filterCategory !== "all" && p.category !== filterCategory) return false;
+      if (filterCertainty !== "all" && p.certainty !== filterCertainty) return false;
+      return true;
+    });
+  }, [audit, filterCategory, filterCertainty]);
+
+  // ===== 排序后的缺口 =====
+  const sortedGaps = useMemo(() => {
+    if (!audit) return [];
+    return prioritizeGaps(audit.gaps);
+  }, [audit]);
+
+  const categoryLabels: Record<ParameterCategory, string> = {
+    safety: "🦺 安全",
+    precursor: "🧪 前驱体",
+    equipment: "🔬 设备",
+    synthesis: "⚗️ 合成",
+    "post-processing": "🔥 后处理",
+    characterization: "📊 表征",
+    testing: "🧫 测试",
+    environment: "🌡️ 环境",
   };
 
-  if (!active) {
-    return (
-      <div className="mx-auto max-w-3xl p-12 text-center text-muted-foreground">
-        <ListChecks size={40} className="mx-auto opacity-30"/>
-        <p className="mt-4">尚无实验，请先到工作台创建或上传实验数据。</p>
-      </div>
-    );
-  }
+  const certaintyConfig: Record<CertaintyLevel, { icon: string; color: string; bg: string; label: string }> = {
+    explicit: { icon: "✅", color: "text-green-600", bg: "bg-green-50 border-green-200", label: "论文明确" },
+    implied: { icon: "📖", color: "text-blue-600", bg: "bg-blue-50 border-blue-200", label: "论文隐含" },
+    inferred: { icon: "🤖", color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "AI 推断" },
+    unknown: { icon: "❓", color: "text-red-600", bg: "bg-red-50 border-red-200", label: "未知" },
+  };
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white"><ListChecks size={20}/></div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">复现 Checklist</h1>
-          <p className="text-sm text-muted-foreground">人工逐项验证 · 详细操作指导 · AI 动态提醒</p>
+  // ═══════════════════════════════
+  // Paper Input Section
+  // ═══════════════════════════════
+  const renderPaperInput = () => (
+    <div className="card-soft p-5 mb-6">
+      <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+        <BookOpen size={16} className="text-primary"/> 论文输入
+      </h3>
+
+      {/* Preset / Custom toggle */}
+      <div className="flex gap-2 mb-4">
+        {(["preset-srtio3", "preset-co3o4", "custom"] as const).map((opt) => (
+          <button
+            key={opt}
+            onClick={() => setPaperSource(opt)}
+            className={`px-3 py-2 rounded-lg text-xs transition ${
+              paperSource === opt
+                ? "bg-primary text-primary-foreground"
+                : "border border-border hover:border-primary/40"
+            }`}
+          >
+            {opt === "preset-srtio3" ? "📄 SrTiO₃ 论文 (Sci Rep 2024)" :
+             opt === "preset-co3o4" ? "📄 Co₃O₄-rGO 论文 (Catalysts 2024)" :
+             "✏️ 自定义输入"}
+          </button>
+        ))}
+      </div>
+
+      {paperSource === "custom" ? (
+        <div className="space-y-3">
+          <input
+            value={customPaperTitle}
+            onChange={(e) => setCustomPaperTitle(e.target.value)}
+            placeholder="论文标题"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <div className="flex gap-3">
+            <input
+              value={customPaperDoi}
+              onChange={(e) => setCustomPaperDoi(e.target.value)}
+              placeholder="DOI (可选)"
+              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <select
+              value={discipline}
+              onChange={(e) => setDiscipline(e.target.value)}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            >
+              <option>材料科学</option>
+              <option>化学</option>
+              <option>物理</option>
+              <option>生物学</option>
+              <option>环境科学</option>
+            </select>
+          </div>
+          <textarea
+            value={customMethods}
+            onChange={(e) => setCustomMethods(e.target.value)}
+            placeholder="在此粘贴论文的实验方法/Methods/Experimental 段落…"
+            rows={8}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y font-mono"
+          />
         </div>
-        <select value={active.id} onChange={(e) => { setActiveId(e.target.value); setDone({}); }}
-          className="rounded-lg border border-border bg-card px-3 py-2 text-sm">
-          {experiments.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
-      </div>
+      ) : (
+        <div className="rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 font-medium text-foreground mb-1">
+            <FileText size={14}/>
+            {paperSource === "preset-srtio3" ? SRTIO3_PAPER.title : REAL_PAPERS[1].title}
+          </div>
+          <p>DOI: {paperSource === "preset-srtio3" ? SRTIO3_PAPER.doi : REAL_PAPERS[1].doi}</p>
+          <p className="mt-1">Methods 段落已预加载（真实论文内容），可直接拆解或使用预设结果。</p>
+        </div>
+      )}
 
-      {/* 概览进度条 */}
+      {/* Action buttons */}
+      <div className="mt-4 flex gap-3">
+        <button
+          onClick={runDecomposition}
+          disabled={decomposing}
+          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition"
+        >
+          {decomposing ? (
+            <><Loader2 size={15} className="animate-spin"/> AI 拆解中…</>
+          ) : (
+            <><Sparkles size={15}/> AI 拆解论文 → 复现参数</>
+          )}
+        </button>
+        <button
+          onClick={loadPresetAudit}
+          disabled={decomposing}
+          className="flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm hover:border-primary/40 hover:bg-primary-soft/10 transition"
+        >
+          <Zap size={15}/> 使用预设 Audit（快速演示）
+        </button>
+      </div>
+    </div>
+  );
+
+  // ═══════════════════════════════
+  // Score Dashboard
+  // ═══════════════════════════════
+  const renderScoreDashboard = () => {
+    if (!audit) return null;
+    const explicitCount = audit.parameters.filter((p) => p.certainty === "explicit").length;
+    const inferredCount = audit.parameters.filter((p) => p.certainty === "inferred").length;
+    const unknownCount = audit.parameters.filter((p) => p.certainty === "unknown").length;
+    const openGaps = audit.gaps.filter((g) => g.status === "open").length;
+    const confirmedCount = audit.parameters.filter((p) => p.userConfirmed).length;
+
+    const scoreColor = audit.reproducibilityScore >= 80 ? "text-green-600" :
+      audit.reproducibilityScore >= 60 ? "text-amber-600" : "text-red-600";
+
+    return (
       <div className="card-soft p-5 mb-6">
         <div className="flex flex-wrap items-center gap-6">
-          <div>
-            <div className="text-xs text-muted-foreground">复现实验</div>
-            <div className="text-lg font-semibold mt-0.5">{active.name}</div>
+          {/* Score ring */}
+          <div className="text-center">
+            <div className={`text-3xl font-bold ${scoreColor}`}>{audit.reproducibilityScore}</div>
+            <div className="text-[10px] text-muted-foreground">复现可行性 /100</div>
           </div>
-          <Stat label="总步骤" value={`${totalItems}`}/>
-          <Stat label="已完成" value={`${doneCount}`}/>
-          <Stat label="进度" value={`${pct}%`}/>
-          <div className="flex-1 min-w-[120px]">
-            <div className="h-2.5 rounded-full bg-primary/10 overflow-hidden">
+
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-4 flex-1">
+            <MiniStat label="总参数" value={audit.parameters.length.toString()} icon={<Beaker size={14}/>}/>
+            <MiniStat label="论文明确" value={explicitCount.toString()} icon={<CheckCircle2 size={14} className="text-green-600"/>}/>
+            <MiniStat label="AI 推断" value={(inferredCount + unknownCount).toString()} icon={<Sparkles size={14} className="text-amber-600"/>}/>
+            <MiniStat label="待补缺口" value={openGaps.toString()} icon={<AlertTriangle size={14} className={openGaps > 0 ? "text-red-600" : "text-green-600"}/>}/>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full">
+            <div className="h-2 rounded-full bg-secondary overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  allDone ? "bg-[color:var(--color-success)]" : "bg-primary"
+                className={`h-full rounded-full transition-all duration-700 ${
+                  audit.reproducibilityScore >= 80 ? "bg-green-500" :
+                  audit.reproducibilityScore >= 60 ? "bg-amber-500" : "bg-red-500"
                 }`}
-                style={{ width: `${pct}%` }}
+                style={{ width: `${audit.reproducibilityScore}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-muted-foreground">{audit.scoreBreakdown}</p>
+          </div>
+
+          {/* Confirmed count */}
+          {confirmedCount > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              ✅ {confirmedCount} 个参数已由你确认
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════
+  // Critical Risks
+  // ═══════════════════════════════
+  const renderCriticalRisks = () => {
+    if (!audit || !audit.criticalRisks.length) return null;
+    return (
+      <div className="mb-6 rounded-xl bg-red-50 border border-red-200 p-4">
+        <h3 className="text-sm font-semibold text-red-700 flex items-center gap-2 mb-2">
+          <Shield size={15}/> 关键风险（{audit.criticalRisks.length} 项）
+        </h3>
+        <ul className="space-y-1.5">
+          {audit.criticalRisks.map((risk, i) => (
+            <li key={i} className="text-xs text-red-800 flex items-start gap-2">
+              <span className="mt-0.5">🔴</span>
+              <span>{risk}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════
+  // AI Assessment
+  // ═══════════════════════════════
+  const renderAIAssessment = () => {
+    if (!audit?.aiAssessment) return null;
+    return (
+      <div className="mb-6 rounded-xl bg-primary-soft/10 border border-primary/15 p-4">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-2 text-primary">
+          <Lightbulb size={15}/> AI 总体评估
+        </h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">{audit.aiAssessment}</p>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════
+  // Parameters Tab
+  // ═══════════════════════════════
+  const renderParameters = () => {
+    if (!audit) return null;
+
+    // Group by category
+    const grouped = new Map<ParameterCategory, ReproductionParameter[]>();
+    for (const p of filteredParams) {
+      if (!grouped.has(p.category)) grouped.set(p.category, []);
+      grouped.get(p.category)!.push(p);
+    }
+
+    if (filteredParams.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          无匹配参数 — 请调整筛选条件
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {Array.from(grouped.entries()).map(([cat, params]) => (
+          <div key={cat}>
+            <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+              {categoryLabels[cat]}
+              <span className="text-[10px] text-muted-foreground/70">({params.length})</span>
+            </h4>
+            <div className="space-y-2">
+              {params.map((p) => renderParamRow(p))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderParamRow = (p: ReproductionParameter) => {
+    const config = certaintyConfig[p.certainty];
+    const isExpanded = expandedParam.has(p.name);
+    const isEditing = editingParam === p.name;
+    const impactColors = {
+      critical: "border-l-red-500",
+      major: "border-l-amber-500",
+      minor: "border-l-blue-500",
+    };
+
+    return (
+      <div
+        key={p.name}
+        className={`rounded-lg border border-border border-l-2 ${impactColors[p.impactIfWrong]} ${
+          p.userConfirmed ? "bg-green-50/30" : "bg-card"
+        } p-3 transition`}
+      >
+        <div className="flex items-center gap-3">
+          {/* Certainty badge */}
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${config.bg} ${config.color} border shrink-0`}>
+            {config.icon} {config.label}
+          </span>
+
+          {/* Param name */}
+          <span className="text-sm font-medium flex-1 min-w-0 truncate">{p.name}</span>
+
+          {/* Value */}
+          <span className="text-sm font-bold tabular-nums shrink-0">
+            {p.userConfirmed ? (
+              <span className="text-green-700">{p.userValue || p.value}</span>
+            ) : (
+              p.value || <span className="text-red-400 italic">未知</span>
+            )}
+          </span>
+          <span className="text-[11px] text-muted-foreground shrink-0">{p.unit}</span>
+
+          {/* Confidence bar */}
+          <div className="w-16 shrink-0 hidden lg:block">
+            <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+              <div
+                className={`h-full rounded-full transition ${
+                  p.confidence >= 80 ? "bg-green-500" :
+                  p.confidence >= 50 ? "bg-amber-500" : "bg-red-500"
+                }`}
+                style={{ width: `${p.confidence}%` }}
+              />
+            </div>
+            <p className="text-[9px] text-muted-foreground text-right mt-0.5">{p.confidence}%</p>
+          </div>
+
+          {/* Actions */}
+          <button
+            onClick={() => setExpandedParam((prev) => {
+              const next = new Set(prev);
+              next.has(p.name) ? next.delete(p.name) : next.add(p.name);
+              return next;
+            })}
+            className="p-1 text-muted-foreground hover:text-foreground shrink-0"
+          >
+            {isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+          </button>
+
+          {!p.userConfirmed && p.certainty !== "explicit" && (
+            <button
+              onClick={() => { setEditingParam(p.name); setEditValue(p.value); }}
+              className="p-1 text-primary hover:bg-primary-soft/20 rounded shrink-0"
+              title="修改/确认"
+            >
+              <Edit2 size={14}/>
+            </button>
+          )}
+
+          {p.userConfirmed && (
+            <CheckCircle2 size={16} className="text-green-600 shrink-0"/>
+          )}
+        </div>
+
+        {/* Expanded details */}
+        {isExpanded && (
+          <div className="mt-3 pt-3 border-t border-border space-y-2">
+            {p.paperQuote && (
+              <div className="text-[11px] text-muted-foreground">
+                <span className="font-medium">论文原文：</span>
+                <span className="italic">"{p.paperQuote}"</span>
+              </div>
+            )}
+            {p.inferenceRationale && (
+              <div className="text-[11px] text-muted-foreground">
+                <span className="font-medium">推断依据：</span>
+                {p.inferenceRationale}
+              </div>
+            )}
+            {p.alternativeRange && (
+              <div className="text-[11px] text-muted-foreground">
+                <span className="font-medium">参考范围：</span>
+                {p.alternativeRange}
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <span>来源：{p.source}</span>
+              <span>·</span>
+              <span>影响等级：{p.impactIfWrong === "critical" ? "🔴 关键" : p.impactIfWrong === "major" ? "🟡 重要" : "🟢 轻微"}</span>
+            </div>
+            {p.relatedParams.length > 0 && (
+              <div className="text-[10px] text-muted-foreground">
+                关联参数：{p.relatedParams.join("、")}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Edit inline */}
+        {isEditing && (
+          <div className="mt-2 flex gap-2">
+            <input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="flex-1 rounded-lg border border-primary/40 bg-card px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder={`输入 ${p.name} 的值${p.unit ? ` (${p.unit})` : ""}`}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  confirmParam(p.name, editValue);
+                  setEditingParam(null);
+                }
+                if (e.key === "Escape") setEditingParam(null);
+              }}
+            />
+            <button
+              onClick={() => { confirmParam(p.name, editValue); setEditingParam(null); }}
+              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:bg-primary/90"
+            >
+              确认
+            </button>
+            <button
+              onClick={() => setEditingParam(null)}
+              className="px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-secondary"
+            >
+              取消
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════
+  // Gaps Tab
+  // ═══════════════════════════════
+  const renderGaps = () => {
+    if (!audit) return null;
+
+    if (sortedGaps.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <CheckCircle2 size={32} className="mx-auto text-green-500"/>
+          <p className="mt-2 text-sm text-muted-foreground">所有信息已完整，无复现缺口 🎉</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {sortedGaps.map((gap) => renderGapRow(gap))}
+      </div>
+    );
+  };
+
+  const renderGapRow = (gap: ReproductionGap) => {
+    const impactConfig = {
+      critical: { icon: "🔴", color: "border-red-300 bg-red-50/50", label: "关键" },
+      major: { icon: "🟡", color: "border-amber-300 bg-amber-50/50", label: "重要" },
+      minor: { icon: "🟢", color: "border-blue-300 bg-blue-50/50", label: "轻微" },
+    };
+    const ic = impactConfig[gap.impactIfWrong];
+    const isResolved = gap.status === "user-filled" || gap.status === "resolved";
+
+    return (
+      <div key={gap.description} className={`rounded-lg border ${ic.color} p-4 ${isResolved ? "opacity-70" : ""}`}>
+        <div className="flex items-start gap-3">
+          <span className="text-lg shrink-0 mt-0.5">{ic.icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-semibold">{gap.description}</h4>
+              <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                {ic.label}缺口
+              </span>
+              {isResolved && (
+                <span className="text-[10px] text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                  ✅ 已补全
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{gap.importanceRationale}</p>
+
+            {/* AI Suggestion */}
+            {gap.aiSuggestion && (
+              <div className="mt-2 rounded-lg bg-primary-soft/10 border border-primary/15 p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={12} className="text-primary"/>
+                  <span className="text-[11px] font-semibold text-primary">AI 建议</span>
+                  <span className="text-[10px] text-muted-foreground">置信度 {gap.confidence}%</span>
+                </div>
+                <p className="text-xs">{gap.aiSuggestion}</p>
+                {gap.inferenceBasis && (
+                  <p className="mt-1 text-[10px] text-muted-foreground">依据：{gap.inferenceBasis}</p>
+                )}
+                {!isResolved && (
+                  <button
+                    onClick={() => acceptAISuggestion(gap.description)}
+                    className="mt-2 text-[11px] text-primary hover:underline flex items-center gap-1"
+                  >
+                    <CheckCircle2 size={11}/> 采纳此建议
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* DB Reference */}
+            {gap.dbReference && (
+              <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1">
+                <ExternalLink size={11}/>
+                数据库参考：{gap.dbReference}
+              </div>
+            )}
+
+            {/* User fill */}
+            {!isResolved && (
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={gapFillValues[gap.description] ?? ""}
+                  onChange={(e) => setGapFillValues((prev) => ({ ...prev, [gap.description]: e.target.value }))}
+                  placeholder="输入你确定的值…"
+                  className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && gapFillValues[gap.description]?.trim()) {
+                      fillGap(gap.description, gapFillValues[gap.description]);
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (gapFillValues[gap.description]?.trim()) {
+                      fillGap(gap.description, gapFillValues[gap.description]);
+                    }
+                  }}
+                  disabled={!gapFillValues[gap.description]?.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:bg-primary/90 disabled:opacity-40"
+                >
+                  提交
+                </button>
+              </div>
+            )}
+
+            {/* Show filled value */}
+            {isResolved && gap.userFill && (
+              <div className="mt-2 text-xs text-green-700 flex items-center gap-1">
+                <CheckCircle2 size={11}/>
+                已填入：{gap.userFill}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════
+  // Protocol Tab
+  // ═══════════════════════════════
+  const renderProtocol = () => {
+    if (!audit) return null;
+    const md = generateReproductionProtocol(audit);
+    return (
+      <div className="space-y-4">
+        <div className="flex gap-3">
+          <button
+            onClick={exportProtocol}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground hover:bg-primary/90"
+          >
+            <Download size={14}/> 下载 Markdown 协议
+          </button>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(md);
+              toast.success("协议已复制到剪贴板");
+            }}
+            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-xs hover:bg-secondary"
+          >
+            <Copy size={14}/> 复制全文
+          </button>
+        </div>
+        <pre className="rounded-xl bg-secondary/50 p-5 text-xs leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-auto font-mono">
+          {md}
+        </pre>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════
+  // Empty State
+  // ═══════════════════════════════
+  if (!audit && !decomposing) {
+    return (
+      <RequireAuth>
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
+            <ListChecks size={20}/>
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">复现审计</h1>
+            <p className="text-sm text-muted-foreground">
+              论文实验方法拆解 · 参数确定性标注 · 缺口智能推断 · 复现协议生成
+            </p>
+          </div>
+        </div>
+
+        {/* How it works */}
+        {showPreset && (
+          <div className="card-soft p-6 mb-6">
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
+              <Target size={20} className="text-primary"/> 如何解决"AI 只能靠推测"的问题？
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <StepCard
+                num={1}
+                title="拆解而非猜测"
+                desc="AI 系统性地从论文 Methods 中提取每一个数值参数，区分「论文明确写出」「论文隐含」「需要推断」三个等级。不确定就是不确定，不假装知道。"
+              />
+              <StepCard
+                num={2}
+                title="领域知识校验"
+                desc="每个推断都基于真实科研文献中的典型参数范围和公共数据库（Materials Project、NIST）。置信度透明标注，研究者可随时覆盖。"
+              />
+              <StepCard
+                num={3}
+                title="缺口驱动复现"
+                desc="自动识别缺失但复现必需的信息，按关键程度排序。研究者逐项审核/补全后，生成可执行的复现协议。"
               />
             </div>
           </div>
-          <button onClick={resetAll}
-            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary transition">
-            <RotateCcw size={14}/> 重置
-          </button>
-        </div>
+        )}
 
-        {/* 分组进度条 */}
-        <div className="mt-4 flex flex-wrap gap-3">
-          {groupProgress.map((g) => (
-            <div key={g.key}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] ${
-                g.done
-                  ? "bg-[color:var(--color-success)]/10 text-[color:var(--color-success)]"
-                  : g.finished > 0
-                  ? "bg-primary-soft text-primary"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${
-                g.done ? "bg-[color:var(--color-success)]" : g.finished > 0 ? "bg-primary" : "bg-border"
-              }`}/>
-              {g.title} {g.finished}/{g.total}
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* Paper Input */}
+        {renderPaperInput()}
 
-      {/* AI 动态提醒 */}
-      {aiReminder && (
-        <div className={`mb-6 rounded-xl p-4 transition-all ${
-          aiReminder.tone === "success"
-            ? "bg-[color:var(--color-success)]/5 border border-[color:var(--color-success)]/30"
-            : "bg-primary-soft/10 border border-primary/20"
-        }`}>
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={15} className={
-              aiReminder.tone === "success" ? "text-[color:var(--color-success)]" : "text-primary"
-            }/>
-            <h3 className="text-sm font-semibold">{aiReminder.title}</h3>
-          </div>
-          <ul className="space-y-1.5">
-            {aiReminder.lines.map((line, i) => (
-              <li key={i} className="text-xs text-muted-foreground leading-relaxed">{line}</li>
-            ))}
+        {/* Quick info */}
+        <div className="mt-6 rounded-xl bg-secondary/30 p-4 text-xs text-muted-foreground">
+          <p className="flex items-center gap-2 font-medium text-foreground mb-1">
+            <Info size={14}/> 支持的真实数据来源
+          </p>
+          <ul className="space-y-1 ml-6 list-disc">
+            <li>Materials Project API — 15万+ 无机材料计算属性 (band gap, formation energy, crystal structure)</li>
+            <li>NIST Chemistry WebBook — 化合物热力学数据</li>
+            <li>开放获取论文 — Scientific Reports, RSC Advances, MDPI Catalysts 等</li>
+            <li>领域知识库 — 基于 2024 年发表的 10+ 篇光催化/材料论文的典型参数</li>
           </ul>
         </div>
-      )}
+      </div>
+      </RequireAuth>
+    );
+  }
 
-      {/* 步骤时间线（全展开、可交互） */}
-      <div className="card-soft p-5 mb-6">
-        <div className="relative pl-8 border-l-2 border-border space-y-0">
-          {allSteps.map((step, i) => {
-            const key = step.groupKey + step.item.text;
-            const isDone = !!done[key];
-            const isExpanded = !!expandedGuidance[key];
-            // 当前步骤：第一个未完成的
-            const isCurrent = !isDone && !allSteps.slice(0, i).some((s) => !done[s.groupKey + s.item.text]);
-
-            return (
-              <div key={i} className={`relative -left-[34px] pb-3 last:pb-0`}>
-                {/* 圆圈 */}
-                <div className="flex items-start gap-3">
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] border-2 transition-all ${
-                    isDone
-                      ? "bg-[color:var(--color-success)] border-[color:var(--color-success)] text-white"
-                      : isCurrent
-                      ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/20"
-                      : "bg-background border-border text-muted-foreground"
-                  }`}>
-                    {isDone ? "✓" : i + 1}
-                  </span>
-
-                  <div className="flex-1 min-w-0 pb-1">
-                    {/* 标签 + 所属分组 */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <label className="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={isDone}
-                          onChange={(e) => setDone({ ...done, [key]: e.target.checked })}
-                          className="mt-0.5 accent-[color:var(--color-primary)]"
-                        />
-                        <span className={`text-sm leading-relaxed ${
-                          isDone ? "line-through text-muted-foreground" : isCurrent ? "font-medium" : ""
-                        }`}>
-                          {step.item.text}
-                        </span>
-                      </label>
-                      <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full shrink-0">
-                        {step.groupTitle}
-                      </span>
-                    </div>
-
-                    {/* 展开/收起指导按钮 */}
-                    <button
-                      onClick={() => toggleGuidance(key)}
-                      className={`mt-1 flex items-center gap-1 text-[11px] transition ${
-                        isCurrent && !isExpanded
-                          ? "text-primary font-medium animate-pulse"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
-                      {isExpanded ? "收起指导" : isCurrent ? "📖 查看详细操作指导" : "查看指导"}
-                    </button>
-
-                    {/* 详细指导内容 */}
-                    {isExpanded && (
-                      <div className={`mt-2 rounded-lg p-3 text-xs leading-relaxed transition-all ${
-                        isDone
-                          ? "bg-[color:var(--color-success)]/5 border border-[color:var(--color-success)]/20"
-                          : "bg-primary-soft/10 border border-primary/15"
-                      }`}>
-                        <div className="flex items-start gap-2">
-                          <Lightbulb size={12} className="text-primary mt-0.5 shrink-0"/>
-                          <span>{step.item.guidance}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+  // ═══════════════════════════════
+  // Main Audit View
+  // ═══════════════════════════════
+  return (
+    <RequireAuth>
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-2">
+        <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
+          <ListChecks size={20}/>
         </div>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">复现审计</h1>
+          <p className="text-sm text-muted-foreground">
+            论文实验方法拆解 · 参数确定性标注 · 缺口智能推断
+          </p>
+        </div>
+        <button
+          onClick={() => { setAudit(null); setShowPreset(true); }}
+          className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
+        >
+          <RotateCcw size={14}/> 重新开始
+        </button>
       </div>
 
-      {/* 缺失字段提醒 */}
-      {missing.length > 0 && (
-        <div className="mt-6 rounded-xl bg-[color:var(--color-warning)]/5 border border-[color:var(--color-warning)]/30 p-4">
-          <h3 className="text-sm font-semibold flex items-center gap-2 text-[color:var(--color-warning)]">
-            <AlertTriangle size={15}/> 卡片字段待补全（{missing.length} 项）
-          </h3>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {missing.slice(0, 8).join("、")}{missing.length > 8 ? `等共 ${missing.length} 项` : ""}
-            。补全后可提高复现可信度评分。
+      {/* Paper info */}
+      {audit && (
+        <div className="mb-4 text-xs text-muted-foreground flex items-center gap-2">
+          <FileText size={12}/>
+          <span className="font-medium text-foreground truncate">{audit.paperTitle}</span>
+          <span>·</span>
+          <span>{audit.paperSource}</span>
+        </div>
+      )}
+
+      {/* Loading */}
+      {decomposing && (
+        <div className="card-soft p-12 text-center mb-6">
+          <Loader2 size={40} className="animate-spin mx-auto text-primary"/>
+          <p className="mt-4 font-semibold">AI 正在拆解论文实验方法…</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            提取结构化复现参数，标注确定性等级，识别信息缺口
           </p>
         </div>
       )}
 
-      {/* 全部完成后的大提示 */}
-      {allDone && (
-        <div className="mt-6 card-soft p-6 border-[color:var(--color-success)]/40 bg-[color:var(--color-success)]/5 text-center">
-          <CheckCircle2 size={40} className="mx-auto text-[color:var(--color-success)]"/>
-          <h3 className="mt-3 text-lg font-bold">复现验证通过</h3>
-          <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-            实验「{active.name}」的 {totalItems} 项步骤全部确认可复现。建议导出复现包归档。
-          </p>
-          <button
-            onClick={() => {
-              const md = `# 复现报告：${active.name}\n\n## 验证日期\n${new Date().toISOString().slice(0, 10)}\n\n## 验证结果\n全部 ${totalItems} 项步骤通过 ✅\n\n## 实验卡片\n见工作台\n`;
-              const blob = new Blob([md], { type: "text/markdown" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a"); a.href = url;
-              a.download = `复现报告-${active.name}.md`; a.click();
-              URL.revokeObjectURL(url);
-              toast.success("复现报告已下载");
-            }}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm text-primary-foreground hover:bg-primary/90 transition"
-          >
-            <ArrowRight size={14}/> 导出复现报告
-          </button>
-        </div>
+      {/* Score */}
+      {audit && renderScoreDashboard()}
+
+      {/* Critical Risks */}
+      {audit && renderCriticalRisks()}
+
+      {/* AI Assessment */}
+      {audit && renderAIAssessment()}
+
+      {/* Tabs */}
+      {audit && (
+        <>
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 mb-4">
+            {(["params", "gaps", "protocol"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 rounded-lg text-sm transition ${
+                  activeTab === tab
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-secondary text-muted-foreground"
+                }`}
+              >
+                {tab === "params" ? `📋 参数 (${audit.parameters.length})` :
+                 tab === "gaps" ? `🔍 缺口 (${audit.gaps.length})` :
+                 "📄 协议"}
+              </button>
+            ))}
+
+            <div className="flex-1"/>
+
+            {/* Filters (only for params) */}
+            {activeTab === "params" && (
+              <div className="flex gap-2">
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value as ParameterCategory | "all")}
+                  className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
+                >
+                  <option value="all">全部类别</option>
+                  {Object.entries(categoryLabels).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterCertainty}
+                  onChange={(e) => setFilterCertainty(e.target.value as CertaintyLevel | "all")}
+                  className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
+                >
+                  <option value="all">全部确定性</option>
+                  <option value="explicit">✅ 论文明确</option>
+                  <option value="implied">📖 论文隐含</option>
+                  <option value="inferred">🤖 AI 推断</option>
+                  <option value="unknown">❓ 未知</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Tab content */}
+          <div className="card-soft p-5">
+            {activeTab === "params" && renderParameters()}
+            {activeTab === "gaps" && renderGaps()}
+            {activeTab === "protocol" && renderProtocol()}
+          </div>
+        </>
       )}
+    </div>
+    </RequireAuth>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// Small components
+// ═══════════════════════════════════════════════════════
+
+function MiniStat({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return (
+    <div className="text-center">
+      <div className="flex items-center justify-center gap-1 text-muted-foreground mb-0.5">
+        {icon}
+      </div>
+      <div className="text-lg font-bold tabular-nums">{value}</div>
+      <div className="text-[10px] text-muted-foreground">{label}</div>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function StepCard({ num, title, desc }: { num: number; title: string; desc: string }) {
   return (
-    <div className="text-center">
-      <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className="text-base font-bold tabular-nums">{value}</div>
+    <div className="rounded-xl border border-border p-4 hover:border-primary/30 transition">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+          {num}
+        </span>
+        <h3 className="text-sm font-semibold">{title}</h3>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
     </div>
+  );
+}
+
+// Simple edit icon (avoiding Lucide import if not available)
+function Edit2({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+      <path d="m15 5 4 4"/>
+    </svg>
   );
 }

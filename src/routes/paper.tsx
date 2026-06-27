@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import { useLab, generateMethods } from "../lib/labStore";
 import { FileText, Sparkles, Download, ArrowRight, CheckCircle2, BookOpen, Edit3 } from "lucide-react";
 import { toast } from "sonner";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/paper")({
   head: () => ({
@@ -51,6 +52,7 @@ function PaperPage() {
   };
 
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex items-center gap-3 mb-6">
         <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white"><BookOpen size={20}/></div>
@@ -131,5 +133,6 @@ function PaperPage() {
         </div>
       </div>
     </div>
+    </RequireAuth>
   );
 }

@@ -10,6 +10,7 @@ import {
   Network, X, FileText, User, FlaskConical, Cpu,
   Lightbulb, ArrowUpRight, ZoomIn, ZoomOut, RotateCcw,
 } from "lucide-react";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/graph")({
   head: () => ({
@@ -190,6 +191,7 @@ function GraphPage() {
   }
 
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-7xl px-4 py-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
@@ -323,6 +325,7 @@ function GraphPage() {
         <span className="ml-4 border-l border-border pl-4" style={{ color: "var(--color-success)" }}>语义边 = AI 相似度 &gt;75%</span>
       </div>
     </div>
+    </RequireAuth>
   );
 }
 
