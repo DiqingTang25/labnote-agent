@@ -1,129 +1,51 @@
 /**
- * 多模态解析流水线
- * - 读取每个文件 → 按类型分类 → 合并生成实验卡片
- * - 后台调 SiliconFlow API 增强（不阻塞）
- * - 预置卡片兜底，保证每次上传都有产出
+ * 多模态解析流水线 — 真实 AI 集成版
+ *
+ * 流程：读取文件 → 按类型调 SiliconFlow API → 提取 JSON → 合并去重 → 出实验卡片
  */
-import { type Experiment } from "./labStore";
-import { parseTextFile } from "./siliconflow";
+import type { AttachedFile, Experiment } from "./labStore";
+import {
+  parseTextFile,
+  parseImage,
+  parseCSV,
+  parseTranscript,
+  parseVideo,
+  parseAudio,
+  mergeResults,
+  fileToBase64,
+} from "./siliconflow";
+import { parseAPIResponse, normalizeExperiment } from "./json-parser";
 
-// ==================== 预置实验卡片 ====================
+// ═══════════════════════════════════════════════════════
+// 类型
+// ═══════════════════════════════════════════════════════
 
-const PRESET_CARDS: Experiment[] = [
-  {
-    id: "",
-    name: "Fe₃O₄ 纳米粒子制备（共沉淀法）",
-    date: "2026-05-15 08:30",
-    operator: "李明",
-    purpose: "采用化学共沉淀法制备Fe₃O₄磁性纳米粒子，为光催化降解实验提供催化剂",
-    background: "Fe₃O₄作为窄带隙半导体（~0.1eV），在可见光下有催化活性，且磁性便于回收。共沉淀法操作简单、成本低，适合实验室规模制备。",
-    device: { name: "机械搅拌器", model: "RW20", vendor: "IKA" },
-    sample: { id: "Fe₃O₄-20260515", batch: "B-0515-A", source: "实验室自制" },
-    params: [
-      { name: "FeCl₃·6H₂O", value: "5.406", unit: "g (20mmol)" },
-      { name: "FeCl₂·4H₂O", value: "1.988", unit: "g (10mmol)" },
-      { name: "反应温度", value: "80", unit: "℃" },
-      { name: "反应时间", value: "60", unit: "min" },
-      { name: "NH₃·H₂O", value: "15", unit: "mL (25%)" },
-      { name: "干燥温度", value: "60", unit: "℃" },
-    ],
-    environment: { temperature: "25", humidity: "55", other: "N₂气氛保护" },
-    steps: [
-      "称取FeCl₃·6H₂O 5.406g和FeCl₂·4H₂O 1.988g溶于100mL去离子水",
-      "通入N₂保护，400rpm搅拌，升温至80℃",
-      "快速注入15mL NH₃·H₂O(25%)，溶液变黑",
-      "80℃反应60min，持续N₂保护",
-      "磁分离，水洗3次+乙醇洗2次，60℃真空干燥12h",
-    ],
-    results: "XRD确认纯相Fe₃O₄(JCPDS 19-0629)，Scherrer公式晶粒尺寸12.8nm，磁性良好。",
-    notes: "制备中差点忘通N₂，经提醒及时纠正。产物磁响应性强。",
-    source: "",
-    discipline: "材料科学",
-  },
-  {
-    id: "",
-    name: "Fe₃O₄ 可见光催化降解亚甲基蓝",
-    date: "2026-05-15 14:00",
-    operator: "李明",
-    purpose: "研究Fe₃O₄纳米粒子在可见光下对亚甲基蓝(MB)的光催化降解性能",
-    background: "以MB为模型污染物，通过664nm吸光度变化评估Fe₃O₄可见光催化活性，为染料废水处理提供数据支撑。",
-    device: { name: "紫外可见分光光度计", model: "UV-2600", vendor: "Shimadzu" },
-    sample: { id: "MB-20mg/L", batch: "MB-20260515", source: "亚甲基蓝AR，国药" },
-    params: [
-      { name: "催化剂用量", value: "50", unit: "mg" },
-      { name: "MB初始浓度", value: "20", unit: "mg/L" },
-      { name: "溶液体积", value: "100", unit: "mL" },
-      { name: "pH", value: "6.8", unit: "" },
-      { name: "光源", value: "300W Xe灯", unit: "λ>420nm" },
-      { name: "暗吸附时间", value: "30", unit: "min" },
-      { name: "检测波长", value: "664", unit: "nm" },
-    ],
-    environment: { temperature: "25", humidity: "50", other: "光强~100mW/cm²" },
-    steps: [
-      "配制20mg/L MB溶液100mL",
-      "加入50mg Fe₃O₄，超声分散5min",
-      "暗反应30min达吸附平衡",
-      "开启300W氙灯(λ>420nm)",
-      "每15min取样3mL，磁分离取上清液",
-      "UV-Vis测664nm吸光度，计算降解率",
-    ],
-    results: "90min降解率93.43%，120min稳定在94.55%。比上批次(85%)显著提高，推测因本批Fe₃O₄晶粒更细。降解过程符合一级动力学。",
-    notes: "磁分离磁铁吸力不足→下次换强磁铁。UV-Vis基线微漂(氘灯近2000h)。氙灯滤光片老化，实际光强约标称92%。105min吸光度波动可能是比色皿未擦净。",
-    source: "",
-    discipline: "环境化学",
-  },
-  {
-    id: "",
-    name: "Fe₃O₄ 纳米粒子 XRD 表征",
-    date: "2026-05-15 15:00",
-    operator: "李明",
-    purpose: "XRD确认Fe₃O₄物相纯度与晶体结构，Scherrer公式计算晶粒尺寸",
-    background: "需确认样品为纯相Fe₃O₄而非Fe₂O₃杂质，通过衍射峰宽化估算晶粒尺寸。",
-    device: { name: "X射线衍射仪", model: "SmartLab", vendor: "Rigaku" },
-    sample: { id: "Fe₃O₄-20260515", batch: "B-0515-A", source: "共沉淀法制备" },
-    params: [
-      { name: "靶材", value: "Cu Kα", unit: "λ=0.15406nm" },
-      { name: "扫描范围", value: "10-80", unit: "°" },
-      { name: "步长", value: "0.02", unit: "°" },
-      { name: "电压/电流", value: "40kV/40mA", unit: "" },
-      { name: "晶粒尺寸", value: "12.8", unit: "nm (311峰)" },
-      { name: "晶格常数", value: "8.374", unit: "Å" },
-    ],
-    environment: { temperature: "23", humidity: "45", other: "室温" },
-    steps: [
-      "Fe₃O₄粉末均匀涂布在零背景硅片上",
-      "设置扫描参数：10-80°，步长0.02°，速度4°/min",
-      "启动扫描，监控图谱",
-      "比对JCPDS 19-0629确认物相",
-      "311峰Scherrer公式计算晶粒尺寸",
-    ],
-    results: "8个特征峰对应FCC Fe₃O₄的(111)(220)(311)(222)(400)(422)(511)(440)晶面，与JCPDS 19-0629完全匹配，无Fe₂O₃杂峰。311峰FWHM=0.45°，晶粒12.8nm。a=8.374Å。",
-    notes: "衍射峰略宽(FWHM>0.45°)，印证晶粒小(~13nm)，有利于催化。",
-    source: "",
-    discipline: "材料科学",
-  },
+export type PipelineStage =
+  | "idle"
+  | "reading"
+  | "analyzing"
+  | "extracting"
+  | "merging"
+  | "complete";
+
+export const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
+  { key: "reading", label: "读取文件内容" },
+  { key: "analyzing", label: "AI 多模态识别" },
+  { key: "extracting", label: "结构化信息抽取" },
+  { key: "merging", label: "去重合并生成卡片" },
+  { key: "complete", label: "完成" },
 ];
 
-// ==================== 本地文件映射 ====================
-
-interface LocalFileEntry {
+export type FileProgress = {
   name: string;
-  type: "text" | "csv" | "image" | "transcript";
-  label: string;
-  cardIndex: number;
-}
+  status: "waiting" | "reading" | "analyzing" | "extracting" | "complete" | "error";
+  detail?: string;
+  error?: string;
+};
 
-const LOCAL_FILES: LocalFileEntry[] = [
-  { name: "实验方案_v2_final.md", type: "text", label: "实验方案", cardIndex: 0 },
-  { name: "UV-Vis-20260515.csv", type: "csv", label: "光谱数据", cardIndex: 1 },
-  { name: "实验记录-随手记.txt", type: "text", label: "实验笔记", cardIndex: 1 },
-  { name: "XRD-结果分析.csv", type: "csv", label: "XRD数据", cardIndex: 2 },
-  { name: "SEM-Fe3O4-纳米粒子.png", type: "image", label: "SEM图像", cardIndex: 0 },
-  { name: "样品制备-操作图.jpg", type: "image", label: "操作照片", cardIndex: 0 },
-  { name: "语音记录-20260515-转录.txt", type: "transcript", label: "语音记录", cardIndex: 1 },
-];
-
-// ==================== 文件类型检测 ====================
+// ═══════════════════════════════════════════════════════
+// 文件类型检测
+// ═══════════════════════════════════════════════════════
 
 export function detectFileInfo(fileName: string): { type: string; icon: string } {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
@@ -148,113 +70,309 @@ export function detectFileInfo(fileName: string): { type: string; icon: string }
   return map[ext] ?? { type: "其他格式", icon: "📎" };
 }
 
-export function getLocalFiles(): LocalFileEntry[] {
-  return LOCAL_FILES;
-}
-
-// ==================== 流水线 ====================
-
-export type PipelineStage =
-  | "idle"
-  | "reading"
-  | "analyzing"
-  | "extracting"
-  | "merging"
-  | "complete";
-
-export const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
-  { key: "reading", label: "读取文件内容" },
-  { key: "analyzing", label: "多模态识别分析" },
-  { key: "extracting", label: "结构化信息抽取" },
-  { key: "merging", label: "去重合并生成卡片" },
-  { key: "complete", label: "完成" },
-];
-
 /**
- * 执行多模态解析流水线
- * 流程：读文件 → 分析 → 抽取 → 合并 → 出卡片
- * 后台调 API 增强，预置卡片兜底
+ * 分类文件到 API 路由类型
  */
-export async function runPipeline(
-  files: File[],
-  onStage: (stage: PipelineStage, detail: string) => void,
-  useRealAPI = true,
-): Promise<Experiment[]> {
-
-  // === Stage 1: 读取文件 ===
-  onStage("reading", `${files.length} 个文件`);
-  await sleep(600);
-
-  const textContents: string[] = [];
-  for (const file of files) {
-    try {
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(ext)) {
-        const text = await file.text();
-        textContents.push(`[${file.name}]\n${text.slice(0, 4000)}`);
-      }
-    } catch { /* skip unreadable */ }
-  }
-
-  // === Stage 2: 多模态识别 ===
-  const imageCount = files.length - textContents.length;
-  onStage("analyzing", `文本${textContents.length} + 图像${imageCount}`);
-  await sleep(800);
-
-  // 后台调 API 增强数据（fire-and-forget，不阻塞）
-  if (useRealAPI && textContents.length > 0) {
-    const combined = textContents.join("\n\n---\n\n");
-    setTimeout(() => {
-      parseTextFile(combined, files.map(f => f.name).join(","))
-        .then(() => console.log("[Pipeline] API 增强完成"))
-        .catch(() => {});
-    }, 0);
-  }
-
-  // === Stage 3: 结构化抽取 ===
-  onStage("extracting", "LLM 抽取实验元数据");
-  await sleep(1000);
-
-  // === Stage 4: 合并生成 ===
-  onStage("merging", "去重合并卡片");
-
-  const usedIndices = new Set<number>();
-  const cards: Experiment[] = [];
-
-  for (const f of files) {
-    const match = LOCAL_FILES.find((lf) => lf.name === f.name);
-    if (match && match.cardIndex >= 0 && !usedIndices.has(match.cardIndex)) {
-      usedIndices.add(match.cardIndex);
-      const card = { ...PRESET_CARDS[match.cardIndex] };
-      card.id = "exp_" + Math.random().toString(36).slice(2, 9);
-      card.source = files.map((x) => x.name).join(", ");
-      cards.push(card);
-    }
-  }
-
-  // 兜底：无匹配时生成基础卡片
-  if (cards.length === 0 && files.length > 0) {
-    cards.push({
-      id: "exp_" + Math.random().toString(36).slice(2, 9),
-      name: files[0].name.replace(/\.[^.]+$/, ""),
-      date: new Date().toISOString().slice(0, 16).replace("T", " "),
-      operator: "", purpose: "", background: "",
-      device: { name: "", model: "", vendor: "" },
-      sample: { id: "", batch: "", source: "" },
-      params: [], environment: { temperature: "", humidity: "", other: "" },
-      steps: [], results: "", notes: "",
-      source: files.map((x) => x.name).join(", "), discipline: "",
-    });
-  }
-
-  await sleep(500);
-
-  // === Stage 5: 完成 ===
-  onStage("complete", `${cards.length} 张卡片`);
-
-  return cards;
+export function classifyFile(
+  fileName: string,
+): "image" | "text" | "csv" | "audio" | "video" | "document" {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  if (["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(ext)) return "image";
+  if (["mp3", "wav", "m4a", "ogg", "flac"].includes(ext)) return "audio";
+  if (["mp4", "mov", "avi", "webm"].includes(ext)) return "video";
+  if (ext === "csv") return "csv";
+  if (["pdf", "docx", "xlsx"].includes(ext)) return "document";
+  return "text";
 }
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const API_DELAY_MS = 200; // 文件间延迟避免限流
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// ═══════════════════════════════════════════════════════
+// 主流水线
+// ═══════════════════════════════════════════════════════
+
+export async function runPipeline(
+  files: File[],
+  onStage: (stage: PipelineStage, detail: string) => void,
+  onFileProgress: (fileIndex: number, progress: FileProgress) => void,
+  useRealAPI = true,
+): Promise<Experiment[]> {
+  if (files.length === 0) return [];
+
+  // 初始化所有文件为 waiting
+  for (let i = 0; i < files.length; i++) {
+    onFileProgress(i, { name: files[i].name, status: "waiting" });
+  }
+
+  // ═══ Stage 1: 读取文件 ═══
+  onStage("reading", `读取 ${files.length} 个文件`);
+  const fileContents: Array<{
+    textContent: string;
+    base64?: string;
+    mime?: string;
+    isBinary: boolean;
+  }> = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    onFileProgress(i, { name: file.name, status: "reading", detail: "读取中..." });
+
+    if (file.size > MAX_FILE_SIZE) {
+      onFileProgress(i, {
+        name: file.name,
+        status: "error",
+        error: `文件过大 (${(file.size / 1024 / 1024).toFixed(1)}MB > 10MB)`,
+      });
+      fileContents.push({ textContent: "", isBinary: true });
+      continue;
+    }
+
+    const category = classifyFile(file.name);
+
+    try {
+      if (category === "image" || category === "audio" || category === "video") {
+        const { base64, mime } = await fileToBase64(file);
+        fileContents.push({ textContent: "", base64, mime, isBinary: true });
+      } else {
+        const text = await file.text();
+        fileContents.push({ textContent: text.slice(0, 8000), isBinary: false });
+      }
+      onFileProgress(i, { name: file.name, status: "reading", detail: "读取完成" });
+    } catch (err) {
+      onFileProgress(i, { name: file.name, status: "error", error: `读取失败: ${err}` });
+      fileContents.push({ textContent: "", isBinary: false });
+    }
+  }
+
+  await sleep(200);
+
+  // ═══ Stage 2: AI 分析 ═══
+  onStage("analyzing", `AI 分析 ${files.length} 个文件`);
+  const rawResults: Array<{ fileName: string; fileType: string; rawOutput: string }> = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fc = fileContents[i];
+    const category = classifyFile(file.name);
+
+    // 跳过大文件
+    if (fc.isBinary && !fc.base64) {
+      rawResults.push({ fileName: file.name, fileType: category, rawOutput: "" });
+      continue;
+    }
+
+    const modelHint =
+      category === "image"
+        ? "Qwen3-VL-32B"
+        : category === "audio" || category === "video"
+          ? "Qwen3-Omni"
+          : "DeepSeek-V3";
+
+    onFileProgress(i, {
+      name: file.name,
+      status: "analyzing",
+      detail: `调用 ${modelHint}...`,
+    });
+
+    await sleep(API_DELAY_MS); // 限流延迟
+
+    let rawOutput = "";
+    try {
+      if (!useRealAPI) {
+        rawOutput = JSON.stringify({
+          experiments: [{ name: file.name.replace(/\.[^.]+$/, ""), source: file.name }],
+        });
+      } else {
+        switch (category) {
+          case "image":
+            rawOutput = await parseImage(fc.base64!, fc.mime!, file.name);
+            break;
+          case "text":
+            rawOutput = await parseTextFile(fc.textContent, file.name);
+            break;
+          case "csv":
+            rawOutput = await parseCSV(fc.textContent, file.name);
+            break;
+          case "audio":
+            rawOutput = await parseAudio(fc.base64!, fc.mime!);
+            break;
+          case "video":
+            rawOutput = await parseVideo(fc.base64!, fc.mime!, file.name);
+            break;
+          case "document":
+            rawOutput = await parseTextFile(fc.textContent || file.name, file.name);
+            break;
+          default:
+            rawOutput = await parseTextFile(fc.textContent, file.name);
+        }
+      }
+      onFileProgress(i, { name: file.name, status: "analyzing", detail: "API 响应已收到" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onFileProgress(i, { name: file.name, status: "error", error: `API: ${msg.slice(0, 60)}` });
+      // 生成兜底卡片
+      rawOutput = JSON.stringify({
+        experiments: [{ name: file.name.replace(/\.[^.]+$/, ""), source: file.name }],
+      });
+    }
+
+    rawResults.push({ fileName: file.name, fileType: category, rawOutput });
+  }
+
+  // ═══ Stage 3: 结构化抽取 ═══
+  onStage("extracting", "解析 AI 响应为实验卡片");
+  const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+
+  for (let i = 0; i < rawResults.length; i++) {
+    const rr = rawResults[i];
+    onFileProgress(i, { name: files[i].name, status: "extracting", detail: "解析 JSON..." });
+
+    try {
+      const parsed = parseAPIResponse(rr.rawOutput, rr.fileName);
+      parsed.forEach((p) => allPartials.push({ fileName: rr.fileName, experiment: p }));
+      onFileProgress(i, { name: files[i].name, status: "extracting", detail: `提取 ${parsed.length} 条` });
+    } catch {
+      // JSON 解析失败：创建基础卡片
+      allPartials.push({
+        fileName: rr.fileName,
+        experiment: {
+          name: rr.fileName.replace(/\.[^.]+$/, ""),
+          results: rr.rawOutput.slice(0, 500), // 原始输出放入结果区
+          notes: "AI JSON 解析失败，原始响应已放入结果区。请手动整理。",
+        },
+      });
+      onFileProgress(i, { name: files[i].name, status: "extracting", detail: "解析失败" });
+    }
+  }
+
+  // ═══ Stage 4: 合并 ═══
+  onStage("merging", "去重合并生成最终卡片");
+  let finalExperiments: Experiment[];
+
+  const validResults = rawResults.filter((r) => r.rawOutput.length > 0);
+
+  if (useRealAPI && validResults.length > 1) {
+    // 多文件 → 调 mergeResults 去重
+    try {
+      const mergedRaw = await mergeResults(validResults);
+      const merged = parseAPIResponse(mergedRaw, "__merged__");
+      finalExperiments = merged.map((p) =>
+        normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }),
+      );
+    } catch {
+      // merge 失败：直接用 partials
+      finalExperiments = buildFromPartials(allPartials);
+    }
+  } else if (allPartials.length > 0) {
+    finalExperiments = buildFromPartials(allPartials);
+  } else {
+    finalExperiments = [];
+  }
+
+  // 附加文件元数据
+  const now = new Date().toISOString();
+  for (const exp of finalExperiments) {
+    exp.attachedFiles = files.map((f, i) => ({
+      id: `af_${Math.random().toString(36).slice(2, 11)}`,
+      name: f.name,
+      mediaType: classifyFile(f.name),
+      mimeType: f.type || "application/octet-stream",
+      size: f.size,
+      addedAt: now,
+      textContent: fileContents[i]?.textContent ?? "",
+      parsedRaw: rawResults[i]?.rawOutput ?? "",
+    }));
+    exp.lastParsedAt = now;
+  }
+
+  // ═══ Stage 5: 完成 ═══
+  onStage("complete", `${finalExperiments.length} 张卡片`);
+
+  for (let i = 0; i < files.length; i++) {
+    const pf = fileContents[i];
+    if (pf.isBinary && !pf.base64) continue; // 已标记错误
+    onFileProgress(i, { name: files[i].name, status: "complete" });
+  }
+
+  return finalExperiments;
+}
+
+// ═══════════════════════════════════════════════════════
+// 辅助
+// ═══════════════════════════════════════════════════════
+
+/** @deprecated 已移除硬编码文件映射，返回空数组 */
+export function getLocalFiles(): Array<{
+  name: string;
+  type: string;
+  label: string;
+  cardIndex: number;
+}> {
+  return [];
+}
+
+function buildFromPartials(
+  allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }>,
+): Experiment[] {
+  // 简单去重：名称相近的合并
+  const groups = new Map<string, Partial<Experiment>[]>();
+
+  for (const p of allPartials) {
+    const key = (p.experiment.name || p.fileName).slice(0, 20);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p.experiment);
+  }
+
+  return Array.from(groups.values()).map((parts) => {
+    const merged: Partial<Experiment> = {};
+    for (const part of parts) {
+      for (const [k, v] of Object.entries(part)) {
+        if (v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0)) {
+          (merged as Record<string, unknown>)[k] = v;
+        }
+      }
+    }
+    return normalizeExperiment(merged, { lastParsedAt: new Date().toISOString() });
+  });
+}
+
+/**
+ * 仅重新合并（不重调文件级 API，使用存储的 parsedRaw）
+ */
+export async function rerunMerge(
+  fileResults: Array<{ fileName: string; fileType: string; rawOutput: string }>,
+  onStage: (stage: PipelineStage, detail: string) => void,
+): Promise<Experiment[]> {
+  onStage("merging", `重新合并 ${fileResults.length} 个文件的结果`);
+
+  const valid = fileResults.filter((r) => r.rawOutput.length > 0);
+  if (valid.length === 0) return [];
+
+  try {
+    const mergedRaw = await mergeResults(valid);
+    const parsed = parseAPIResponse(mergedRaw, "__remerge__");
+    onStage("complete", `${parsed.length} 张卡片`);
+    return parsed.map((p) =>
+      normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }),
+    );
+  } catch {
+    // 回退：用 allPartials 直接构建
+    const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+    for (const r of valid) {
+      try {
+        const p = parseAPIResponse(r.rawOutput, r.fileName);
+        p.forEach((x) => allPartials.push({ fileName: r.fileName, experiment: x }));
+      } catch {
+        /* skip */
+      }
+    }
+    const result = buildFromPartials(allPartials);
+    onStage("complete", `${result.length} 张卡片 (回退模式)`);
+    return result;
+  }
 }

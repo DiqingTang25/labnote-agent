@@ -13,18 +13,20 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useLab, mockCardFromFile, mockCardFromVoice,
+  useLab,
+  mockCardFromVoice,
   checkCompleteness, generateMethods, ragAnswer,
-  type Experiment, type Param,
+  type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
 import { useElectron } from "../lib/electron/useElectron";
 import { FolderWatcherPanel } from "../lib/electron/FolderWatcherPanel";
 import {
   runPipeline,
   detectFileInfo,
-  getLocalFiles,
   PIPELINE_STAGES,
+  classifyFile,
   type PipelineStage,
+  type FileProgress,
 } from "../lib/multimodal-parser";
 import { ExperimentSummary } from "../components/ExperimentSummary";
 import { consumePendingUpload } from "../lib/upload-bridge";
@@ -98,10 +100,21 @@ function createBlank(add: (e: Experiment) => void): string {
     notes: "",
     source: "手动新建",
     discipline: "材料科学",
+    attachedFiles: [],
+    lastParsedAt: null,
   };
   add(blank);
   return blank.id;
 }
+
+const statusLabels: Record<string, string> = {
+  waiting: "等待中",
+  reading: "读取中",
+  analyzing: "分析中",
+  extracting: "提取中",
+  complete: "完成",
+  error: "错误",
+};
 
 /* ---------- 左栏 ---------- */
 
@@ -116,6 +129,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
   const [pipelineDetail, setPipelineDetail] = useState("");
   const [pipelineCards, setPipelineCards] = useState<Experiment[]>([]);
   const [lastUploadedFiles, setLastUploadedFiles] = useState<string[]>([]);
+  const [fileProgresses, setFileProgresses] = useState<Map<number, FileProgress>>(new Map());
   const [showSummary, setShowSummary] = useState(false);
 
   // 首页跳转过来的待上传文件
@@ -136,20 +150,14 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
   // Electron
   const { isElectron: _isElectron, watchStatus, recentFiles, selectFolder, startWatch, stopWatch } = useElectron();
 
-  // 本地待整理材料（预存在 public/ 下）
-  const localFiles = getLocalFiles();
-  const [localPanelOpen, setLocalPanelOpen] = useState(false);
-
   const handleElectronSelectFolder = async () => {
     const folder = await selectFolder();
     if (folder) await startWatch(folder);
   };
 
   const handleGenerateCardFromFile = (file: { name: string }) => {
-    const card = mockCardFromFile(file.name);
-    addExperiment(card);
-    onSelect(card.id);
-    toast.success(`已为 ${file.name} 生成实验卡片`);
+    // 使用真实解析但提示需要完整文件对象
+    toast.info(`请在数据输入区上传文件 "${file.name}" 进行 AI 解析`);
   };
 
   // ===== 真实多模态解析 — 上传文件 → API → 实验卡片 =====
@@ -162,6 +170,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
     setPipelineRunning(true);
     setPipelineCards([]);
     setPipelineStage("reading");
+    setFileProgresses(new Map());
 
     try {
       const cards = await runPipeline(
@@ -169,6 +178,9 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
         (stage, detail) => {
           setPipelineStage(stage);
           setPipelineDetail(detail);
+        },
+        (index, progress) => {
+          setFileProgresses((prev) => new Map(prev).set(index, progress));
         },
         true, // 使用真实 API
       );
@@ -184,7 +196,6 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
       toast.error("解析过程出错，已使用本地缓存生成卡片");
     } finally {
       setPipelineRunning(false);
-      setPipelineStage("idle");
     }
   };
 
@@ -193,63 +204,6 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
 
   return (
     <div className="space-y-4">
-      {/* ===== 待整理材料 ===== */}
-      {localFiles.length > 0 && (
-        <div className="card-soft p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <FolderOpen size={15} className="text-amber-500"/>
-              待整理材料
-            </h3>
-            <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-              {localFiles.length} 文件 · {new Set(localFiles.map(f => detectFileInfo(f.name).type)).size} 种格式
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-            本地文件夹：<span className="text-foreground font-mono text-[10px]">D:\labnote\实验数据-20260515\</span>
-          </p>
-
-          {!localPanelOpen ? (
-            <button
-              onClick={() => setLocalPanelOpen(true)}
-              className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs hover:border-primary/40 transition"
-            >
-              <FolderOpen size={12}/>
-              查看文件列表
-            </button>
-          ) : (
-            <div className="mt-2 space-y-2">
-              <div className="space-y-0.5 max-h-[200px] overflow-auto pr-1">
-                {localFiles.map((f) => {
-                  const info = detectFileInfo(f.name);
-                  const processed = pipelineCards.length > 0 && lastUploadedFiles.includes(f.name);
-                  return (
-                    <div key={f.name}
-                      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${
-                        processed ? "bg-[color:var(--color-success)]/10 border border-[color:var(--color-success)]/30" : "bg-secondary/60"
-                      }`}
-                    >
-                      <span className="text-sm">{info.icon}</span>
-                      <span className="flex-1 truncate text-[11px] font-medium">{f.name}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{info.type}</span>
-                      {processed && <CheckCircle2 size={12} className="text-[color:var(--color-success)]"/>}
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-muted-foreground text-center">
-                请通过上方「数据输入」区域上传这些文件
-              </p>
-              <button
-                onClick={() => setLocalPanelOpen(false)}
-                className="w-full rounded-lg border border-border px-3 py-1.5 text-[11px] hover:bg-secondary transition"
-              >
-                收起
-              </button>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ===== 解析进度 ===== */}
       {pipelineRunning && (
@@ -283,6 +237,32 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
               );
             })}
           </div>
+
+          {/* 逐文件进度 */}
+          {fileProgresses.size > 0 && (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              <p className="text-[10px] text-muted-foreground mb-2">文件进度</p>
+              <div className="space-y-1 max-h-[180px] overflow-auto">
+                {Array.from(fileProgresses.entries()).map(([i, fp]) => (
+                  <div key={i} className="flex items-center gap-2 text-[11px]">
+                    {fp.status === "complete" ? (
+                      <CheckCircle2 size={12} className="text-green-500 shrink-0" />
+                    ) : fp.status === "error" ? (
+                      <AlertCircle size={12} className="text-red-500 shrink-0" />
+                    ) : fp.status === "analyzing" ? (
+                      <Loader2 size={12} className="animate-spin text-primary shrink-0" />
+                    ) : (
+                      <span className="w-3 h-3 rounded-full border border-muted-foreground/30 shrink-0" />
+                    )}
+                    <span className="truncate flex-1 text-[11px]">{fp.name}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {fp.status === "error" ? fp.error : statusLabels[fp.status] ?? fp.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -465,6 +445,8 @@ function CardEditor({ experiment, onSave, onDelete }: {
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState<Experiment>(experiment);
+  const [viewFileOpen, setViewFileOpen] = useState(false);
+  const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
   const update = <K extends keyof Experiment>(k: K, v: Experiment[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
@@ -565,6 +547,126 @@ function CardEditor({ experiment, onSave, onDelete }: {
       <Section title="异常与备注">
         <textarea value={draft.notes} onChange={(e) => update("notes", e.target.value)} className={inputCls + " min-h-[60px]"}/>
       </Section>
+
+      {/* ===== 文件管理 ===== */}
+      <Section title="实验文件" actions={
+        <div className="flex gap-2">
+          {draft.attachedFiles.length > 0 && (
+            <button
+              onClick={() => {
+                // Re-parse with existing files
+                const files = draft.attachedFiles.map((af) => new File(
+                  [af.textContent || af.name],
+                  af.name,
+                  { type: af.mimeType || "text/plain" }
+                ));
+                if (files.length === 0) { toast.info("没有可重新解析的文件"); return; }
+                // Trigger re-parse via custom event
+                window.dispatchEvent(new CustomEvent("labnote:reparse", { detail: { experimentId: draft.id, files } }));
+              }}
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              <Sparkles size={12}/>重新解析
+            </button>
+          )}
+        </div>
+      }>
+        {draft.attachedFiles.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">暂无文件 — 通过左侧"数据输入"上传文件后自动关联</p>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/60 text-xs text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">文件名</th>
+                  <th className="text-left px-3 py-2 font-medium">类型</th>
+                  <th className="text-left px-3 py-2 font-medium">大小</th>
+                  <th className="w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.attachedFiles.map((af) => (
+                  <tr key={af.id} className="border-t border-border">
+                    <td className="px-3 py-2">
+                      <span className="text-[11px] font-medium truncate block max-w-[180px]" title={af.name}>
+                        {detectFileInfo(af.name).icon} {af.name}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                        af.mediaType === "image" ? "bg-purple-100 text-purple-700" :
+                        af.mediaType === "text" ? "bg-blue-100 text-blue-700" :
+                        af.mediaType === "csv" ? "bg-green-100 text-green-700" :
+                        af.mediaType === "audio" ? "bg-amber-100 text-amber-700" :
+                        "bg-gray-100 text-gray-700"
+                      }`}>
+                        {af.mediaType}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-[11px] text-muted-foreground">
+                      {(af.size / 1024).toFixed(1)} KB
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1">
+                        {af.textContent && (
+                          <button
+                            onClick={() => {
+                              setViewingFile(af);
+                              setViewFileOpen(true);
+                            }}
+                            className="p-1 text-muted-foreground hover:text-primary"
+                            title="查看内容"
+                          ><FileText size={13}/></button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (confirm(`确认删除 "${af.name}"？`)) {
+                              update("attachedFiles", draft.attachedFiles.filter((f) => f.id !== af.id));
+                              toast.success("已删除文件");
+                            }
+                          }}
+                          className="p-1 text-muted-foreground hover:text-destructive"
+                          title="删除"
+                        ><Trash2 size={13}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* 文件内容查看弹窗 */}
+      {viewFileOpen && viewingFile && (
+        <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4" onClick={() => setViewFileOpen(false)}>
+          <div className="card-soft w-full max-w-2xl max-h-[80vh] overflow-auto p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <FileText size={15}/> {viewingFile.name}
+              </h3>
+              <button onClick={() => setViewFileOpen(false)} className="p-1 hover:bg-secondary rounded"><X size={16}/></button>
+            </div>
+            <div className="text-[10px] text-muted-foreground mb-3 flex gap-4">
+              <span>类型: {viewingFile.mediaType}</span>
+              <span>大小: {(viewingFile.size / 1024).toFixed(1)} KB</span>
+              <span>添加时间: {viewingFile.addedAt?.slice(0, 16).replace("T", " ")}</span>
+            </div>
+            <pre className="bg-secondary/50 rounded-lg p-4 text-xs whitespace-pre-wrap max-h-[400px] overflow-auto">
+              {viewingFile.textContent || "(无文本内容 — 二进制文件)"}
+            </pre>
+            <div className="mt-3 flex justify-end">
+              <button onClick={() => {
+                navigator.clipboard.writeText(viewingFile.textContent);
+                toast.success("已复制内容");
+              }} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-secondary flex items-center gap-1">
+                <ClipboardCopy size={12}/>复制
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
