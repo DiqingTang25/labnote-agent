@@ -406,3 +406,76 @@ export async function ragSearch(
     };
   });
 }
+
+// ═══════════════════════════════════════════════════════
+// 真实 RAG 问答 (pgvector + DeepSeek-V3)
+// ═══════════════════════════════════════════════════════
+
+export type RagSource = {
+  doc: string;
+  page: string;
+  confidence: string;
+  link: string;
+};
+
+const RAG_SYSTEM_PROMPT = `你是 LabNote Agent，一个科研实验数据治理助手。
+你的回答必须基于提供的实验记录上下文，不要编造数据。
+如果上下文中没有相关信息，诚实告知用户"知识库中暂无相关记录"。
+回答用中文，简洁专业，标注引用的实验名称和日期。`;
+
+/**
+ * 真实 RAG：question → embedding → pgvector → context → DeepSeek-V3
+ */
+export async function ragAnswerReal(
+  question: string,
+): Promise<{ answer: string; sources: RagSource[] }> {
+  // 1. 向量检索 Top-3 相关实验
+  const contexts = await ragSearch(question, 3);
+
+  if (contexts.length === 0) {
+    return {
+      answer: "知识库中暂无与您问题相关的实验记录。建议：① 先上传实验数据 ② 使用更具体的关键词 ③ 直接在实验卡片中搜索。",
+      sources: [],
+    };
+  }
+
+  // 2. 拼接上下文
+  const contextBlock = contexts
+    .map(
+      (c, i) =>
+        `[实验${i + 1}] ${c.name}\n内容：${c.text}\n相似度：${(c.similarity * 100).toFixed(0)}%`,
+    )
+    .join("\n\n");
+
+  // 3. 调 DeepSeek-V3 生成回答
+  const prompt = `基于以下实验记录回答用户问题。\n\n实验记录：\n${contextBlock}\n\n用户问题：${question}\n\n请用2-4句话回答，并引用相关实验名称。`;
+
+  let answer: string;
+  try {
+    const { chat } = await import("./siliconflow");
+    answer = await chat(
+      "deepseek-ai/DeepSeek-V3",
+      [
+        { role: "system", content: RAG_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      512,
+    );
+  } catch (err) {
+    console.error("[RAG] LLM call failed:", err);
+    // 回退：直接返回检索结果
+    answer =
+      `检索到 ${contexts.length} 条相关实验（LLM 暂时不可用）：\n` +
+      contexts.map((c) => `• ${c.name}（相似度 ${(c.similarity * 100).toFixed(0)}%）`).join("\n");
+  }
+
+  // 4. 构建来源
+  const sources: RagSource[] = contexts.map((c) => ({
+    doc: c.name,
+    page: "实验卡片",
+    confidence: `${(c.similarity * 100).toFixed(0)}%`,
+    link: `/workbench?id=${c.id}`,
+  }));
+
+  return { answer, sources };
+}
