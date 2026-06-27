@@ -3,8 +3,25 @@
  * 使用 React Context + useState 提供前端模拟数据存储
  */
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import {
+  saveExperiments,
+  loadExperiments,
+  saveProfile as persistProfile,
+  loadProfile,
+} from "./persistence";
 
 export type Param = { name: string; value: string; unit: string };
+
+export type AttachedFile = {
+  id: string;
+  name: string;
+  mediaType: string; // "image" | "text" | "csv" | "audio" | "video" | "document"
+  mimeType: string;
+  size: number;
+  addedAt: string;
+  textContent: string; // 文本内容或 AI 提取的描述
+  parsedRaw: string; // 上次 API 解析的原始响应
+};
 
 export type Experiment = {
   id: string;
@@ -22,6 +39,8 @@ export type Experiment = {
   notes: string;
   source: string;
   discipline: string;
+  attachedFiles: AttachedFile[];
+  lastParsedAt: string | null;
 };
 
 const newId = () => "exp_" + Math.random().toString(36).slice(2, 9);
@@ -55,6 +74,8 @@ const seed: Experiment[] = [
     notes: "升温过程中第 40 min 出现短暂温度波动 ±3 ℃。",
     source: "示例数据",
     discipline: "材料科学",
+    attachedFiles: [],
+    lastParsedAt: null,
   },
   {
     id: newId(),
@@ -76,6 +97,8 @@ const seed: Experiment[] = [
     notes: "缺少前驱体批次与设备厂家信息。",
     source: "示例数据",
     discipline: "材料科学",
+    attachedFiles: [],
+    lastParsedAt: null,
   },
   {
     id: newId(),
@@ -103,6 +126,8 @@ const seed: Experiment[] = [
     notes: "电流异常可能与气泡附着有关。",
     source: "示例数据",
     discipline: "化学",
+    attachedFiles: [],
+    lastParsedAt: null,
   },
 ];
 
@@ -114,35 +139,103 @@ type Ctx = {
   getById: (id: string) => Experiment | undefined;
   profile: { name: string; org: string; discipline: Experiment["discipline"] };
   setProfile: (p: Ctx["profile"]) => void;
+  /** 文件管理 */
+  addFileToExperiment: (expId: string, file: AttachedFile) => void;
+  removeFileFromExperiment: (expId: string, fileId: string) => void;
 };
 
 const LabCtx = createContext<Ctx | null>(null);
 
+/** 将持久化写入延迟到下一个事件循环，避免阻塞 UI */
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleSave(experiments: Experiment[]) {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    saveExperiments(experiments);
+    _saveTimer = null;
+  }, 100);
+}
+
 export function LabProvider({ children }: { children: ReactNode }) {
-  const [experiments, setExperiments] = useState<Experiment[]>(seed);
-  const [profile, setProfile] = useState<Ctx["profile"]>({
-    name: "研究员",
-    org: "智能材料课题组",
-    discipline: "材料科学",
+  const [experiments, setExperiments] = useState<Experiment[]>(() => {
+    const saved = loadExperiments();
+    if (saved && saved.length > 0) return saved;
+    return seed;
+  });
+  const [profile, setProfile] = useState<Ctx["profile"]>(() => {
+    const saved = loadProfile();
+    if (saved) return saved;
+    return {
+      name: "研究员",
+      org: "智能材料课题组",
+      discipline: "材料科学",
+    };
   });
 
-  const addExperiment = useCallback(
-    (e: Experiment) => setExperiments((arr) => [e, ...arr]),
-    [],
-  );
+  const addExperiment = useCallback((e: Experiment) => {
+    setExperiments((arr) => {
+      const next = [e, ...arr];
+      scheduleSave(next);
+      return next;
+    });
+  }, []);
   const updateExperiment = useCallback(
-    (id: string, patch: Partial<Experiment>) =>
-      setExperiments((arr) => arr.map((x) => (x.id === id ? { ...x, ...patch } : x))),
+    (id: string, patch: Partial<Experiment>) => {
+      setExperiments((arr) => {
+        const next = arr.map((x) => (x.id === id ? { ...x, ...patch } : x));
+        scheduleSave(next);
+        return next;
+      });
+    },
     [],
   );
-  const deleteExperiment = useCallback(
-    (id: string) => setExperiments((arr) => arr.filter((x) => x.id !== id)),
-    [],
-  );
+  const deleteExperiment = useCallback((id: string) => {
+    setExperiments((arr) => {
+      const next = arr.filter((x) => x.id !== id);
+      scheduleSave(next);
+      return next;
+    });
+  }, []);
   const getById = useCallback(
     (id: string) => experiments.find((x) => x.id === id),
     [experiments],
   );
+
+  // 文件管理
+  const addFileToExperiment = useCallback(
+    (expId: string, file: AttachedFile) => {
+      setExperiments((arr) => {
+        const next = arr.map((x) =>
+          x.id === expId
+            ? { ...x, attachedFiles: [...x.attachedFiles, file], lastParsedAt: new Date().toISOString() }
+            : x,
+        );
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [],
+  );
+  const removeFileFromExperiment = useCallback(
+    (expId: string, fileId: string) => {
+      setExperiments((arr) => {
+        const next = arr.map((x) =>
+          x.id === expId
+            ? { ...x, attachedFiles: x.attachedFiles.filter((f) => f.id !== fileId) }
+            : x,
+        );
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  // 用户配置变更自动持久化
+  const updateProfile = useCallback((p: Ctx["profile"]) => {
+    setProfile(p);
+    setTimeout(() => persistProfile(p), 0);
+  }, []);
 
   return (
     <LabCtx.Provider
@@ -153,7 +246,9 @@ export function LabProvider({ children }: { children: ReactNode }) {
         deleteExperiment,
         getById,
         profile,
-        setProfile,
+        setProfile: updateProfile,
+        addFileToExperiment,
+        removeFileFromExperiment,
       }}
     >
       {children}
@@ -186,6 +281,8 @@ export function mockCardFromFile(fileName: string): Experiment {
     notes: "通过多模态解析自动生成，建议人工复核。",
     source: "文件上传",
     discipline: "材料科学",
+    attachedFiles: [],
+    lastParsedAt: null,
   };
   if (lower.includes("xrd")) {
     base.name = "XRD 表征记录（自动解析）";
@@ -255,6 +352,8 @@ export function mockCardFromVoice(text: string): Experiment {
     notes: "由语音 ASR 模拟生成，建议补充设备型号与样品批次。",
     source: "语音录入模拟",
     discipline: "材料科学",
+    attachedFiles: [],
+    lastParsedAt: null,
   };
 }
 
