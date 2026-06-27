@@ -33,8 +33,9 @@ import {
   calculateReproducibilityScore,
 } from "../lib/reproduction-audit";
 import { decomposePaperMethods } from "../lib/paper-decomposer";
+import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
-import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS } from "../lib/paper-test-data";
+import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/checklist")({
@@ -53,7 +54,7 @@ export const Route = createFileRoute("/checklist")({
 
 function ReproductionAuditPage() {
   // 输入状态
-  const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "custom">("preset-srtio3");
+  const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "preset-plant-ep" | "preset-spatial" | "custom">("preset-srtio3");
   const [customPaperTitle, setCustomPaperTitle] = useState("");
   const [customPaperDoi, setCustomPaperDoi] = useState("");
   const [customMethods, setCustomMethods] = useState("");
@@ -61,6 +62,7 @@ function ReproductionAuditPage() {
 
   // 处理状态
   const [decomposing, setDecomposing] = useState(false);
+  const [progress, setProgress] = useState<DecompositionProgress>({ step: "connecting" });
   const [audit, setAudit] = useState<ReproductionAudit | null>(null);
   const [showPreset, setShowPreset] = useState(true);
 
@@ -76,26 +78,24 @@ function ReproductionAuditPage() {
   // ===== 获取当前论文内容 =====
   const getCurrentPaperData = useCallback(() => {
     if (paperSource === "preset-srtio3") {
-      return {
-        title: SRTIO3_PAPER.title,
-        doi: SRTIO3_PAPER.doi,
-        methods: SRTIO3_PAPER.methods,
-      };
+      return { title: SRTIO3_PAPER.title, doi: SRTIO3_PAPER.doi, methods: SRTIO3_PAPER.methods, discipline: SRTIO3_PAPER.discipline };
     }
     if (paperSource === "preset-co3o4") {
-      const paper = REAL_PAPERS[1];
-      return {
-        title: paper.title,
-        doi: paper.doi,
-        methods: paper.methods,
-      };
+      return { title: REAL_PAPERS[1].title, doi: REAL_PAPERS[1].doi, methods: REAL_PAPERS[1].methods, discipline: REAL_PAPERS[1].discipline };
+    }
+    if (paperSource === "preset-plant-ep") {
+      return { title: PLANT_EP_PAPER.title, doi: PLANT_EP_PAPER.doi, methods: PLANT_EP_PAPER.methods, discipline: PLANT_EP_PAPER.discipline };
+    }
+    if (paperSource === "preset-spatial") {
+      return { title: SPATIAL_TRANSCRIPTOMICS_PAPER.title, doi: SPATIAL_TRANSCRIPTOMICS_PAPER.doi, methods: SPATIAL_TRANSCRIPTOMICS_PAPER.methods, discipline: SPATIAL_TRANSCRIPTOMICS_PAPER.discipline };
     }
     return {
       title: customPaperTitle || "未命名论文",
       doi: customPaperDoi || "手动输入",
       methods: customMethods,
+      discipline,
     };
-  }, [paperSource, customPaperTitle, customPaperDoi, customMethods]);
+  }, [paperSource, customPaperTitle, customPaperDoi, customMethods, discipline]);
 
   // ===== 使用预设 Audit =====
   const loadPresetAudit = useCallback(() => {
@@ -114,12 +114,14 @@ function ReproductionAuditPage() {
 
     setDecomposing(true);
     setShowPreset(false);
+    setProgress({ step: "connecting" });
     try {
       const result = await decomposePaperMethods(
         paper.title,
         paper.doi,
         paper.methods,
-        discipline,
+        paper.discipline || discipline,
+        (p) => setProgress(p),
       );
       setAudit(result);
       toast.success(`拆解完成：${result.parameters.length} 个参数，${result.gaps.length} 个缺口`);
@@ -232,8 +234,8 @@ function ReproductionAuditPage() {
       </h3>
 
       {/* Preset / Custom toggle */}
-      <div className="flex gap-2 mb-4">
-        {(["preset-srtio3", "preset-co3o4", "custom"] as const).map((opt) => (
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {(["preset-srtio3", "preset-co3o4", "preset-plant-ep", "preset-spatial", "custom"] as const).map((opt) => (
           <button
             key={opt}
             onClick={() => setPaperSource(opt)}
@@ -243,8 +245,10 @@ function ReproductionAuditPage() {
                 : "border border-border hover:border-primary/40"
             }`}
           >
-            {opt === "preset-srtio3" ? "📄 SrTiO₃ 论文 (Sci Rep 2024)" :
-             opt === "preset-co3o4" ? "📄 Co₃O₄-rGO 论文 (Catalysts 2024)" :
+            {opt === "preset-srtio3" ? "📄 SrTiO₃ (Sci Rep)" :
+             opt === "preset-co3o4" ? "📄 Co₃O₄-rGO (Catalysts)" :
+             opt === "preset-plant-ep" ? "🌿 植物电生理 (Sci Data)" :
+             opt === "preset-spatial" ? "🧬 空间转录组 (bioRxiv)" :
              "✏️ 自定义输入"}
           </button>
         ))}
@@ -289,9 +293,15 @@ function ReproductionAuditPage() {
         <div className="rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2 font-medium text-foreground mb-1">
             <FileText size={14}/>
-            {paperSource === "preset-srtio3" ? SRTIO3_PAPER.title : REAL_PAPERS[1].title}
+            {paperSource === "preset-srtio3" ? SRTIO3_PAPER.title :
+             paperSource === "preset-co3o4" ? REAL_PAPERS[1].title :
+             paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.title :
+             SPATIAL_TRANSCRIPTOMICS_PAPER.title}
           </div>
-          <p>DOI: {paperSource === "preset-srtio3" ? SRTIO3_PAPER.doi : REAL_PAPERS[1].doi}</p>
+          <p>DOI: {paperSource === "preset-srtio3" ? SRTIO3_PAPER.doi :
+                   paperSource === "preset-co3o4" ? REAL_PAPERS[1].doi :
+                   paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.doi :
+                   SPATIAL_TRANSCRIPTOMICS_PAPER.doi}</p>
           <p className="mt-1">Methods 段落已预加载（真实论文内容），可直接拆解或使用预设结果。</p>
         </div>
       )}
@@ -811,6 +821,9 @@ function ReproductionAuditPage() {
             <li>领域知识库 — 基于 2024 年发表的 10+ 篇光催化/材料论文的典型参数</li>
           </ul>
         </div>
+
+        {/* Technical Documentation — 可折叠 */}
+        <TechDocs />
       </div>
       </RequireAuth>
     );
@@ -851,16 +864,8 @@ function ReproductionAuditPage() {
         </div>
       )}
 
-      {/* Loading */}
-      {decomposing && (
-        <div className="card-soft p-12 text-center mb-6">
-          <Loader2 size={40} className="animate-spin mx-auto text-primary"/>
-          <p className="mt-4 font-semibold">AI 正在拆解论文实验方法…</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            提取结构化复现参数，标注确定性等级，识别信息缺口
-          </p>
-        </div>
-      )}
+      {/* Loading — 多步骤进度 */}
+      {decomposing && <DecompositionProgressBar progress={progress} />}
 
       {/* Score */}
       {audit && renderScoreDashboard()}
@@ -961,6 +966,227 @@ function StepCard({ num, title, desc }: { num: number; title: string; desc: stri
         <h3 className="text-sm font-semibold">{title}</h3>
       </div>
       <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 多步骤进度条
+// ═══════════════════════════════════════════════════════
+
+const PIPELINE_STEPS: { step: DecompositionStep; icon: string; label: string }[] = [
+  { step: "connecting",       icon: "🔗", label: "连接 AI 引擎" },
+  { step: "decomposing",      icon: "🧠", label: "AI 拆解论文 Methods" },
+  { step: "enhancing-static", icon: "📚", label: "静态领域知识库匹配" },
+  { step: "enhancing-mp",     icon: "🌐", label: "Materials Project 查询" },
+  { step: "done",             icon: "✅", label: "生成复现审计报告" },
+];
+
+function DecompositionProgressBar({ progress }: { progress: DecompositionProgress }) {
+  const currentIdx = PIPELINE_STEPS.findIndex((s) => s.step === progress.step);
+
+  return (
+    <div className="card-soft p-6 mb-6">
+      <p className="text-sm font-semibold mb-4 flex items-center gap-2">
+        <Loader2 size={15} className="animate-spin text-primary" />
+        AI 拆解进行中…
+      </p>
+
+      {/* 步骤列表 */}
+      <div className="space-y-1">
+        {PIPELINE_STEPS.map((s, i) => {
+          const isDone = i < currentIdx;
+          const isCurrent = i === currentIdx;
+          const isPending = i > currentIdx;
+
+          return (
+            <div
+              key={s.step}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
+                isCurrent ? "bg-primary/10 text-primary font-medium" :
+                isDone ? "text-muted-foreground" : "text-muted-foreground/50"
+              }`}
+            >
+              {/* 状态图标 */}
+              <span className="flex-shrink-0 w-5 text-center">
+                {isDone ? <CheckCircle2 size={14} className="text-green-500 inline" /> :
+                 isCurrent ? <Loader2 size={14} className="animate-spin inline text-primary" /> :
+                 <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-muted-foreground/30" />}
+              </span>
+              <span className={`w-5 text-center ${isPending ? "opacity-40" : ""}`}>{s.icon}</span>
+              <span className={isPending ? "opacity-40" : ""}>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 当前步骤详情 */}
+      {progress.detail && (
+        <div className="mt-4 pt-3 border-t border-border">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Info size={12} />
+            {progress.detail}
+          </p>
+        </div>
+      )}
+
+      {/* 进度条 */}
+      <div className="mt-4 h-1.5 rounded-full bg-secondary overflow-hidden">
+        <div
+          className="h-full bg-primary rounded-full transition-all duration-700 ease-out"
+          style={{ width: `${((currentIdx + 0.5) / PIPELINE_STEPS.length) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 技术文档面板（可折叠）
+// ═══════════════════════════════════════════════════════
+
+function TechDocs() {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="mt-4 w-full rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition text-left"
+      >
+        <div className="flex items-center gap-2">
+          <BookOpen size={16} />
+          <span className="font-medium">技术文档：复现审计管道详解</span>
+          <ChevronDown size={14} className="ml-auto" />
+        </div>
+        <p className="mt-1 text-xs ml-7">
+          了解 AI 拆解流程、确定性分类标准、Materials Project 集成方式、评分算法
+        </p>
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-primary/30 bg-card p-6 text-sm">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-bold flex items-center gap-2">
+          <BookOpen size={18} className="text-primary" /> 复现审计技术文档
+        </h3>
+        <button onClick={() => setExpanded(false)} className="text-muted-foreground hover:text-foreground">
+          <ChevronUp size={18} />
+        </button>
+      </div>
+
+      <div className="space-y-6 text-xs leading-relaxed">
+        {/* 1. Pipeline Architecture */}
+        <section>
+          <h4 className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+            <Zap size={13} className="text-amber-500" /> 管道架构
+          </h4>
+          <div className="rounded-lg bg-secondary/40 p-3 font-mono text-[11px] text-muted-foreground overflow-x-auto">
+            <div>论文 Methods ──→ <span className="text-primary font-semibold">DeepSeek-V3</span> (AI 拆解)</div>
+            <div className="ml-[13ch]">│</div>
+            <div className="ml-[13ch]">├─→ 提取结构化参数 (explicit/implied/inferred)</div>
+            <div className="ml-[13ch]">├─→ 识别信息缺口 (gaps)</div>
+            <div className="ml-[13ch]">│</div>
+            <div>──────────→ <span className="text-primary font-semibold">静态领域知识库</span> (domain-knowledge.ts)</div>
+            <div className="ml-[13ch]">│   · 水热法、溶胶凝胶、煅烧… 典型参数范围</div>
+            <div className="ml-[13ch]">│   · 基于 10+ 篇 2024 年论文的真实数据</div>
+            <div className="ml-[13ch]">│</div>
+            <div>──────────→ <span className="text-primary font-semibold">Materials Project API</span> (实时)</div>
+            <div className="ml-[13ch]">│   · 提取化学式 → GET /materials/summary/?formula=TiO2</div>
+            <div className="ml-[13ch]">│   · 返回: band_gap, formation_energy, crystal_system…</div>
+            <div className="ml-[13ch]">│   · 会话缓存 (同公式不重复请求)</div>
+            <div className="ml-[13ch]">│</div>
+            <div>──────────→ <span className="text-primary font-semibold">复现审计报告</span> (ReproductionAudit)</div>
+          </div>
+        </section>
+
+        {/* 2. Certainty Classification */}
+        <section>
+          <h4 className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+            <Target size={13} className="text-blue-500" /> 确定性四级分类
+          </h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-1.5 pr-3 font-medium">等级</th>
+                  <th className="py-1.5 pr-3 font-medium">含义</th>
+                  <th className="py-1.5 pr-3 font-medium">置信度</th>
+                  <th className="py-1.5 font-medium">示例</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />explicit</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">论文明确写出数值</td>
+                  <td className="py-1.5 pr-3 font-mono">100%</td>
+                  <td className="py-1.5 text-muted-foreground">"heated at 200°C for 4h"</td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />implied</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">可从上下文合理推断</td>
+                  <td className="py-1.5 pr-3 font-mono">80–95%</td>
+                  <td className="py-1.5 text-muted-foreground">"dried overnight" → ~12h</td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />inferred</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">AI 基于领域知识推断</td>
+                  <td className="py-1.5 pr-3 font-mono">40–80%</td>
+                  <td className="py-1.5 text-muted-foreground">KOH 用量 → 推测 pH 调节至 10-12</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5" />unknown</td>
+                  <td className="py-1.5 pr-3 text-muted-foreground">完全未知，标记为 gap</td>
+                  <td className="py-1.5 pr-3 font-mono">0%</td>
+                  <td className="py-1.5 text-muted-foreground">搅拌速度 — 未提及</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* 3. Materials Project Integration */}
+        <section>
+          <h4 className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+            <ExternalLink size={13} className="text-green-500" /> Materials Project 集成说明
+          </h4>
+          <div className="space-y-1.5 text-muted-foreground">
+            <p>• <strong>覆盖范围:</strong> 15万+ 无机晶体材料（不含有机分子/聚合物/复合材料）</p>
+            <p>• <strong>查询属性:</strong> 带隙 (band_gap)、形成能 (formation_energy_per_atom)、能量凸包距离 (energy_above_hull)、晶系/空间群、密度、金属性</p>
+            <p>• <strong>触发条件:</strong> 参数涉及可识别化学式（如 SrTiO₃、TiO₂）且置信度低时自动查询</p>
+            <p>• <strong>增强效果:</strong> 匹配到材料属性 → 置信度提升至 85-92%；未匹配 → 不影响原 AI 推断</p>
+            <p>• <strong>缓存策略:</strong> 同页面会话内相同化学式仅查询一次</p>
+            <p>• <strong>认证:</strong> 需要 <code className="bg-secondary px-1 rounded">MP_API_KEY</code>（免费注册获取）</p>
+          </div>
+        </section>
+
+        {/* 4. Scoring Formula */}
+        <section>
+          <h4 className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+            <Gauge size={13} className="text-purple-500" /> 复现可行性评分公式
+          </h4>
+          <div className="rounded-lg bg-secondary/40 p-3 font-mono text-[11px] text-muted-foreground">
+            <div>score = avgConfidence − criticalPenalty − gapPenalty</div>
+            <div className="mt-1.5 space-y-0.5">
+              <div>· avgConfidence = 所有参数置信度加权平均 (0-100)</div>
+              <div>· criticalPenalty = 关键参数中不确定部分的比例 × 20</div>
+              <div>· gapPenalty = 缺口数 × 5 (上限 30)</div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-border text-muted-foreground/70">
+              示例: 28 参数 (avg 78%) + 5 缺口 + 2 个关键不确定性 → 78 − 2.8 − 25 = <span className="text-amber-500 font-semibold">50</span> (中等可行)
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <button
+        onClick={() => setExpanded(false)}
+        className="mt-5 w-full text-center text-xs text-muted-foreground hover:text-foreground py-1"
+      >
+        <ChevronUp size={14} className="inline mr-1" /> 收起文档
+      </button>
     </div>
   );
 }

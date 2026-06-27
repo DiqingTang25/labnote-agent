@@ -19,6 +19,7 @@ export const ragSearch = createServerFn({ method: "POST" })
     z.object({
       question: z.string().min(1),
       limit: z.number().optional().default(3),
+      userId: z.string().optional().nullable(),
     }),
   )
   .handler(async ({ data }) => {
@@ -28,12 +29,12 @@ export const ragSearch = createServerFn({ method: "POST" })
     const qVec = await generateEmbedding({ data: { text: data.question } });
     if (!Array.isArray(qVec) || qVec.length === 0) return [];
 
-    // 2. pgvector RPC 相似度搜索
+    // 2. pgvector RPC 相似度搜索（user_id 隔离）
     const { data: similar, error } = await supabase.rpc("match_experiments", {
       query_embedding: qVec,
       match_threshold: 0.6,
       match_count: data.limit,
-      filter_user_id: null, // 暂不按用户过滤（RAG 搜索全局知识库）
+      filter_user_id: data.userId ?? null,
     });
 
     if (error || !similar || !Array.isArray(similar)) return [];
@@ -101,12 +102,13 @@ export const ragAnswer = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       question: z.string().min(1),
+      userId: z.string().optional().nullable(),
     }),
   )
   .handler(async ({ data }) => {
-    // 1. 向量检索 Top-3 相关实验
+    // 1. 向量检索 Top-3 相关实验（按用户隔离）
     const contexts = await ragSearch({
-      data: { question: data.question, limit: 3 },
+      data: { question: data.question, limit: 3, userId: data.userId },
     });
 
     if (!Array.isArray(contexts) || contexts.length === 0) {

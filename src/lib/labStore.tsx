@@ -55,6 +55,8 @@ export type Experiment = {
   embedding: number[] | null;
   /** AI 发现的非结构化洞察（关联、建议、风险、后续步骤等） */
   aiInsights: string;
+  /** 知识图谱标签（设备、样品、学科、参数名等），GIN 索引加速检索 */
+  knowledgeTags: string[];
 };
 
 const newId = () => "exp_" + Math.random().toString(36).slice(2, 9);
