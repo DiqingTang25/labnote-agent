@@ -101,6 +101,7 @@ function createBlank(add: (e: Experiment) => void): string {
     discipline: "材料科学",
     attachedFiles: [],
     lastParsedAt: null,
+    embedding: null,
   };
   add(blank);
   return blank.id;

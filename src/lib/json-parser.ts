@@ -156,6 +156,7 @@ function asPartialExperiment(item: unknown): Partial<Experiment> {
     source: asString(obj.source),
     attachedFiles: [],
     lastParsedAt: null,
+    embedding: null,
   };
 }
 

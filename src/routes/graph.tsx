@@ -30,7 +30,20 @@ type GraphNode = {
   x: number; y: number;
   expId?: string;
 };
-type GraphEdge = { from: string; to: string; label?: string; dashed?: boolean };
+type GraphEdge = { from: string; to: string; label?: string; dashed?: boolean; color?: string };
+
+/** 余弦相似度 (纯 JS)，用于语义边计算 */
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (!a || !b || a.length !== b.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
 
 function GraphPage() {
   const { experiments } = useLab();
@@ -129,6 +142,25 @@ function GraphPage() {
       });
     });
 
+    // 新增：语义相似度边（基于 pgvector embedding）
+    for (let i = 0; i < exps.length; i++) {
+      for (let j = i + 1; j < exps.length; j++) {
+        const a = exps[i].embedding;
+        const b = exps[j].embedding;
+        if (!a || !b) continue;
+        const sim = cosineSimilarity(a, b);
+        if (sim > 0.75) {
+          edges.push({
+            from: exps[i].id,
+            to: exps[j].id,
+            label: `语义 ${(sim * 100).toFixed(0)}%`,
+            dashed: true,
+            color: "var(--color-success)",
+          });
+        }
+      }
+    }
+
     return { nodes, edges };
   }, [exps]);
 
@@ -211,16 +243,19 @@ function GraphPage() {
               if (!a || !b) return null;
               const mx = (a.x + b.x) / 2;
               const my = (a.y + b.y) / 2;
+              const strokeColor = e.color ?? (e.dashed ? "var(--color-border)" : "var(--color-primary)");
               return (
                 <g key={i}>
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    stroke={e.dashed ? "var(--color-border)" : "var(--color-primary)"}
-                    strokeWidth={e.dashed ? 1 : 1.8}
+                    stroke={strokeColor}
+                    strokeWidth={e.dashed ? 1.2 : 1.8}
                     strokeDasharray={e.dashed ? "6,3" : "none"}
-                    opacity={e.dashed ? 0.6 : 1}
+                    opacity={e.dashed ? 0.7 : 1}
                   />
                   {e.label && (
-                    <text x={mx} y={my - 5} textAnchor="middle" fontSize={9} fill="var(--color-muted-foreground)" opacity={0.7}>
+                    <text x={mx} y={my - 5} textAnchor="middle" fontSize={9}
+                      fill={e.color ?? "var(--color-muted-foreground)"} opacity={0.8}
+                      fontWeight={e.color ? 600 : 400}>
                       {e.label}
                     </text>
                   )}
@@ -285,6 +320,7 @@ function GraphPage() {
         ))}
         <span className="ml-4 border-l border-border pl-4">实线 = 直接关联</span>
         <span>虚线 = 间接关联</span>
+        <span className="ml-4 border-l border-border pl-4" style={{ color: "var(--color-success)" }}>语义边 = AI 相似度 &gt;75%</span>
       </div>
     </div>
   );

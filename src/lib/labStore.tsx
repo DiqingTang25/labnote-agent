@@ -17,6 +17,7 @@ import {
   deleteExperimentDB,
   fetchProfile,
   upsertProfile,
+  embedExperiment,
 } from "./supabase";
 
 export type Param = { name: string; value: string; unit: string };
@@ -50,6 +51,8 @@ export type Experiment = {
   discipline: string;
   attachedFiles: AttachedFile[];
   lastParsedAt: string | null;
+  /** pgvector embedding (1024-dim), 用于语义相似度 */
+  embedding: number[] | null;
 };
 
 const newId = () => "exp_" + Math.random().toString(36).slice(2, 9);
@@ -125,8 +128,10 @@ export function LabProvider({ children }: { children: ReactNode }) {
       scheduleSave(next);
       return next;
     });
-    // 异步写 Supabase（不阻塞 UI）
-    if (isSupabaseReady()) insertExperiment(e);
+    // 异步写 Supabase + 生成 embedding
+    if (isSupabaseReady()) {
+      insertExperiment(e).then(() => embedExperiment(e.id));
+    }
   }, []);
   const updateExperiment = useCallback(
     (id: string, patch: Partial<Experiment>) => {
@@ -135,7 +140,9 @@ export function LabProvider({ children }: { children: ReactNode }) {
         scheduleSave(next);
         return next;
       });
-      if (isSupabaseReady()) updateExperimentDB(id, patch);
+      if (isSupabaseReady()) {
+        updateExperimentDB(id, patch).then(() => embedExperiment(id));
+      }
     },
     [],
   );
