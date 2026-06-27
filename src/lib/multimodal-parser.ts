@@ -1,7 +1,11 @@
 /**
- * 多模态解析流水线 — 真实 AI 集成版
+ * 多模态解析流水线 — v2 上下文感知版
  *
- * 流程：读取文件 → 按类型调 SiliconFlow API → 提取 JSON → 合并去重 → 出实验卡片
+ * 核心改进：
+ *   1. 分批处理（每批 5 个文件）
+ *   2. 批内压缩为 markdown 摘要（~80%→10% 上下文压缩）
+ *   3. 跨批合并只读摘要，不读原始数据
+ *   4. 逐批进度上报
  */
 import type { AttachedFile, Experiment } from "./labStore";
 import {
@@ -15,6 +19,16 @@ import {
   fileToBase64,
 } from "./siliconflow";
 import { parseAPIResponse, normalizeExperiment } from "./json-parser";
+
+// ═══════════════════════════════════════════════════════
+// 配置
+// ═══════════════════════════════════════════════════════
+
+const BATCH_SIZE = 5;                // 每批最多文件数
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const API_DELAY_MS = 200;            // 文件间延迟避免限流
+const CONTEXT_LIMIT = 8000;          // merge 上下文上限 (字符)
+const CONTEXT_THRESHOLD = 6400;      // 80% 触发压缩
 
 // ═══════════════════════════════════════════════════════
 // 类型
@@ -41,6 +55,19 @@ export type FileProgress = {
   status: "waiting" | "reading" | "analyzing" | "extracting" | "complete" | "error";
   detail?: string;
   error?: string;
+};
+
+type FileContent = {
+  textContent: string;
+  base64?: string;
+  mime?: string;
+  isBinary: boolean;
+};
+
+type RawResult = {
+  fileName: string;
+  fileType: string;
+  rawOutput: string;
 };
 
 // ═══════════════════════════════════════════════════════
@@ -70,9 +97,6 @@ export function detectFileInfo(fileName: string): { type: string; icon: string }
   return map[ext] ?? { type: "其他格式", icon: "📎" };
 }
 
-/**
- * 分类文件到 API 路由类型
- */
 export function classifyFile(
   fileName: string,
 ): "image" | "text" | "csv" | "audio" | "video" | "document" {
@@ -85,38 +109,19 @@ export function classifyFile(
   return "text";
 }
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const API_DELAY_MS = 200; // 文件间延迟避免限流
-
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 // ═══════════════════════════════════════════════════════
-// 主流水线
+// 步骤1: 读取文件
 // ═══════════════════════════════════════════════════════
 
-export async function runPipeline(
+async function readFiles(
   files: File[],
-  onStage: (stage: PipelineStage, detail: string) => void,
   onFileProgress: (fileIndex: number, progress: FileProgress) => void,
-  useRealAPI = true,
-): Promise<Experiment[]> {
-  if (files.length === 0) return [];
-
-  // 初始化所有文件为 waiting
-  for (let i = 0; i < files.length; i++) {
-    onFileProgress(i, { name: files[i].name, status: "waiting" });
-  }
-
-  // ═══ Stage 1: 读取文件 ═══
-  onStage("reading", `读取 ${files.length} 个文件`);
-  const fileContents: Array<{
-    textContent: string;
-    base64?: string;
-    mime?: string;
-    isBinary: boolean;
-  }> = [];
+): Promise<FileContent[]> {
+  const fileContents: FileContent[] = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -126,7 +131,7 @@ export async function runPipeline(
       onFileProgress(i, {
         name: file.name,
         status: "error",
-        error: `文件过大 (${(file.size / 1024 / 1024).toFixed(1)}MB > 10MB)`,
+        error: `文件过大 (${(file.size / 1024 / 1024).toFixed(1)}MB > 20MB)`,
       });
       fileContents.push({ textContent: "", isBinary: true });
       continue;
@@ -149,132 +154,326 @@ export async function runPipeline(
     }
   }
 
-  await sleep(200);
+  return fileContents;
+}
 
-  // ═══ Stage 2: AI 分析 ═══
-  onStage("analyzing", `AI 分析 ${files.length} 个文件`);
-  const rawResults: Array<{ fileName: string; fileType: string; rawOutput: string }> = [];
+// ═══════════════════════════════════════════════════════
+// 步骤2: AI 分析单个文件
+// ═══════════════════════════════════════════════════════
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const fc = fileContents[i];
-    const category = classifyFile(file.name);
+async function analyzeFile(
+  file: File,
+  content: FileContent,
+  useRealAPI: boolean,
+): Promise<RawResult> {
+  const category = classifyFile(file.name);
 
-    // 跳过大文件
-    if (fc.isBinary && !fc.base64) {
-      rawResults.push({ fileName: file.name, fileType: category, rawOutput: "" });
-      continue;
-    }
+  if (content.isBinary && !content.base64) {
+    return { fileName: file.name, fileType: category, rawOutput: "" };
+  }
 
-    const modelHint =
-      category === "image"
-        ? "Qwen3-VL-32B"
-        : category === "audio" || category === "video"
-          ? "Qwen3-Omni"
-          : "DeepSeek-V3";
-
-    onFileProgress(i, {
-      name: file.name,
-      status: "analyzing",
-      detail: `调用 ${modelHint}...`,
-    });
-
-    await sleep(API_DELAY_MS); // 限流延迟
-
-    let rawOutput = "";
-    try {
-      if (!useRealAPI) {
-        rawOutput = JSON.stringify({
-          experiments: [{ name: file.name.replace(/\.[^.]+$/, ""), source: file.name }],
-        });
-      } else {
-        switch (category) {
-          case "image":
-            rawOutput = await parseImage(fc.base64!, fc.mime!, file.name);
-            break;
-          case "text":
-            rawOutput = await parseTextFile(fc.textContent, file.name);
-            break;
-          case "csv":
-            rawOutput = await parseCSV(fc.textContent, file.name);
-            break;
-          case "audio":
-            rawOutput = await parseAudio(fc.base64!, fc.mime!);
-            break;
-          case "video":
-            rawOutput = await parseVideo(fc.base64!, fc.mime!, file.name);
-            break;
-          case "document":
-            rawOutput = await parseTextFile(fc.textContent || file.name, file.name);
-            break;
-          default:
-            rawOutput = await parseTextFile(fc.textContent, file.name);
-        }
-      }
-      onFileProgress(i, { name: file.name, status: "analyzing", detail: "API 响应已收到" });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      onFileProgress(i, { name: file.name, status: "error", error: `API: ${msg.slice(0, 60)}` });
-      // 生成兜底卡片
+  let rawOutput = "";
+  try {
+    if (!useRealAPI) {
       rawOutput = JSON.stringify({
         experiments: [{ name: file.name.replace(/\.[^.]+$/, ""), source: file.name }],
       });
+    } else {
+      switch (category) {
+        case "image":
+          rawOutput = await parseImage(content.base64!, content.mime!, file.name);
+          break;
+        case "text":
+          rawOutput = await parseTextFile(content.textContent, file.name);
+          break;
+        case "csv":
+          rawOutput = await parseCSV(content.textContent, file.name);
+          break;
+        case "audio":
+          rawOutput = await parseAudio(content.base64!, content.mime!);
+          break;
+        case "video":
+          rawOutput = await parseVideo(content.base64!, content.mime!, file.name);
+          break;
+        case "document":
+          rawOutput = await parseTextFile(content.textContent || file.name, file.name);
+          break;
+        default:
+          rawOutput = await parseTextFile(content.textContent, file.name);
+      }
     }
-
-    rawResults.push({ fileName: file.name, fileType: category, rawOutput });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Pipeline] API failed for ${file.name}:`, msg.slice(0, 120));
+    // 生成兜底卡片
+    rawOutput = JSON.stringify({
+      experiments: [{ name: file.name.replace(/\.[^.]+$/, ""), source: file.name }],
+    });
   }
 
-  // ═══ Stage 3: 结构化抽取 ═══
-  onStage("extracting", "解析 AI 响应为实验卡片");
-  const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+  return { fileName: file.name, fileType: category, rawOutput };
+}
 
+// ═══════════════════════════════════════════════════════
+// 步骤3: 压缩实验结果 → 紧凑 markdown 摘要
+// ═══════════════════════════════════════════════════════
+
+function compressToMarkdown(
+  partials: Array<{ fileName: string; experiment: Partial<Experiment> }>,
+): string {
+  if (partials.length === 0) return "";
+
+  const lines: string[] = ["## 批处理摘要", ""];
+
+  for (const p of partials) {
+    const e = p.experiment;
+    const paramsStr = (e.params ?? [])
+      .filter((x) => x?.name)
+      .map((x) => `${x.name}=${x.value}${x.unit}`)
+      .join(", ");
+
+    lines.push(`### ${e.name || "未命名"}`);
+    lines.push(`- 来源: ${p.fileName}`);
+    if (e.date) lines.push(`- 日期: ${e.date}`);
+    if (e.operator) lines.push(`- 操作人: ${e.operator}`);
+    if (e.purpose) lines.push(`- 目的: ${e.purpose}`);
+    if (e.device?.name) lines.push(`- 设备: ${e.device.name} (${e.device.model || ""})`);
+    if (e.sample?.id) lines.push(`- 样品: ${e.sample.id}`);
+    if (paramsStr) lines.push(`- 参数: ${paramsStr}`);
+    if (e.results) lines.push(`- 结果: ${e.results.slice(0, 120)}`);
+    if (e.notes) lines.push(`- 备注: ${e.notes.slice(0, 80)}`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+// ═══════════════════════════════════════════════════════
+// 步骤4: 处理一个批次
+// ═══════════════════════════════════════════════════════
+
+async function processBatch(
+  batchFiles: File[],
+  batchContents: FileContent[],
+  batchIndex: number,
+  totalBatches: number,
+  onFileProgress: (fileIndex: number, progress: FileProgress) => void,
+  useRealAPI: boolean,
+): Promise<{
+  partials: Array<{ fileName: string; experiment: Partial<Experiment> }>;
+  summaryMd: string;
+}> {
+  const rawResults: RawResult[] = [];
+  const globalStartIdx = batchIndex * BATCH_SIZE;
+
+  // 2a: 逐文件调 API
+  for (let i = 0; i < batchFiles.length; i++) {
+    const globalIdx = globalStartIdx + i;
+    const file = batchFiles[i];
+    const fc = batchContents[i];
+
+    if (fc.isBinary && !fc.base64) continue;
+
+    const modelHint =
+      classifyFile(file.name) === "image"
+        ? "Qwen3-VL-32B"
+        : classifyFile(file.name) === "audio" || classifyFile(file.name) === "video"
+          ? "Qwen3-Omni"
+          : "DeepSeek-V3";
+
+    onFileProgress(globalIdx, {
+      name: file.name,
+      status: "analyzing",
+      detail: `批次${batchIndex + 1}/${totalBatches} · ${modelHint}`,
+    });
+
+    await sleep(API_DELAY_MS);
+
+    const result = await analyzeFile(file, fc, useRealAPI);
+    rawResults.push(result);
+
+    if (result.rawOutput.length > 0) {
+      onFileProgress(globalIdx, {
+        name: file.name,
+        status: "extracting",
+        detail: "解析 JSON...",
+      });
+    } else {
+      onFileProgress(globalIdx, {
+        name: file.name,
+        status: "error",
+        error: "API 返回为空",
+      });
+    }
+  }
+
+  // 2b: 解析所有响应 → partial experiments
+  const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
   for (let i = 0; i < rawResults.length; i++) {
     const rr = rawResults[i];
-    onFileProgress(i, { name: files[i].name, status: "extracting", detail: "解析 JSON..." });
+    const globalIdx = globalStartIdx + i;
+
+    if (!rr.rawOutput) {
+      onFileProgress(globalIdx, {
+        name: batchFiles[i].name,
+        status: "error",
+        error: "无 AI 响应",
+      });
+      continue;
+    }
 
     try {
       const parsed = parseAPIResponse(rr.rawOutput, rr.fileName);
-      parsed.forEach((p) => allPartials.push({ fileName: rr.fileName, experiment: p }));
-      onFileProgress(i, { name: files[i].name, status: "extracting", detail: `提取 ${parsed.length} 条` });
+      parsed.forEach((exp) => allPartials.push({ fileName: rr.fileName, experiment: exp }));
+      onFileProgress(globalIdx, {
+        name: batchFiles[i].name,
+        status: "extracting",
+        detail: `提取 ${parsed.length} 条`,
+      });
     } catch {
       // JSON 解析失败：创建基础卡片
       allPartials.push({
         fileName: rr.fileName,
         experiment: {
           name: rr.fileName.replace(/\.[^.]+$/, ""),
-          results: rr.rawOutput.slice(0, 500), // 原始输出放入结果区
-          notes: "AI JSON 解析失败，原始响应已放入结果区。请手动整理。",
+          results: rr.rawOutput.slice(0, 300),
+          notes: "AI JSON 解析失败，原始响应已放入结果区。",
         },
       });
-      onFileProgress(i, { name: files[i].name, status: "extracting", detail: "解析失败" });
+      onFileProgress(globalIdx, {
+        name: batchFiles[i].name,
+        status: "error",
+        error: "JSON 解析失败",
+      });
     }
   }
 
-  // ═══ Stage 4: 合并 ═══
-  onStage("merging", "去重合并生成最终卡片");
-  let finalExperiments: Experiment[];
-
+  // 2c: 批内合并（如果该批有多个文件的结果）
+  let batchPartials = allPartials;
   const validResults = rawResults.filter((r) => r.rawOutput.length > 0);
 
   if (useRealAPI && validResults.length > 1) {
-    // 多文件 → 调 mergeResults 去重
     try {
       const mergedRaw = await mergeResults(validResults);
-      const merged = parseAPIResponse(mergedRaw, "__merged__");
-      finalExperiments = merged.map((p) =>
-        normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }),
-      );
+      const merged = parseAPIResponse(mergedRaw, `__batch${batchIndex}__`);
+      if (merged.length > 0) {
+        batchPartials = merged.map((m) => ({
+          fileName: `批次${batchIndex + 1}合并`,
+          experiment: m,
+        }));
+      }
     } catch {
-      // merge 失败：直接用 partials
-      finalExperiments = buildFromPartials(allPartials);
+      // merge 失败，用原始 partials
     }
-  } else if (allPartials.length > 0) {
-    finalExperiments = buildFromPartials(allPartials);
-  } else {
-    finalExperiments = [];
   }
 
-  // 附加文件元数据
+  // 2d: 生成 markdown 摘要
+  const summaryMd = compressToMarkdown(batchPartials);
+
+  return { partials: batchPartials, summaryMd };
+}
+
+// ═══════════════════════════════════════════════════════
+// 主流水线
+// ═══════════════════════════════════════════════════════
+
+export async function runPipeline(
+  files: File[],
+  onStage: (stage: PipelineStage, detail: string) => void,
+  onFileProgress: (fileIndex: number, progress: FileProgress) => void,
+  useRealAPI = true,
+): Promise<Experiment[]> {
+  if (files.length === 0) return [];
+
+  // 初始化进度
+  for (let i = 0; i < files.length; i++) {
+    onFileProgress(i, { name: files[i].name, status: "waiting" });
+  }
+
+  // ═══ 读取文件 ═══
+  onStage("reading", `读取 ${files.length} 个文件`);
+  const fileContents = await readFiles(files, onFileProgress);
+  await sleep(200);
+
+  // ═══ 分批 AI 分析 ═══
+  const totalBatches = Math.ceil(files.length / BATCH_SIZE);
+  const allBatchSummaries: string[] = [];
+  const allBatchPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+
+  for (let bi = 0; bi < totalBatches; bi++) {
+    onStage("analyzing", `批次 ${bi + 1}/${totalBatches} · AI 多模态识别`);
+
+    const start = bi * BATCH_SIZE;
+    const end = Math.min(start + BATCH_SIZE, files.length);
+    const batchFiles = files.slice(start, end);
+    const batchContents = fileContents.slice(start, end);
+
+    const { partials, summaryMd } = await processBatch(
+      batchFiles,
+      batchContents,
+      bi,
+      totalBatches,
+      onFileProgress,
+      useRealAPI,
+    );
+
+    allBatchPartials.push(...partials);
+
+    // 上下文检查：摘要累积超过 80% 则触发压缩提示
+    const totalSummarySize = allBatchSummaries.reduce((s, m) => s + m.length, 0) + summaryMd.length;
+    if (totalSummarySize > CONTEXT_THRESHOLD) {
+      console.log(`[Pipeline] 批${bi + 1}: 累计摘要 ${totalSummarySize} 字符，超过 80% 阈值`);
+    }
+
+    allBatchSummaries.push(summaryMd);
+  }
+
+  // ═══ 跨批合并 ═══
+  onStage("merging", `合并 ${totalBatches} 批结果`);
+
+  let finalExperiments: Experiment[];
+
+  if (totalBatches === 1) {
+    // 单批次：直接用 partials
+    finalExperiments = buildFromPartials(allBatchPartials);
+  } else {
+    // 多批次：将所有批摘要作为上下文，调一次 merge
+    const combinedSummary = allBatchSummaries.join("\n\n---\n\n");
+    const truncatedSummary = combinedSummary.slice(0, CONTEXT_LIMIT);
+
+    if (useRealAPI && allBatchPartials.length > 0) {
+      try {
+        const summaryResults: RawResult[] = [{
+          fileName: `全部摘要`,
+          fileType: "text",
+          rawOutput: `请基于以下 ${totalBatches} 个批次的实验摘要，去重合并为最终的实验卡片列表。\n\n${truncatedSummary}`,
+        }];
+
+        // 直接调 chat 而非 mergeResults，因为 mergeResults 期望的是 rawOutput
+        const { chat } = await import("./siliconflow");
+        const mergedRaw = await chat(
+          "deepseek-ai/DeepSeek-V3",
+          [{
+            role: "user",
+            content: `你是科研实验记录管理员。以下是 ${totalBatches} 个批次的实验摘要，请去重合并，输出最终的实验卡片列表。\n\n【重要】输出纯JSON（不要markdown代码块）：\n{"experiments":[{"name":"...","date":"...","operator":"...","purpose":"...","device":{"name":"...","model":"...","vendor":"..."},"sample":{"id":"...","batch":"...","source":"..."},"params":[{"name":"...","value":"...","unit":"..."}],"environment":{"temperature":"","humidity":"","other":""},"steps":["..."],"results":"...","notes":"...","source":"..."}]}\n\n${truncatedSummary}`,
+          }],
+          4096,
+        );
+
+        const parsed = parseAPIResponse(mergedRaw, "__final__");
+        finalExperiments = parsed.length > 0
+          ? parsed.map((p) => normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }))
+          : buildFromPartials(allBatchPartials);
+      } catch (err) {
+        console.error("[Pipeline] 跨批合并失败，使用原始结果", err);
+        finalExperiments = buildFromPartials(allBatchPartials);
+      }
+    } else {
+      finalExperiments = buildFromPartials(allBatchPartials);
+    }
+  }
+
+  // ═══ 附加文件元数据 ═══
   const now = new Date().toISOString();
   for (const exp of finalExperiments) {
     exp.attachedFiles = files.map((f, i) => ({
@@ -285,17 +484,15 @@ export async function runPipeline(
       size: f.size,
       addedAt: now,
       textContent: fileContents[i]?.textContent ?? "",
-      parsedRaw: rawResults[i]?.rawOutput ?? "",
+      parsedRaw: "", // 最终卡片不再保留原始响应
     }));
     exp.lastParsedAt = now;
   }
 
-  // ═══ Stage 5: 完成 ═══
+  // ═══ 完成 ═══
   onStage("complete", `${finalExperiments.length} 张卡片`);
-
   for (let i = 0; i < files.length; i++) {
-    const pf = fileContents[i];
-    if (pf.isBinary && !pf.base64) continue; // 已标记错误
+    if (fileContents[i].isBinary && !fileContents[i].base64) continue;
     onFileProgress(i, { name: files[i].name, status: "complete" });
   }
 
@@ -309,7 +506,7 @@ export async function runPipeline(
 function buildFromPartials(
   allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }>,
 ): Experiment[] {
-  // 简单去重：名称相近的合并
+  // 去重：名称相近的合并
   const groups = new Map<string, Partial<Experiment>[]>();
 
   for (const p of allPartials) {
@@ -319,20 +516,22 @@ function buildFromPartials(
   }
 
   return Array.from(groups.values()).map((parts) => {
-    const merged: Partial<Experiment> = {};
+    const merged: Record<string, unknown> = {};
     for (const part of parts) {
       for (const [k, v] of Object.entries(part)) {
         if (v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0)) {
-          (merged as Record<string, unknown>)[k] = v;
+          merged[k] = v;
         }
       }
     }
-    return normalizeExperiment(merged, { lastParsedAt: new Date().toISOString() });
+    return normalizeExperiment(merged as Partial<Experiment>, {
+      lastParsedAt: new Date().toISOString(),
+    });
   });
 }
 
 /**
- * 仅重新合并（不重调文件级 API，使用存储的 parsedRaw）
+ * 仅重新合并（使用存储的 parsedRaw，不重调文件级 API）
  */
 export async function rerunMerge(
   fileResults: Array<{ fileName: string; fileType: string; rawOutput: string }>,
@@ -351,7 +550,6 @@ export async function rerunMerge(
       normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }),
     );
   } catch {
-    // 回退：用 allPartials 直接构建
     const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
     for (const r of valid) {
       try {
