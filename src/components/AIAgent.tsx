@@ -3,6 +3,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLab } from "../lib/labStore";
+import { ragAnswerReal } from "../lib/supabase";
 import {
   MessageCircle, X, Sparkles, Loader2, Send, FileText, Target,
   ArrowUpRight, CheckCircle2, Filter, BookOpen, Brain, Search,
@@ -81,16 +82,23 @@ export function AIAgent() {
         setWorkflowStep(step);
         setTimeout(advanceStep, delays[step]);
       } else {
-        // 最后一步：生成回答
-        setTimeout(() => {
+        // 最后一步：真实 RAG 检索 + LLM 生成
+        ragAnswerReal(t).then(({ answer, sources }) => {
           setChat((c) => [...c, {
             role: "agent",
-            text: "知识问答即将接入 Supabase pgvector 向量检索。当前过渡期请在实验卡片中直接查看数据。",
-            sources: activeCards.slice(0, 2).map((e) => ({ doc: e.name, conf: "待验证", link: `/workbench?id=${e.id}` })),
+            text: answer,
+            sources: sources.map((s) => ({ doc: s.doc, conf: s.confidence, link: s.link })),
           }]);
+        }).catch(() => {
+          setChat((c) => [...c, {
+            role: "agent",
+            text: "抱歉，知识检索暂时不可用。请在实验卡片中直接查看数据。",
+            sources: [],
+          }]);
+        }).finally(() => {
           setLoading(false);
           setWorkflowStep(-1);
-        }, delays[delays.length - 1]);
+        });
       }
     };
     setTimeout(advanceStep, delays[0]);

@@ -12,7 +12,7 @@ const MODEL_VL = "Qwen/Qwen3-VL-32B-Instruct";       // 图片理解
 const MODEL_OMNI = "Qwen/Qwen3-Omni-30B-A3B-Instruct"; // 视频/音频
 const MODEL_OCR = "deepseek-ai/DeepSeek-OCR";         // 文档OCR
 
-async function chat(
+export async function chat(
   model: string,
   messages: Array<{ role: string; content: unknown }>,
   maxTokens = 2048,

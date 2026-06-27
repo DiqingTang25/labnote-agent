@@ -17,6 +17,7 @@ import {
   checkCompleteness, generateMethods,
   type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
+import { ragAnswerReal } from "../lib/supabase";
 import { useElectron } from "../lib/electron/useElectron";
 import { FolderWatcherPanel } from "../lib/electron/FolderWatcherPanel";
 import {
@@ -868,18 +869,26 @@ function RagPanel() {
   ]);
   const [q, setQ] = useState("");
 
-  const send = (text?: string) => {
+  const [loading, setLoading] = useState(false);
+
+  const send = async (text?: string) => {
     const t = (text ?? q).trim();
-    if (!t) return;
+    if (!t || loading) return;
     setChat((c) => [...c, { role: "user", text: t }]);
     setQ("");
-    setTimeout(() => {
+    setLoading(true);
+    try {
+      const { answer, sources } = await ragAnswerReal(t);
+      setChat((c) => [...c, { role: "agent", text: answer, sources }]);
+    } catch {
       setChat((c) => [...c, {
         role: "agent",
-        text: "RAG 知识问答即将接入 Supabase pgvector 向量检索与 DeepSeek-V3 生成。当前过渡期请直接在实验卡片中查看数据，或使用「实验工作台」的关键词过滤。",
+        text: "抱歉，RAG 检索暂时不可用。请稍后重试或直接在实验卡片中搜索。",
         sources: [],
       }]);
-    }, 400);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const suggestions = ["上次使用样品 Fe-2309 的退火温度是多少？", "哪几次实验出现电流异常？", "知识库涉及哪些设备？"];
@@ -923,8 +932,11 @@ function RagPanel() {
       </div>
       <div className="mt-2 flex gap-1">
         <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="向知识库提问…" className={inputCls + " text-xs"}/>
-        <button onClick={() => send()} className="rounded-lg bg-primary text-primary-foreground px-2.5 hover:bg-primary/90"><Send size={13}/></button>
+          placeholder="向知识库提问…" disabled={loading} className={inputCls + " text-xs disabled:opacity-50"}/>
+        <button onClick={() => send()} disabled={loading}
+          className="rounded-lg bg-primary text-primary-foreground px-2.5 hover:bg-primary/90 disabled:opacity-60">
+          {loading ? <Loader2 size={13} className="animate-spin"/> : <Send size={13}/>}
+        </button>
       </div>
     </div>
   );
