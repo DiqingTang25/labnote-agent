@@ -1,0 +1,560 @@
+[
+  {
+    "experiment": "Breast Cancer Spatial Transcriptomics",
+    "timestamp": "2026-06-27T17:47:16.925Z",
+    "overallScore": 44,
+    "scores": {
+      "nameMatch": 30,
+      "disciplineMatch": 20,
+      "purposeMatch": 40,
+      "operatorMatch": 20,
+      "deviceMatch": 20,
+      "sampleMatch": 20,
+      "stepsQuality": 100,
+      "resultsQuality": 60,
+      "paramsQuality": 50,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "学科不匹配: 期望含\"转录\", 实际\"病理学\"",
+      "操作人不匹配: 期望含\"Wang\", 实际\"未提及\"",
+      "设备不匹配: 期望含\"Visium\", 实际\"显微镜\"",
+      "样品不匹配: 期望含\"BC-2025\", 实际\"breast_tissue\"",
+      "名称匹配低(30): \"乳腺癌组织HE染色分析\"",
+      "学科匹配低(20)",
+      "目的匹配低(40): \"通过HE染色观察乳腺癌组织的形态学特征，评估肿瘤细胞的排列和结构\"",
+      "设备匹配低(20)"
+    ],
+    "rawExperiments": [
+      {
+        "name": "乳腺癌组织HE染色分析",
+        "date": "2023-01-01 00:00",
+        "operator": "未提及",
+        "purpose": "通过HE染色观察乳腺癌组织的形态学特征，评估肿瘤细胞的排列和结构",
+        "background": "HE染色是组织学研究中常用的染色方法，用于观察细胞和组织的形态结构",
+        "discipline": "病理学",
+        "device": {
+          "name": "显微镜",
+          "model": "未提及",
+          "vendor": "未提及"
+        },
+        "sample": {
+          "id": "breast_tissue",
+          "batch": "未提及",
+          "source": "乳腺癌患者组织样本"
+        },
+        "params": [
+          {
+            "name": "染色方法",
+            "value": "HE染色",
+            "unit": "无"
+          }
+        ],
+        "environment": {
+          "temperature": "室温",
+          "humidity": "未提及",
+          "other": "标准实验室条件"
+        },
+        "steps": [
+          "获取乳腺癌组织样本",
+          "进行石蜡包埋和切片",
+          "进行HE染色",
+          "在显微镜下观察并拍摄图像"
+        ],
+        "results": "通过HE染色图像可以观察到乳腺癌组织的形态学特征，包括肿瘤细胞的排列、核质比、核分裂象等。这些信息对于诊断和评估肿瘤的恶性程度具有重要意义。图像质量良好，能够清晰显示组织结构和细胞形态。",
+        "notes": "图像文件名提示为乳腺癌组织HE染色结果，但缺乏具体的实验细节和定量数据",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：图像文件名提供了基本的实验信息，但缺乏详细的实验参数和操作记录。实验间关联：可能与乳腺癌的空间转录组测序或其他分子生物学实验相关。改进建议：建议补充实验记录，包括染色时间、显微镜型号、放大倍数等详细信息。潜在风险：缺乏定量数据可能限制结果的客观性评估。",
+        "attachedFiles": [
+          {
+            "id": "af_kp1h1p89v",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:47:16.921Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_unnwbgcca",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_4dswxkn22",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_6afirh8sb",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_mju9ltk0x",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:47:16.923Z"
+      },
+      {
+        "name": "乳腺癌组织样本空间转录组Visium测序",
+        "date": "2025-01-22",
+        "operator": "未提及",
+        "purpose": "通过10x Genomics Visium v2技术对乳腺癌组织样本进行空间转录组测序，分析肿瘤微环境的空间异质性",
+        "background": "研究浸润性导管癌（Grade II）的组织样本，探索肿瘤核心区、侵袭前沿、间质、免疫浸润区和正常邻近组织的基因表达差异",
+        "discipline": "空间转录组学",
+        "device": {
+          "name": "NanoZoomer S60 scanner",
+          "model": "S60",
+          "vendor": "未提及"
+        },
+        "sample": {
+          "id": "BC-2025-089",
+          "batch": "未提及",
+          "source": "女性，58岁，浸润性导管癌（Grade II）"
+        },
+        "params": [
+          {
+            "name": "切片厚度",
+            "value": "10",
+            "unit": "μm"
+          },
+          {
+            "name": "组织渗透时间",
+            "value": "12",
+            "unit": "min"
+          },
+          {
+            "name": "测序读长",
+            "value": "2×150",
+            "unit": "bp"
+          },
+          {
+            "name": "每个spot的读对数",
+            "value": "50k",
+            "unit": "read pairs/spot"
+          }
+        ],
+        "environment": {
+          "temperature": "-20°C",
+          "humidity": "未提及",
+          "other": "未提及"
+        },
+        "steps": [
+          "组织样本包埋在OCT化合物中，用液氮快速冷冻",
+          "在-20°C下进行10 μm厚度的冷冻切片",
+          "将切片安装在Visium空间基因表达载玻片上",
+          "按照Visium方案进行H&E染色",
+          "使用40×放大倍数的NanoZoomer S60扫描仪进行明场成像",
+          "组织渗透化12分钟（根据时间过程优化）",
+          "按照10x Genomics Visium v2方案进行cDNA合成和文库制备",
+          "使用Illumina NovaSeq 6000进行测序，读长为2×150 bp，每个spot 50k读对数"
+        ],
+        "results": "实验结果显示RNA完整性数（RIN）为8.2，表明RNA质量高。组织覆盖率为捕获区域的85%。每个spot的平均读数为52,341，平均基因数为3,245。线粒体读段比例为4.2%，在可接受范围内。通过QC的spot比例为98.3%（2,458 / 2,500）。空间聚类分析识别出5个主要簇：簇1（n=452）为肿瘤核心区，高表达EPCAM、KRT19和MUC1；簇2（n=312）为肿瘤侵袭前沿，同时表达上皮和间质标志物；簇3（n=198）为间质区，高表达VIM、COL1A1和FN1；簇4（n=156）为免疫浸润区，高表达CD3E、CD8A和CD68；簇5（n=89）为正常邻近组织。",
+        "notes": "样本来源为58岁女性患者的浸润性导管癌（Grade II）组织",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：RNA完整性高（RIN 8.2），测序深度足够（每个spot平均52,341读段），线粒体污染低（4.2%），表明数据质量优秀。实验间关联：该实验可与免疫组化或单细胞RNA测序数据进行整合分析。改进建议：可以考虑增加更多患者样本以提高统计显著性。潜在风险：样本来源单一（仅一个患者）。",
+        "attachedFiles": [
+          {
+            "id": "af_4ae0sfw5s",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_t2zpwmsyt",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_1j6uudu29",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_uiasu73p7",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:47:16.923Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_qo055hfpj",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:47:16.924Z"
+      },
+      {
+        "name": "基因表达矩阵分析",
+        "date": "2023-01-01 00:00",
+        "operator": "未提供",
+        "purpose": "分析10个空间转录组样本中多个基因的表达水平，以研究基因表达的空间分布模式",
+        "background": "空间转录组技术能够提供组织中基因表达的空间信息，有助于理解细胞间的相互作用和微环境的影响",
+        "discipline": "空间转录组学",
+        "device": {
+          "name": "未提供",
+          "model": "未提供",
+          "vendor": "未提供"
+        },
+        "sample": {
+          "id": "SPOT_001至SPOT_010",
+          "batch": "未提供",
+          "source": "未提供"
+        },
+        "params": [
+          {
+            "name": "x_coord",
+            "value": 220,
+            "unit": "未提供"
+          },
+          {
+            "name": "y_coord",
+            "value": 190,
+            "unit": "未提供"
+          },
+          {
+            "name": "MALAT1",
+            "value": 408.93,
+            "unit": "未提供"
+          },
+          {
+            "name": "GAPDH",
+            "value": 1109.79,
+            "unit": "未提供"
+          },
+          {
+            "name": "MUC1",
+            "value": 130.96,
+            "unit": "未提供"
+          },
+          {
+            "name": "KRT19",
+            "value": 44.08,
+            "unit": "未提供"
+          },
+          {
+            "name": "EPCAM",
+            "value": 516.32,
+            "unit": "未提供"
+          },
+          {
+            "name": "VIM",
+            "value": 13.59,
+            "unit": "未提供"
+          },
+          {
+            "name": "CDH1",
+            "value": 233.87,
+            "unit": "未提供"
+          }
+        ],
+        "environment": {
+          "temperature": "未提供",
+          "humidity": "未提供",
+          "other": "未提供"
+        },
+        "steps": [
+          "收集10个空间转录组样本",
+          "测量每个样本的x和y坐标",
+          "测量每个样本中多个基因的表达水平",
+          "计算每个基因的平均表达水平",
+          "分析基因表达的空间分布模式"
+        ],
+        "results": "实验结果显示，10个空间转录组样本中多个基因的表达水平存在显著差异。其中，GAPDH的平均表达水平最高（1109.79），而VIM的平均表达水平最低（13.59）。MALAT1的平均表达水平为408.93，MUC1为130.96，KRT19为44.08，EPCAM为516.32，CDH1为233.87。这些数据表明，不同基因在空间转录组样本中的表达水平存在明显的空间分布模式。",
+        "notes": "未提供",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：数据完整，所有样本的基因表达水平均有记录。实验间关联：该实验可能与其他空间转录组实验相关，可用于比较不同样本间的基因表达模式。",
+        "attachedFiles": [
+          {
+            "id": "af_z9i1sh082",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_6vwa1u2k9",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_6w97vnhgk",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_yf89epeu6",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_ohtr2pb5f",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:47:16.924Z"
+      },
+      {
+        "name": "基因表达元数据分析",
+        "date": "未提供",
+        "operator": "未提供",
+        "purpose": "分析9个不同基因的表达水平及检测率，包括lncRNA和蛋白质编码基因",
+        "background": "该实验旨在通过分析基因表达数据，了解不同基因的表达水平和检测率，为后续研究提供参考",
+        "discipline": "生物信息学",
+        "device": {
+          "name": "未提供",
+          "model": "未提供",
+          "vendor": "未提供"
+        },
+        "sample": {
+          "id": "未提供",
+          "batch": "未提供",
+          "source": "未提供"
+        },
+        "params": [
+          {
+            "name": "mean_expression",
+            "value": "289.13",
+            "unit": "未提供"
+          },
+          {
+            "name": "detection_rate",
+            "value": "0.83",
+            "unit": "未提供"
+          }
+        ],
+        "environment": {
+          "temperature": "未提供",
+          "humidity": "未提供",
+          "other": "未提供"
+        },
+        "steps": [
+          "收集基因表达数据",
+          "分析基因表达水平",
+          "计算检测率",
+          "汇总分析结果"
+        ],
+        "results": "实验分析了9个不同基因的表达水平和检测率。结果显示，平均表达水平为289.13，范围从15.20到1089.30。其中，GAPDH基因的表达水平最高（1089.30），VIM基因的表达水平最低（15.20）。检测率的平均值为0.83，范围从0.45到0.99。GAPDH基因的检测率最高（0.99），VIM基因的检测率最低（0.45）。这些数据表明，不同基因的表达水平和检测率存在显著差异，可能反映了它们在细胞中的功能重要性或表达调控机制的不同。",
+        "notes": "未提供",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：数据完整性良好，所有基因均有表达水平和检测率数据。实验间关联：该实验可能与其他基因表达研究相关，特别是涉及lncRNA和蛋白质编码基因的研究。改进建议：建议补充实验条件和样本来源信息，以便更好地解释数据。潜在风险：由于缺乏实验条件和样本信息，数据的可重复性和解释性可能受限。",
+        "attachedFiles": [
+          {
+            "id": "af_z2t6tb6lg",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_2ve96tcx5",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_jthnt0jrq",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_dizxgb9zg",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_kwzzdhrl8",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:47:16.924Z"
+      },
+      {
+        "name": "组织宏观观察实验",
+        "date": "2023-01-01 00:00",
+        "operator": "未知",
+        "purpose": "通过宏观观察分析组织的形态特征和结构",
+        "background": "组织宏观观察是生物学和医学研究中的基础步骤，用于初步评估样本的形态学特征",
+        "discipline": "组织学",
+        "device": {
+          "name": "宏观观察设备",
+          "model": "未知",
+          "vendor": "未知"
+        },
+        "sample": {
+          "id": "未知",
+          "batch": "未知",
+          "source": "未知"
+        },
+        "params": [
+          {
+            "name": "放大倍数",
+            "value": "未知",
+            "unit": "倍"
+          }
+        ],
+        "environment": {
+          "temperature": "未知",
+          "humidity": "未知",
+          "other": "未知"
+        },
+        "steps": [
+          "准备组织样本",
+          "使用宏观观察设备进行观察",
+          "记录观察结果并拍摄图像"
+        ],
+        "results": "通过宏观观察，获取了组织的形态特征和结构信息，图像数据已保存为tissue_macro.jpg",
+        "notes": "由于缺乏具体实验细节，部分信息无法提供",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：由于缺乏具体实验细节，数据质量无法评估；实验间关联：可能与后续的微观观察实验相关；改进建议：建议补充实验记录中的具体参数和操作细节；潜在风险：由于信息不完整，可能存在数据解读的偏差",
+        "attachedFiles": [
+          {
+            "id": "af_p96un7pm0",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_j01smbv5p",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_92rlqgfjo",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_sq1k3l6ft",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_2fc0kxfd2",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:47:16.924Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:47:16.924Z"
+      }
+    ]
+  }
+]

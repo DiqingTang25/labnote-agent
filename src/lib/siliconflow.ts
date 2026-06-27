@@ -1,10 +1,10 @@
 /**
  * SiliconFlow 多模态 API — 自动按文件类型选择最优模型
  * 不向 UI 暴露模型名称，仅返回解析结果
+ *
+ * AI 调用通过 server functions 代理 — API key 仅在服务端
+ * 文件处理辅助函数（fileToBase64 等）保留在客户端
  */
-
-const SF_BASE = "https://api.siliconflow.cn/v1";
-const SF_KEY = import.meta.env.VITE_SF_API_KEY || "sk-yhzitgqarzjovxshluqqwuzoozcbnkiaiamncapwjqwooist";
 
 // ===== 模型选择（不暴露给 UI） =====
 const MODEL_TEXT = "deepseek-ai/DeepSeek-V3";
@@ -17,28 +17,11 @@ export async function chat(
   messages: Array<{ role: string; content: unknown }>,
   maxTokens = 2048,
 ): Promise<string> {
-  const res = await fetch(`${SF_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${SF_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.3,
-      stream: false,
-    }),
+  // 通过 server function 代理（API key 在服务端）
+  const { chatCompletion } = await import("./api/ai.functions");
+  return chatCompletion({
+    data: { model, messages, maxTokens, temperature: 0.3 },
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`API ${res.status}: ${errText.slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "";
 }
 
 // ===== 文件 → base64 =====

@@ -3,6 +3,7 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRight, FileText, FileSpreadsheet, Image as ImageIcon, MessageCircle, Sparkles, CheckCircle2 } from "lucide-react";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/compare")({
   head: () => ({
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/compare")({
 
 function ComparePage() {
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-7xl px-4 py-10">
       <div className="mb-8">
         <h1 className="text-2xl md:text-3xl font-bold">上传前 vs AI 治理后</h1>
@@ -135,6 +137,7 @@ function ComparePage() {
         </div>
       </div>
     </div>
+    </RequireAuth>
   );
 }
 

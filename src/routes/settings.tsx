@@ -6,6 +6,7 @@ import { useLab } from "../lib/labStore";
 import { useState } from "react";
 import { toast } from "sonner";
 import { User } from "lucide-react";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -26,6 +27,7 @@ function SettingsPage() {
   const [draft, setDraft] = useState(profile);
 
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-3xl px-4 py-10">
       <div className="flex items-center gap-3 mb-6">
         <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white"><User size={20}/></div>
@@ -69,5 +71,6 @@ function SettingsPage() {
         </div>
       </div>
     </div>
+    </RequireAuth>
   );
 }

@@ -1,0 +1,94 @@
+[
+  {
+    "experiment": "Plant Electrophysiology",
+    "timestamp": "2026-06-27T18:25:59.303Z",
+    "overallScore": 83,
+    "scores": {
+      "nameMatch": 25,
+      "disciplineMatch": 100,
+      "purposeMatch": 60,
+      "operatorMatch": 100,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "名称匹配低(25): \"捕蝇草电生理记录实验\""
+    ],
+    "elapsed": "52.7"
+  },
+  {
+    "experiment": "T Cell Migration",
+    "timestamp": "2026-06-27T18:25:59.307Z",
+    "overallScore": 61,
+    "scores": {
+      "nameMatch": 25,
+      "disciplineMatch": 100,
+      "purposeMatch": 60,
+      "operatorMatch": 10,
+      "deviceMatch": 30,
+      "sampleMatch": 10,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "名称匹配低(25): \"T细胞迁移追踪实验\"",
+      "操作人不匹配(10): \"未提及\"",
+      "设备不匹配(30): \"显微镜\"",
+      "样品不匹配(10): \"未提及\""
+    ],
+    "elapsed": "28.7"
+  },
+  {
+    "experiment": "Spatial Transcriptomics",
+    "timestamp": "2026-06-27T18:25:59.307Z",
+    "overallScore": 66,
+    "scores": {
+      "nameMatch": 25,
+      "disciplineMatch": 100,
+      "purposeMatch": 40,
+      "operatorMatch": 10,
+      "deviceMatch": 30,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "名称匹配低(25): \"乳腺癌空间转录组学测序实验\"",
+      "目的匹配低(40): \"通过空间转录组学技术研究乳腺癌组织中基因表达的空间分布特征，分析肿瘤核心区、浸润前沿、间质、免疫浸润和正常组织的基因表达\"",
+      "操作人不匹配(10): \"未提及\"",
+      "设备不匹配(30): \"NanoZoomer S60 scanner\""
+    ],
+    "elapsed": "56.7"
+  },
+  {
+    "experiment": "Materials Characterization",
+    "timestamp": "2026-06-27T18:25:59.307Z",
+    "overallScore": 73,
+    "scores": {
+      "nameMatch": 25,
+      "disciplineMatch": 100,
+      "purposeMatch": 40,
+      "operatorMatch": 10,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "名称匹配低(25): \"金纳米颗粒合成与表征分析\"",
+      "目的匹配低(40): \"通过Turkevich方法合成单分散的金纳米颗粒，并通过SEM、XRD、UV-Vis等多种表征手段分析其形貌、晶体结构和\"",
+      "操作人不匹配(10): \"未提及\""
+    ],
+    "elapsed": "29.7"
+  }
+]

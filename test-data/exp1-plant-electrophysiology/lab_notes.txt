@@ -1,0 +1,42 @@
+=== Plant Electrophysiology Recording Log ===
+Date: 2024-06-15
+Operator: Dr. J. Chen
+Species: Dionaea muscipula (Venus flytrap)
+Specimen ID: DION-2024-015
+Age: 3 months post-germination
+
+Setup:
+- Faraday cage: Custom-built copper mesh
+- Amplifier: Axon Instruments Axopatch 200B
+- Electrode: Ag/AgCl glass micropipette (resistance 5-8 MΩ)
+- Recording solution: Standard plant Ringer's (pH 6.5)
+- Sampling rate: 44.1 kHz
+- Low-pass filter: 10 kHz Bessel
+- High-pass filter: 0.1 Hz
+
+Protocol:
+1. Plant acclimated in recording chamber for 30 min
+2. Microelectrode inserted into mesophyll cell layer
+3. Baseline recording: 5 min resting potential
+4. Mechanical stimulation: gentle touch to trigger hair with glass probe
+5. Action potential recording: 30 sec post-stimulus
+6. Recovery: 5 min post-stimulus
+
+Observations:
+- Clear action potentials detected after mechanical stimulation
+- AP amplitude: 85-95 mV (typical for Dionaea)
+- AP duration: ~1.5 sec (half-width)
+- Refractory period: ~8 sec between successive APs
+- Resting potential stable at -62 ± 3 mV
+
+Data Quality Assessment:
+- Signal-to-noise ratio: 28.5 dB (excellent)
+- 60 Hz line noise: filtered successfully
+- Electrode drift: <2 mV over 15 min recording
+- No movement artifacts detected
+
+References:
+- Madariaga et al. (2024) "A library of electrophysiological responses in plants"
+  DOI: 10.1038/s41597-024-03152-3
+- Volkov et al. (2019) "Electrophysiology of the Venus flytrap"
+  Bioelectrochemistry 125: 25-32

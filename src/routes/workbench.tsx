@@ -18,6 +18,7 @@ import {
   type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
 import { ragAnswerReal } from "../lib/supabase";
+import { RequireAuth } from "../lib/auth-guard";
 import { useElectron } from "../lib/electron/useElectron";
 import { FolderWatcherPanel } from "../lib/electron/FolderWatcherPanel";
 import {
@@ -51,6 +52,7 @@ function Workbench() {
   const active = experiments.find((e) => e.id === activeId);
 
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-[1500px] px-4 py-6">
       <div className="mb-5">
         <h1 className="text-2xl font-bold">实验工作台</h1>
@@ -80,6 +82,7 @@ function Workbench() {
         <div className="lg:col-span-3"><RightPanel experiment={active}/></div>
       </div>
     </div>
+    </RequireAuth>
   );
 }
 
@@ -860,7 +863,7 @@ function ReproAssistant({ experiment }: { experiment: Experiment }) {
     </div>
   );
 }
-type Source = { doc: string; page: string; confidence: string; link: string };
+type Source ={ doc: string; page: string; confidence: string; link: string };
 
 function RagPanel() {
   const { experiments } = useLab();

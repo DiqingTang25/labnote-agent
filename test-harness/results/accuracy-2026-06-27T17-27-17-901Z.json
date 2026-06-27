@@ -1,0 +1,291 @@
+[
+  {
+    "experiment": "Breast Cancer Spatial Transcriptomics",
+    "timestamp": "2026-06-27T17:27:17.901Z",
+    "overallScore": 52,
+    "scores": {
+      "nameMatch": 30,
+      "disciplineMatch": 20,
+      "purposeMatch": 40,
+      "operatorMatch": 20,
+      "deviceMatch": 20,
+      "sampleMatch": 20,
+      "stepsQuality": 100,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "学科不匹配: 期望含\"转录\", 实际\"分子生物学\"",
+      "操作人不匹配: 期望含\"Wang\", 实际\"\"",
+      "设备不匹配: 期望含\"Visium\", 实际\"\"",
+      "样品不匹配: 期望含\"BC-2025\", 实际\"\"",
+      "名称匹配低(30): \"基因表达矩阵分析\"",
+      "学科匹配低(20)",
+      "目的匹配低(40): \"分析10个样本点的基因表达水平\"",
+      "设备匹配低(20)"
+    ],
+    "rawExperiments": [
+      {
+        "name": "基因表达矩阵分析",
+        "date": "",
+        "operator": "",
+        "purpose": "分析10个样本点的基因表达水平",
+        "background": "通过空间转录组技术获取样本点的基因表达数据，研究特定基因的表达模式。",
+        "discipline": "分子生物学",
+        "device": {
+          "name": "",
+          "model": "",
+          "vendor": ""
+        },
+        "sample": {
+          "id": "",
+          "batch": "",
+          "source": ""
+        },
+        "params": [
+          {
+            "name": "x_coord",
+            "value": "100.00-400.00",
+            "unit": "um"
+          },
+          {
+            "name": "y_coord",
+            "value": "100.00-300.00",
+            "unit": "um"
+          },
+          {
+            "name": "MALAT1",
+            "value": "367.80-452.30",
+            "unit": "expression level"
+          },
+          {
+            "name": "GAPDH",
+            "value": "956.40-1234.60",
+            "unit": "expression level"
+          },
+          {
+            "name": "MUC1",
+            "value": "45.30-267.80",
+            "unit": "expression level"
+          },
+          {
+            "name": "KRT19",
+            "value": "23.80-72.30",
+            "unit": "expression level"
+          },
+          {
+            "name": "EPCAM",
+            "value": "412.50-612.30",
+            "unit": "expression level"
+          },
+          {
+            "name": "VIM",
+            "value": "9.80-18.90",
+            "unit": "expression level"
+          },
+          {
+            "name": "CDH1",
+            "value": "178.90-312.50",
+            "unit": "expression level"
+          },
+          {
+            "name": "mean_expression",
+            "value": "15.20-1089.30",
+            "unit": ""
+          },
+          {
+            "name": "detection_rate",
+            "value": "0.45-0.99",
+            "unit": ""
+          }
+        ],
+        "environment": {
+          "temperature": "",
+          "humidity": "",
+          "other": ""
+        },
+        "steps": [
+          "获取样本点的空间坐标",
+          "测量每个样本点的基因表达水平",
+          "记录MALAT1、GAPDH、MUC1、KRT19、EPCAM、VIM、CDH1等基因的表达数据",
+          "整理数据为矩阵格式",
+          "收集基因表达数据",
+          "分析基因表达水平",
+          "计算检测率",
+          "记录基因类型和染色体位置",
+          "汇总数据"
+        ],
+        "results": "实验结果显示，10个样本点的基因表达水平存在差异。GAPDH的表达水平最高（均值1109.79），其次是EPCAM（均值516.32）和MALAT1（均值408.93）。MUC1的表达水平波动较大（范围45.30-267.80），而VIM的表达水平最低（均值13.59）。样本点的空间坐标（x_coord和y_coord）显示样本分布在100-400um和100-300um的范围内。",
+        "notes": "数据中未包含实验日期和操作人信息，样本来源和实验设备信息缺失。",
+        "source": "AI 解析",
+        "aiInsights": "数据质量评估：数据完整，无缺失值；实验间关联：可能与基因功能研究相关；改进建议：增加样本数量以提高统计显著性；潜在风险：部分基因的检测率较低，可能影响结果可靠性。",
+        "attachedFiles": [
+          {
+            "id": "af_s4vor4va6",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:27:17.898Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_pq237plj1",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_h34ccfblp",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_btnzbvdb3",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_kp89o7bsm",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:27:17.899Z"
+      },
+      {
+        "name": "Tissue Sample Preparation",
+        "date": "2025-01-22",
+        "operator": "",
+        "purpose": "Prepare breast tissue samples for spatial gene expression analysis",
+        "background": "Sample from a 58-year-old female with invasive ductal carcinoma, Grade II, processed for spatial transcriptomics to study tumor heterogeneity.",
+        "discipline": "Spatial Transcriptomics",
+        "device": {
+          "name": "NanoZoomer S60 scanner",
+          "model": "S60",
+          "vendor": "Hamamatsu"
+        },
+        "sample": {
+          "id": "BC-2025-089",
+          "batch": "",
+          "source": "Breast, fresh-frozen"
+        },
+        "params": [
+          {
+            "name": "Section thickness",
+            "value": "10",
+            "unit": "μm"
+          },
+          {
+            "name": "Tissue permeabilization time",
+            "value": "12",
+            "unit": "min"
+          },
+          {
+            "name": "Sequencing read length",
+            "value": "2×150",
+            "unit": "bp"
+          },
+          {
+            "name": "Read pairs per spot",
+            "value": "50k",
+            "unit": "read pairs/spot"
+          }
+        ],
+        "environment": {
+          "temperature": "-20°C",
+          "humidity": "",
+          "other": ""
+        },
+        "steps": [
+          "Tissue embedded in OCT compound, flash-frozen in liquid nitrogen",
+          "Cryosectioned at 10 μm thickness (-20°C)",
+          "Sections mounted on Visium Spatial Gene Expression slides",
+          "H&E staining performed per Visium protocol",
+          "Bright-field imaging at 40× (NanoZoomer S60 scanner)",
+          "Tissue permeabilization: 12 min (optimal from time-course)",
+          "cDNA synthesis and library preparation per 10x Genomics Visium v2 protocol",
+          "Sequencing: Illumina NovaSeq 6000, 2×150 bp, 50k read pairs/spot"
+        ],
+        "results": "The sample preparation was successful with high-quality RNA (RIN 8.2) and good tissue coverage (85%). Sequencing yielded 52,341 mean reads",
+        "notes": "",
+        "source": "AI 解析",
+        "aiInsights": "",
+        "attachedFiles": [
+          {
+            "id": "af_4kgzldu8x",
+            "name": "breast_tissue_HE.png",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 22550,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_enkiqh9lr",
+            "name": "gene_expression_matrix.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 756,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_h4q9j2q1i",
+            "name": "gene_metadata.csv",
+            "mediaType": "csv",
+            "mimeType": "application/octet-stream",
+            "size": 565,
+            "addedAt": "2026-06-27T17:27:17.899Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_frldce6ck",
+            "name": "sample_preparation.txt",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1441,
+            "addedAt": "2026-06-27T17:27:17.900Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_tvqbst3ba",
+            "name": "tissue_macro.jpg",
+            "mediaType": "image",
+            "mimeType": "application/octet-stream",
+            "size": 936,
+            "addedAt": "2026-06-27T17:27:17.900Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:27:17.900Z"
+      }
+    ]
+  }
+]

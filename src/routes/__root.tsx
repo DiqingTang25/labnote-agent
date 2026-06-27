@@ -1,5 +1,5 @@
 /**
- * 根路由：注入 LabProvider + 顶部导航
+ * 根路由：注入 AuthProvider + LabProvider + 顶部导航
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -11,13 +11,22 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, UserCheck, BookOpen, Layers, FileText, Book, Code, ClipboardList, Mail, MessageSquare, Users, Package } from "lucide-react";
+import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, UserCheck, BookOpen, Layers, FileText, Book, Code, ClipboardList, Mail, MessageSquare, Users, Package, User, LogOut, LogIn } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { LabProvider, useLab } from "../lib/labStore";
+import { AuthProvider, useAuth } from "../lib/auth-context";
 import { Toaster } from "sonner";
 import { AIAgent } from "../components/AIAgent";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 function NotFoundComponent() {
   return (
@@ -91,21 +100,25 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <LabProvider>
-        <div className="min-h-screen flex flex-col">
-          <TopNav />
-          <main className="flex-1"><Outlet /></main>
-          <Footer />
-        </div>
-        <Toaster position="top-right" richColors />
-        <AIAgent />
-      </LabProvider>
+      <AuthProvider>
+        <LabProvider>
+          <div className="min-h-screen flex flex-col">
+            <TopNav />
+            <main className="flex-1"><Outlet /></main>
+            <Footer />
+          </div>
+          <Toaster position="top-right" richColors />
+          <AIAgent />
+        </LabProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
 
 function TopNav() {
   const [searchOpen, setSearchOpen] = useState(false);
+  const { user, signOut } = useAuth();
+
   return (
     <header className="no-print sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4">
@@ -136,6 +149,46 @@ function TopNav() {
           >
             <Search size={14}/> 全局搜索…
           </button>
+
+          {/* 用户区域 */}
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="rounded-lg p-2 hover:bg-secondary transition" aria-label="用户菜单">
+                  <User size={16} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel className="text-xs text-muted-foreground truncate">
+                  {user.email}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/settings" className="cursor-pointer">
+                    <Settings size={14} className="mr-2" />
+                    设置
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={signOut}
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <LogOut size={14} className="mr-2" />
+                  退出登录
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link
+              to="/login"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition"
+            >
+              <LogIn size={14} />
+              登录
+            </Link>
+          )}
+
           <Link to="/settings" className="rounded-lg p-2 hover:bg-secondary transition" aria-label="设置">
             <Settings size={16}/>
           </Link>

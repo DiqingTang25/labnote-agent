@@ -1,0 +1,10 @@
+gene_symbol,ensembl_id,chromosome,gene_type,mean_expression,detection_rate
+MALAT1,ENSG00000251562,11q13.1,lncRNA,412.5,0.98
+GAPDH,ENSG00000111640,12p13.31,protein_coding,1089.3,0.99
+MUC1,ENSG00000185499,1q22,protein_coding,145.7,0.85
+KRT19,ENSG00000171345,17q21.2,protein_coding,38.2,0.72
+EPCAM,ENSG00000119888,2p21,protein_coding,534.6,0.95
+VIM,ENSG00000026025,10p13,protein_coding,15.2,0.45
+CDH1,ENSG00000039068,16q22.1,protein_coding,245.3,0.91
+TP53,ENSG00000141510,17p13.1,protein_coding,48.9,0.78
+EGFR,ENSG00000146648,7p11.2,protein_coding,72.5,0.82

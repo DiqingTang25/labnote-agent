@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkbenchRouteImport } from './routes/workbench'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PaperRouteImport } from './routes/paper'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as HandoffRouteImport } from './routes/handoff'
 import { Route as GraphRouteImport } from './routes/graph'
@@ -19,10 +21,16 @@ import { Route as CompareRouteImport } from './routes/compare'
 import { Route as ChecklistRouteImport } from './routes/checklist'
 import { Route as AssetsRouteImport } from './routes/assets'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 
 const WorkbenchRoute = WorkbenchRouteImport.update({
   id: '/workbench',
   path: '/workbench',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -33,6 +41,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const PaperRoute = PaperRouteImport.update({
   id: '/paper',
   path: '/paper',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -70,6 +83,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -79,9 +97,12 @@ export interface FileRoutesByFullPath {
   '/graph': typeof GraphRoute
   '/handoff': typeof HandoffRoute
   '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/paper': typeof PaperRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
   '/workbench': typeof WorkbenchRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -91,9 +112,12 @@ export interface FileRoutesByTo {
   '/graph': typeof GraphRoute
   '/handoff': typeof HandoffRoute
   '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/paper': typeof PaperRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
   '/workbench': typeof WorkbenchRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -104,9 +128,12 @@ export interface FileRoutesById {
   '/graph': typeof GraphRoute
   '/handoff': typeof HandoffRoute
   '/help': typeof HelpRoute
+  '/login': typeof LoginRoute
   '/paper': typeof PaperRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
   '/workbench': typeof WorkbenchRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -118,9 +145,12 @@ export interface FileRouteTypes {
     | '/graph'
     | '/handoff'
     | '/help'
+    | '/login'
     | '/paper'
     | '/settings'
+    | '/signup'
     | '/workbench'
+    | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -130,9 +160,12 @@ export interface FileRouteTypes {
     | '/graph'
     | '/handoff'
     | '/help'
+    | '/login'
     | '/paper'
     | '/settings'
+    | '/signup'
     | '/workbench'
+    | '/auth/callback'
   id:
     | '__root__'
     | '/'
@@ -142,9 +175,12 @@ export interface FileRouteTypes {
     | '/graph'
     | '/handoff'
     | '/help'
+    | '/login'
     | '/paper'
     | '/settings'
+    | '/signup'
     | '/workbench'
+    | '/auth/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -155,9 +191,12 @@ export interface RootRouteChildren {
   GraphRoute: typeof GraphRoute
   HandoffRoute: typeof HandoffRoute
   HelpRoute: typeof HelpRoute
+  LoginRoute: typeof LoginRoute
   PaperRoute: typeof PaperRoute
   SettingsRoute: typeof SettingsRoute
+  SignupRoute: typeof SignupRoute
   WorkbenchRoute: typeof WorkbenchRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -167,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/workbench'
       fullPath: '/workbench'
       preLoaderRoute: typeof WorkbenchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -181,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/paper'
       fullPath: '/paper'
       preLoaderRoute: typeof PaperRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -232,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -243,9 +303,12 @@ const rootRouteChildren: RootRouteChildren = {
   GraphRoute: GraphRoute,
   HandoffRoute: HandoffRoute,
   HelpRoute: HelpRoute,
+  LoginRoute: LoginRoute,
   PaperRoute: PaperRoute,
   SettingsRoute: SettingsRoute,
+  SignupRoute: SignupRoute,
   WorkbenchRoute: WorkbenchRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

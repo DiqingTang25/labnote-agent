@@ -1,0 +1,249 @@
+[
+  {
+    "experiment": "Gold Nanoparticle Synthesis",
+    "timestamp": "2026-06-27T17:39:13.400Z",
+    "overallScore": 73,
+    "scores": {
+      "nameMatch": 60,
+      "disciplineMatch": 100,
+      "purposeMatch": 40,
+      "operatorMatch": 20,
+      "deviceMatch": 100,
+      "sampleMatch": 100,
+      "stepsQuality": 50,
+      "resultsQuality": 100,
+      "paramsQuality": 100,
+      "fileAttachment": 100
+    },
+    "issues": [
+      "操作人不匹配: 期望含\"Zhang\", 实际\"未提供\"",
+      "目的匹配低(40): \"通过多种表征方法分析金纳米颗粒和二氧化钛纳米颗粒的物理和化学性质\""
+    ],
+    "rawExperiments": [
+      {
+        "name": "Nanoparticle Characterization Analysis",
+        "date": "2023-01-01 00:00",
+        "operator": "未提供",
+        "purpose": "通过多种表征方法分析金纳米颗粒和二氧化钛纳米颗粒的物理和化学性质",
+        "background": "纳米颗粒的表征对于理解其物理化学性质和应用潜力至关重要",
+        "discipline": "纳米材料科学",
+        "device": {
+          "name": "JEOL JSM-7800F FESEM, Shimadzu UV-2600, JEOL JEM-2100F, Malvern Zetasizer Nano ZS",
+          "model": "JSM-7800F, UV-2600, JEM-2100F, Nano ZS",
+          "vendor": "JEOL, Shimadzu, JEOL, Malvern"
+        },
+        "sample": {
+          "id": "AuNP-Citrate, AuNP-CTAB",
+          "batch": "未提供",
+          "source": "实验室合成"
+        },
+        "params": [
+          {
+            "name": "Accelerating voltage",
+            "value": "5",
+            "unit": "kV"
+          },
+          {
+            "name": "Working distance",
+            "value": "4.5",
+            "unit": "mm"
+          },
+          {
+            "name": "Magnification",
+            "value": "50000",
+            "unit": "×"
+          },
+          {
+            "name": "TEM尺寸",
+            "value": "15.2 ± 2.1, 28.7 ± 3.5",
+            "unit": "nm"
+          },
+          {
+            "name": "DLS尺寸",
+            "value": "18.5 ± 3.2, 32.1 ± 4.8",
+            "unit": "nm"
+          },
+          {
+            "name": "Zeta电位",
+            "value": "-35.2, +28.5",
+            "unit": "mV"
+          },
+          {
+            "name": "XRD相",
+            "value": "FCC",
+            "unit": ""
+          },
+          {
+            "name": "PL峰",
+            "value": "520",
+            "unit": "nm"
+          },
+          {
+            "name": "HAuCl4 concentration",
+            "value": "0.25",
+            "unit": "mM"
+          },
+          {
+            "name": "Sodium citrate concentration",
+            "value": "1",
+            "unit": "% (w/v)"
+          },
+          {
+            "name": "Stirring speed",
+            "value": "600",
+            "unit": "rpm"
+          },
+          {
+            "name": "Boiling temperature",
+            "value": "100",
+            "unit": "°C"
+          },
+          {
+            "name": "Reaction time",
+            "value": "15",
+            "unit": "min"
+          }
+        ],
+        "environment": {
+          "temperature": "Room temperature for storage",
+          "humidity": "未提供",
+          "other": "Reflux conditions during synthesis"
+        },
+        "steps": [
+          "使用Turkevich方法合成AuNP-Citrate",
+          "使用种子介导法合成AuNP-CTAB",
+          "使用JEOL JSM-7800F FESEM进行SEM分析",
+          "设置加速电压为5 kV",
+          "设置工作距离为4.5 mm",
+          "使用SE检测器",
+          "放大倍数为50,000×",
+          "观察颗粒形态和分布",
+          "通过TEM测量纳米颗粒尺寸",
+          "通过DLS测量水动力直径",
+          "测量Zeta电位",
+          "进行XRD相分析",
+          "测量光致发光(PL)光谱",
+          "Prepare 50 mL of 0.25 mM HAuCl4 solution in a 250 mL round-bottom flask.",
+          "Heat the solution to boiling (100°C) under reflux with vigorous stirring (600 rpm).",
+          "Rapidly inject 2.5 mL of 1% (w/v) sodium citrate solution.",
+          "Observe color change: pale yellow → colorless → dark blue → deep red (within ~2 min)."
+        ],
+        "results": "SEM分析显示球形颗粒，尺寸分布均匀，聚集现象极少。这表明金纳米颗粒的合成方法（Turkevich法）成功制备了单分散的纳米颗粒。实验结果表明，两种金纳米颗粒均呈现面心立方(FCC)结构。AuNP-Citrate的TEM尺寸为15.2±2.1nm，DLS尺寸为18.5±3.2nm，显示负Zeta电位(-35.2mV)，表明表面带负电荷。AuNP-CTAB尺寸较大(TEM:28.7±3.5nm; DLS:32.1±4.8nm)，Zeta电位为正(+28.5mV)，这与CTAB阳离子表面活性剂修饰一致。AuNP-CTAB在520nm处观察到明显的PL峰，而AuNP-Citrate未检测到PL信号。",
+        "notes": "AuNP-Citrate的BET比表面积和带隙数据缺失",
+        "source": "AI 解析",
+        "aiInsights": "SEM数据质量高，提供了清晰的颗粒形态和分布信息。建议补充样品制备方法和操作条件。数据质量良好，提供了TEM和DLS的尺寸分布以及Zeta电位等关键参数。建议补充BET比表面积和带隙数据以获得更全面的表征。与TiO2和ZnO样品相比，金纳米颗粒的尺寸分布较窄。潜在风险包括DLS测量中可能的多分散性影响。",
+        "attachedFiles": [
+          {
+            "id": "af_77pz0xn0j",
+            "name": "characterization_analysis.md",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1427,
+            "addedAt": "2026-06-27T17:39:13.396Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_tphjegyp0",
+            "name": "nanoparticle_characterization.xlsx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2514,
+            "addedAt": "2026-06-27T17:39:13.398Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_w3z0x6qj8",
+            "name": "nanoparticle_synthesis_protocol.docx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2063,
+            "addedAt": "2026-06-27T17:39:13.398Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:39:13.398Z"
+      },
+      {
+        "name": "XRD Analysis of TiO2 Nanoparticles",
+        "date": "2023-01-01 00:00",
+        "operator": "未提供",
+        "purpose": "通过XRD分析确定二氧化钛纳米颗粒的晶体结构和晶粒尺寸",
+        "background": "XRD是确定材料晶体结构和晶粒尺寸的标准方法",
+        "discipline": "材料科学",
+        "device": {
+          "name": "Rigaku SmartLab",
+          "model": "SmartLab",
+          "vendor": "Rigaku"
+        },
+        "sample": {
+          "id": "未提供",
+          "batch": "未提供",
+          "source": "未提供"
+        },
+        "params": [
+          {
+            "name": "Scan range",
+            "value": "20-80",
+            "unit": "° 2θ"
+          },
+          {
+            "name": "Step size",
+            "value": "0.02",
+            "unit": "°"
+          }
+        ],
+        "environment": {
+          "temperature": "未提供",
+          "humidity": "未提供",
+          "other": "未提供"
+        },
+        "steps": [
+          "使用Rigaku SmartLab进行XRD分析",
+          "设置扫描范围为20-80° 2θ",
+          "设置步长为0.02°",
+          "分析晶体结构和晶粒尺寸"
+        ],
+        "results": "未提供",
+        "notes": "未提供",
+        "source": "AI 解析",
+        "aiInsights": "未提供",
+        "attachedFiles": [
+          {
+            "id": "af_o76jyandq",
+            "name": "characterization_analysis.md",
+            "mediaType": "text",
+            "mimeType": "application/octet-stream",
+            "size": 1427,
+            "addedAt": "2026-06-27T17:39:13.398Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_ey1yikqpr",
+            "name": "nanoparticle_characterization.xlsx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2514,
+            "addedAt": "2026-06-27T17:39:13.398Z",
+            "textContent": "",
+            "parsedRaw": ""
+          },
+          {
+            "id": "af_tnr6s8hs5",
+            "name": "nanoparticle_synthesis_protocol.docx",
+            "mediaType": "document",
+            "mimeType": "application/octet-stream",
+            "size": 2063,
+            "addedAt": "2026-06-27T17:39:13.398Z",
+            "textContent": "",
+            "parsedRaw": ""
+          }
+        ],
+        "lastParsedAt": "2026-06-27T17:39:13.398Z"
+      }
+    ]
+  }
+]

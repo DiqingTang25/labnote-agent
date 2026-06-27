@@ -8,6 +8,7 @@ import {
   FlaskConical, Clock, CheckCircle2, TrendingUp, BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
+import { RequireAuth } from "../lib/auth-guard";
 
 export const Route = createFileRoute("/assets")({
   head: () => ({
@@ -57,6 +58,7 @@ function AssetsPage() {
   }
 
   return (
+    <RequireAuth>
     <div className="mx-auto max-w-7xl px-4 py-8">
       {/* 页头 */}
       <div className="flex items-start justify-between flex-wrap gap-4 mb-8">
@@ -94,6 +96,7 @@ function AssetsPage() {
         ))}
       </div>
     </div>
+    </RequireAuth>
   );
 }
 
