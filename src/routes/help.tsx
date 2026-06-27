@@ -35,7 +35,7 @@ function HelpPage() {
       <section className="mt-10">
         <h2 className="text-xl font-semibold">快速上手</h2>
         <ol className="mt-4 space-y-2 text-sm list-decimal pl-5 text-muted-foreground">
-          <li>进入「实验工作台」，从左栏上传文件或使用语音录入模拟。</li>
+          <li>进入「实验工作台」，从左栏上传文件或新建实验卡片。</li>
           <li>在中栏对自动生成的实验卡片进行复核、补全。</li>
           <li>在右栏查看完整性检查结果，生成复现清单与 Methods 草稿。</li>
           <li>需要追溯历史实验时，使用 RAG 知识问答快速检索。</li>
