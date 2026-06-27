@@ -50,7 +50,6 @@ type ExperimentRow = {
   notes: string | null;
   source: string | null;
   attached_files: unknown;
-  embedding: number[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -114,7 +113,22 @@ function fromRow(r: Record<string, unknown>): Experiment {
     source: (r.source as string) ?? "",
     attachedFiles: (r.attached_files as AttachedFile[]) ?? [],
     lastParsedAt: (r.lastParsedAt as string) ?? null,
+    embedding: parseEmbedding(r.embedding),
   };
+}
+
+/** pgvector 列可能以字符串 `[0.1,0.2,...]` 返回 */
+function parseEmbedding(v: unknown): number[] | null {
+  if (Array.isArray(v)) return v as number[];
+  if (typeof v === "string") {
+    try {
+      const arr = JSON.parse(v);
+      return Array.isArray(arr) ? arr : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════
