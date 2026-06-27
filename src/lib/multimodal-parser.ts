@@ -306,16 +306,6 @@ export async function runPipeline(
 // 辅助
 // ═══════════════════════════════════════════════════════
 
-/** @deprecated 已移除硬编码文件映射，返回空数组 */
-export function getLocalFiles(): Array<{
-  name: string;
-  type: string;
-  label: string;
-  cardIndex: number;
-}> {
-  return [];
-}
-
 function buildFromPartials(
   allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }>,
 ): Experiment[] {

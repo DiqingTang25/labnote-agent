@@ -2,7 +2,7 @@
  * AI 科研 Agent — 选择实验卡片作为知识边界，展示 Agent 工作流
  */
 import { useState, useMemo } from "react";
-import { useLab, ragAnswer } from "../lib/labStore";
+import { useLab } from "../lib/labStore";
 import {
   MessageCircle, X, Sparkles, Loader2, Send, FileText, Target,
   ArrowUpRight, CheckCircle2, Filter, BookOpen, Brain, Search,
@@ -83,9 +83,11 @@ export function AIAgent() {
       } else {
         // 最后一步：生成回答
         setTimeout(() => {
-          const answer = ragAnswer(t, activeCards);
-          const sources = buildSources(answer, activeCards);
-          setChat((c) => [...c, { role: "agent", text: answer, sources }]);
+          setChat((c) => [...c, {
+            role: "agent",
+            text: "知识问答即将接入 Supabase pgvector 向量检索。当前过渡期请在实验卡片中直接查看数据。",
+            sources: activeCards.slice(0, 2).map((e) => ({ doc: e.name, conf: "待验证", link: `/workbench?id=${e.id}` })),
+          }]);
           setLoading(false);
           setWorkflowStep(-1);
         }, delays[delays.length - 1]);
@@ -275,19 +277,4 @@ export function AIAgent() {
       )}
     </>
   );
-}
-
-function buildSources(text: string, cards: ReturnType<typeof useLab>["experiments"]) {
-  const sources: Array<{ doc: string; conf: string; link: string }> = [];
-  const sampleMatch = text.match(/([A-Z][a-z]?-\d+)/);
-  if (sampleMatch) {
-    const e = cards.find((x) => x.sample.id === sampleMatch[1]);
-    if (e) sources.push({ doc: e.name, conf: "98%", link: `/workbench?id=${e.id}` });
-  }
-  for (const e of cards.slice(0, 2)) {
-    if (!sources.find((s) => s.doc === e.name)) {
-      sources.push({ doc: e.name, conf: "94%", link: `/workbench?id=${e.id}` });
-    }
-  }
-  return sources;
 }

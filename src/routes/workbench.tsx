@@ -6,7 +6,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { z } from "zod";
 import {
-  Upload, Mic, FilePlus2, Save, Download, FileJson, Printer, Trash2,
+  Upload, FilePlus2, Save, Download, FileJson, Printer, Trash2,
   Plus, X, CheckCircle2, AlertCircle, Sparkles, Send, ClipboardCopy,
   Loader2, Package, Clock, FileText, Bot, Target, MapPin, ArrowUpRight,
   FolderOpen,
@@ -14,8 +14,7 @@ import {
 import { toast } from "sonner";
 import {
   useLab,
-  mockCardFromVoice,
-  checkCompleteness, generateMethods, ragAnswer,
+  checkCompleteness, generateMethods,
   type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
 import { useElectron } from "../lib/electron/useElectron";
@@ -120,7 +119,6 @@ const statusLabels: Record<string, string> = {
 
 function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; activeId?: string }) {
   const { experiments, addExperiment } = useLab();
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 多模态解析流水线状态
@@ -348,12 +346,6 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
           />
         </div>
         <button
-          onClick={() => setVoiceOpen(true)}
-          className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs hover:border-primary/40 transition"
-        >
-          <Mic size={14}/> 语音录入
-        </button>
-        <button
           onClick={() => { const id = createBlank(addExperiment); onSelect(id); }}
           className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground hover:bg-primary/90 transition"
         >
@@ -381,14 +373,6 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
         </ul>
       </div>
 
-      {voiceOpen && <VoiceModal onClose={() => setVoiceOpen(false)} onConfirm={(text) => {
-        const card = mockCardFromVoice(text);
-        addExperiment(card);
-        onSelect(card.id);
-        setVoiceOpen(false);
-        toast.success("语音识别完成，已生成实验卡片");
-      }}/>}
-
       {/* 实验总结 */}
       {showSummary && pipelineCards.length > 0 && (
         <ExperimentSummary
@@ -397,43 +381,6 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
           onClose={() => setShowSummary(false)}
         />
       )}
-    </div>
-  );
-}
-
-const presetVoices = [
-  "2026-05-31 15:20，样品编号 Fe-2309，管式炉退火温度 550℃，保温 60 分钟，氩气气氛",
-  "今天上午 9 点，使用 Bruker XRD 仪器对 CuO-0525 样品进行扫描，扫描角度 10 到 80 度",
-  "样品 Pt-0301 在 0.5M 硫酸中进行 CV 测试，扫描速率 50mV/s，循环 100 圈",
-  "2026-05-30，水热反应釜 180 度反应 12 小时，前驱体浓度 0.1M",
-  "电化学工作站 CHI760E 测试，样品 PtC-Lab-04，发现第 200 圈电流出现尖峰异常",
-];
-
-function VoiceModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (t: string) => void }) {
-  const [text, setText] = useState(presetVoices[0]);
-  return (
-    <div className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="card-soft w-full max-w-lg p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold flex items-center gap-2"><Mic size={16} className="text-primary"/>语音录入</h3>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded"><X size={16}/></button>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">选择预设语音文本或自由输入（模拟 ASR 识别结果）：</p>
-        <div className="mt-3 space-y-1.5">
-          {presetVoices.map((v, i) => (
-            <button key={i} onClick={() => setText(v)}
-              className={`w-full text-left text-xs rounded-lg p-2 border transition ${
-                text === v ? "border-primary bg-primary-soft" : "border-border hover:border-primary/40"
-              }`}>{v}</button>
-          ))}
-        </div>
-        <textarea value={text} onChange={(e) => setText(e.target.value)}
-          className="mt-3 w-full rounded-lg border border-border p-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-primary/30"/>
-        <div className="mt-3 flex justify-end gap-2">
-          <button onClick={onClose} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-secondary">取消</button>
-          <button onClick={() => onConfirm(text)} className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">确认生成卡片</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -910,25 +857,7 @@ function ReproAssistant({ experiment }: { experiment: Experiment }) {
     </div>
   );
 }
-
 type Source = { doc: string; page: string; confidence: string; link: string };
-
-function mockSources(text: string, experiments: Experiment[]): Source[] {
-  const sampleMatch = text.match(/([A-Z][a-z]?-\d+)/);
-  const base: Source[] = [];
-  if (sampleMatch) {
-    const e = experiments.find((x) => x.sample.id === sampleMatch[1]);
-    if (e) base.push({ doc: e.name, page: "实验卡片", confidence: "98%", link: `/workbench?id=${e.id}` });
-  }
-  if (/异常|故障|波动|尖峰/.test(text)) {
-    const hits = experiments.filter((e) => /异常|故障|波动|尖峰/.test(e.notes + e.results));
-    hits.slice(0, 2).forEach((e) => base.push({ doc: e.name, page: "备注/结果", confidence: "94%", link: `/workbench?id=${e.id}` }));
-  }
-  if (base.length === 0) {
-    experiments.slice(0, 2).forEach((e) => base.push({ doc: e.name, page: "实验卡片", confidence: "92%", link: `/workbench?id=${e.id}` }));
-  }
-  return base;
-}
 
 function RagPanel() {
   const { experiments } = useLab();
@@ -944,9 +873,11 @@ function RagPanel() {
     setChat((c) => [...c, { role: "user", text: t }]);
     setQ("");
     setTimeout(() => {
-      const answer = ragAnswer(t, experiments);
-      const sources = mockSources(answer, experiments);
-      setChat((c) => [...c, { role: "agent", text: answer, sources }]);
+      setChat((c) => [...c, {
+        role: "agent",
+        text: "RAG 知识问答即将接入 Supabase pgvector 向量检索与 DeepSeek-V3 生成。当前过渡期请直接在实验卡片中查看数据，或使用「实验工作台」的关键词过滤。",
+        sources: [],
+      }]);
     }, 400);
   };
 
