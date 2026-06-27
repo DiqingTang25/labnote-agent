@@ -216,5 +216,6 @@ export function normalizeExperiment(
     source: raw.source || defaults?.source || "AI 解析",
     attachedFiles: raw.attachedFiles || defaults?.attachedFiles || [],
     lastParsedAt: raw.lastParsedAt ?? defaults?.lastParsedAt ?? null,
+    embedding: (raw as Experiment).embedding ?? defaults?.embedding ?? null,
   };
 }

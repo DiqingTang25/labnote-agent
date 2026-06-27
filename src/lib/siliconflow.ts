@@ -7,10 +7,10 @@ const SF_BASE = "https://api.siliconflow.cn/v1";
 const SF_KEY = import.meta.env.VITE_SF_API_KEY || "REDACTED_SILICONFLOW_KEY";
 
 // ===== 模型选择（不暴露给 UI） =====
-const MODEL_TEXT = "deepseek-ai/DeepSeek-V3";        // 文本结构化提取
-const MODEL_VL = "Qwen/Qwen3-VL-32B-Instruct";       // 图片理解
-const MODEL_OMNI = "Qwen/Qwen3-Omni-30B-A3B-Instruct"; // 视频/音频
-const MODEL_OCR = "deepseek-ai/DeepSeek-OCR";         // 文档OCR
+const MODEL_TEXT = "deepseek-ai/DeepSeek-V3";
+const MODEL_VL = "Qwen/Qwen3-VL-32B-Instruct";
+const MODEL_OMNI = "Qwen/Qwen3-Omni-30B-A3B-Instruct";
+const MODEL_OCR = "deepseek-ai/DeepSeek-OCR";
 
 export async function chat(
   model: string,
@@ -76,26 +76,13 @@ export async function parseImage(imageBase64: string, mime: string, fileName: st
 }
 
 // ===== 文本文件 → 结构化实验数据 =====
-const EXTRACT_PROMPT = `你是科研数据治理专家。从以下文件内容中提取实验信息，严格输出JSON（不要markdown代码块）：
+const EXTRACT_PROMPT = `你是科研数据治理专家。从以下文件内容中提取实验信息。
 
-{
-  "experiments": [{
-    "name": "简洁实验名称",
-    "date": "YYYY-MM-DD 或推断",
-    "operator": "操作人",
-    "purpose": "实验目的",
-    "background": "背景说明",
-    "discipline": "学科",
-    "device": {"name":"","model":"","vendor":""},
-    "sample": {"id":"","batch":"","source":""},
-    "params": [{"name":"","value":"","unit":""}],
-    "environment": {"temperature":"","humidity":"","other":""},
-    "steps": ["步骤"],
-    "results": "结果摘要",
-    "notes": "异常与备注",
-    "source": "文件名"
-  }]
-}`;
+【重要】你必须输出纯JSON，不要markdown代码块（禁止\`\`\`），不要任何解释文字。只输出：
+
+{"experiments":[{"name":"简洁实验名称","date":"YYYY-MM-DD HH:mm","operator":"操作人","purpose":"实验目的","background":"背景说明","discipline":"学科","device":{"name":"设备名","model":"型号","vendor":"厂家"},"sample":{"id":"样品编号","batch":"批次","source":"来源"},"params":[{"name":"参数名","value":"值","unit":"单位"}],"environment":{"temperature":"","humidity":"","other":""},"steps":["步骤1"],"results":"结果摘要","notes":"异常备注","source":"文件名"}]}
+
+无法推断的字段填空字符串""。`;
 
 export async function parseTextFile(text: string, fileName: string): Promise<string> {
   const content = text.slice(0, 8000);
@@ -127,7 +114,7 @@ export async function parseTranscript(text: string, fileName: string): Promise<s
   ], 4096);
 }
 
-// ===== 视频解析（如有真视频文件） =====
+// ===== 视频解析 =====
 export async function parseVideo(videoBase64: string, mime: string, fileName: string): Promise<string> {
   return chat(MODEL_OMNI, [
     {
