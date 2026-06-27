@@ -78,20 +78,18 @@ export async function parseImage(imageBase64: string, mime: string, fileName: st
 // ===== 文本文件 → 结构化实验数据 =====
 const EXTRACT_PROMPT = `你是科研数据治理专家。从以下文件内容中提取实验信息。
 
-【重要】你必须输出纯JSON，不要markdown代码块（禁止\`\`\`），不要任何解释文字。只输出：
-
-{"experiments":[{"name":"简洁实验名称","date":"YYYY-MM-DD HH:mm","operator":"操作人","purpose":"实验目的","background":"背景说明","discipline":"学科","device":{"name":"设备名","model":"型号","vendor":"厂家"},"sample":{"id":"样品编号","batch":"批次","source":"来源"},"params":[{"name":"参数名","value":"值","unit":"单位"}],"environment":{"temperature":"","humidity":"","other":""},"steps":["步骤1"],"results":"结果摘要","notes":"异常备注","source":"文件名"}]}
-
+【重要】输出纯JSON（不要markdown代码块），包含以下字段。aiInsights 字段用于记录AI分析中发现的非结构化洞察（关联、建议、风险、后续步骤等），请认真填写，不要留空。
+{"experiments":[{"name":"简洁实验名称","date":"YYYY-MM-DD HH:mm","operator":"操作人","purpose":"实验目的","background":"背景说明","discipline":"学科","device":{"name":"设备名","model":"型号","vendor":"厂家"},"sample":{"id":"样品编号","batch":"批次","source":"来源"},"params":[{"name":"参数名","value":"值","unit":"单位"}],"environment":{"temperature":"","humidity":"","other":""},"steps":["步骤1"],"results":"结果摘要","notes":"异常备注","source":"文件名","aiInsights":"数据质量评估、实验间关联、改进建议、潜在风险等AI观察"}]}
 无法推断的字段填空字符串""。`;
 
 export async function parseTextFile(text: string, fileName: string): Promise<string> {
-  const content = text.slice(0, 8000);
+  const content = text.slice(0, 12000);
   return chat(MODEL_TEXT, [
     {
       role: "user",
       content: `${EXTRACT_PROMPT}\n\n文件名：${fileName}\n内容：\n${content}`,
     },
-  ], 4096);
+  ], 8192);
 }
 
 // ===== CSV 预分析引擎 =====
@@ -230,7 +228,7 @@ function analyzeCSV(csvContent: string): {
 // ===== CSV 数据解析（带预分析）=====
 export async function parseCSV(csvContent: string, fileName: string): Promise<string> {
   const analysis = analyzeCSV(csvContent);
-  const rawSample = csvContent.slice(0, 600); // 只给前几行作样本
+  const rawSample = csvContent.slice(0, 1000);
 
   return chat(MODEL_TEXT, [
     {
@@ -243,11 +241,11 @@ ${analysis.summary}
 【原始数据样本（前几行）】
 ${rawSample}
 
-请根据预分析结果，判断这是什么类型的实验数据（如：炉温记录、CV曲线、XRD谱、色谱等），提取可转化为实验卡片的信息。
+请根据预分析结果判断实验数据类型，提取可转化为实验卡片的信息。aiInsights 中写明数据质量（是否有缺失/异常）、趋势判断、后续建议。
 输出格式（纯JSON，不要markdown代码块）：
 ${EXTRACT_PROMPT.slice(EXTRACT_PROMPT.indexOf("{"))}`,
     },
-  ], 4096);
+  ], 8192);
 }
 
 // ===== 语音转录文本解析 =====
@@ -255,9 +253,9 @@ export async function parseTranscript(text: string, fileName: string): Promise<s
   return chat(MODEL_TEXT, [
     {
       role: "user",
-      content: `${EXTRACT_PROMPT}\n\n这是一段语音转录文本（${fileName}），包含口语化的实验记录。请提取其中的实验信息。\n\n${text.slice(0, 6000)}`,
+      content: `${EXTRACT_PROMPT}\n\n这是一段语音转录文本（${fileName}），包含口语化的实验记录。注意口语中可能有隐含信息（语气强调的异常、模糊的时间表述等），请提取并在aiInsights中标注。\n\n${text.slice(0, 10000)}`,
     },
-  ], 4096);
+  ], 8192);
 }
 
 // ===== 视频解析 =====

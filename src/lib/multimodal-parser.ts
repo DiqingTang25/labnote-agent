@@ -145,7 +145,7 @@ async function readFiles(
         fileContents.push({ textContent: "", base64, mime, isBinary: true });
       } else {
         const text = await file.text();
-        fileContents.push({ textContent: text.slice(0, 8000), isBinary: false });
+        fileContents.push({ textContent: text.slice(0, 12000), isBinary: false });
       }
       onFileProgress(i, { name: file.name, status: "reading", detail: "读取完成" });
     } catch (err) {
@@ -484,7 +484,7 @@ export async function runPipeline(
       size: f.size,
       addedAt: now,
       textContent: fileContents[i]?.textContent ?? "",
-      parsedRaw: "", // 最终卡片不再保留原始响应
+      parsedRaw: allBatchPartials[i]?.experiment?.results ?? "", // 保留解析后的结果文本
     }));
     exp.lastParsedAt = now;
   }
