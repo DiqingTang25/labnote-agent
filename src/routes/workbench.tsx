@@ -9,7 +9,7 @@ import {
   Upload, FilePlus2, Save, Download, FileJson, Printer, Trash2,
   Plus, X, CheckCircle2, AlertCircle, Sparkles, Send, ClipboardCopy,
   Loader2, Package, Clock, FileText, Bot, Target, MapPin, ArrowUpRight,
-  FolderOpen,
+  FolderOpen, GitBranch, Link2, Unlink,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -17,7 +17,11 @@ import {
   checkCompleteness, generateMethods,
   type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
-import { ragAnswerReal } from "../lib/supabase";
+import {
+  ragAnswerReal, fetchExperimentRelations, addExperimentRelation,
+  deleteExperimentRelation, suggestRelations,
+  RELATION_LABELS, type ExperimentRelation,
+} from "../lib/supabase";
 import { RequireAuth } from "../lib/auth-guard";
 import { useElectron } from "../lib/electron/useElectron";
 import { FolderWatcherPanel } from "../lib/electron/FolderWatcherPanel";
@@ -401,6 +405,21 @@ function CardEditor({ experiment, onSave, onDelete }: {
   const [draft, setDraft] = useState<Experiment>(experiment);
   const [viewFileOpen, setViewFileOpen] = useState(false);
   const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
+  // 知识图谱关系
+  const [relations, setRelations] = useState<ExperimentRelation[]>([]);
+  const [suggestedRelations, setSuggestedRelations] = useState<Array<{targetId:string;targetName:string;type:ExperimentRelation["relation_type"];reason:string}>>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [addingRelation, setAddingRelation] = useState(false);
+  const [newRelationTarget, setNewRelationTarget] = useState("");
+  const [newRelationType, setNewRelationType] = useState<ExperimentRelation["relation_type"]>("semantic_similar");
+  const { experiments: allExperiments } = useLab();
+
+  // 实验切换时重新加载关系
+  useEffect(() => {
+    fetchExperimentRelations(draft.id).then(setRelations).catch(() => setRelations([]));
+    setSuggestedRelations([]);
+  }, [draft.id]);
+
   const update = <K extends keyof Experiment>(k: K, v: Experiment[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
@@ -588,6 +607,149 @@ function CardEditor({ experiment, onSave, onDelete }: {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ===== 知识图谱关系 ===== */}
+      <Section title="知识图谱关系" actions={
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setSuggesting(true);
+              const suggestions = await suggestRelations(draft, allExperiments);
+              setSuggestedRelations(suggestions);
+              setSuggesting(false);
+              if (suggestions.length === 0) toast.info("未发现潜在关联实验");
+              else toast.success(`AI 发现 ${suggestions.length} 个潜在关联`);
+            }}
+            disabled={suggesting}
+            className="text-xs text-primary hover:underline flex items-center gap-1 disabled:opacity-50"
+          >
+            <Sparkles size={12}/>{suggesting ? "分析中..." : "AI 补全"}
+          </button>
+          <button
+            onClick={() => setAddingRelation(!addingRelation)}
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            <Plus size={12}/>手动添加
+          </button>
+        </div>
+      }>
+        {/* 手动添加表单 */}
+        {addingRelation && (
+          <div className="mb-3 p-3 rounded-lg border border-dashed border-border bg-secondary/30">
+            <div className="flex gap-2 items-end flex-wrap">
+              <select
+                value={newRelationTarget}
+                onChange={(e) => setNewRelationTarget(e.target.value)}
+                className="text-xs rounded border border-border px-2 py-1.5 bg-card min-w-[160px]"
+              >
+                <option value="">选择关联实验...</option>
+                {allExperiments.filter(e => e.id !== draft.id).map((e) => (
+                  <option key={e.id} value={e.id}>{e.name?.slice(0, 40)}</option>
+                ))}
+              </select>
+              <select
+                value={newRelationType}
+                onChange={(e) => setNewRelationType(e.target.value as ExperimentRelation["relation_type"])}
+                className="text-xs rounded border border-border px-2 py-1.5 bg-card"
+              >
+                {Object.entries(RELATION_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              <button
+                onClick={async () => {
+                  if (!newRelationTarget) { toast.info("请选择关联实验"); return; }
+                  const ok = await addExperimentRelation(draft.id, newRelationTarget, newRelationType);
+                  if (ok) {
+                    toast.success("关系已添加");
+                    setAddingRelation(false);
+                    setNewRelationTarget("");
+                    fetchExperimentRelations(draft.id).then(setRelations);
+                  } else {
+                    toast.error("添加失败");
+                  }
+                }}
+                className="text-xs bg-primary text-primary-foreground px-3 py-1.5 rounded hover:bg-primary/90"
+              >确认</button>
+              <button onClick={() => setAddingRelation(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1.5">取消</button>
+            </div>
+          </div>
+        )}
+
+        {/* 已有关系 */}
+        {relations.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {relations.map((rel) => {
+              const isSource = rel.source_exp_id === draft.id;
+              const otherId = isSource ? rel.target_exp_id : rel.source_exp_id;
+              const otherExp = allExperiments.find((e) => e.id === otherId);
+              return (
+                <div key={rel.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary/30 border border-border text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <GitBranch size={13} className="text-primary shrink-0"/>
+                    <span className="px-1.5 py-0.5 rounded-full bg-primary-soft text-primary text-[10px] font-medium shrink-0">
+                      {RELATION_LABELS[rel.relation_type]}
+                    </span>
+                    <span className="truncate text-muted-foreground">
+                      {isSource ? "→" : "←"} {otherExp?.name ?? otherId?.slice(0, 16)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (confirm("确认删除此关系？")) {
+                        await deleteExperimentRelation(rel.id);
+                        fetchExperimentRelations(draft.id).then(setRelations);
+                        toast.success("已删除");
+                      }
+                    }}
+                    className="p-1 text-muted-foreground hover:text-destructive shrink-0"
+                  ><Unlink size={12}/></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* AI 建议 */}
+        {suggestedRelations.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] text-muted-foreground">AI 建议关联：</p>
+            {suggestedRelations.map((s, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Sparkles size={12} className="text-amber-500 shrink-0"/>
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-medium shrink-0">
+                    {RELATION_LABELS[s.type]}
+                  </span>
+                  <span className="truncate">{s.targetName?.slice(0, 30)}</span>
+                  <span className="text-[10px] text-muted-foreground hidden sm:inline">{s.reason?.slice(0, 40)}</span>
+                </div>
+                <button
+                  onClick={async () => {
+                    const ok = await addExperimentRelation(draft.id, s.targetId, s.type);
+                    if (ok) {
+                      toast.success("已关联");
+                      fetchExperimentRelations(draft.id).then(setRelations);
+                      setSuggestedRelations((prev) => prev.filter((_, j) => j !== i));
+                    } else { toast.error("关联失败"); }
+                  }}
+                  className="px-2 py-1 rounded bg-primary text-primary-foreground text-[10px] hover:bg-primary/90 shrink-0 flex items-center gap-1"
+                ><Link2 size={10}/>采纳</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 空状态 */}
+        {relations.length === 0 && suggestedRelations.length === 0 && (
+          <div className="text-center py-4">
+            <GitBranch size={20} className="mx-auto text-muted-foreground/40"/>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              暂无关联实验 — 点击"AI 补全"自动发现关联，或"手动添加"
+            </p>
           </div>
         )}
       </Section>

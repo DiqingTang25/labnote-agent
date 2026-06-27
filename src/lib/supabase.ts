@@ -267,6 +267,139 @@ export async function findSimilarExperiments(
 }
 
 // ═══════════════════════════════════════════════════════
+// 实验关系（知识图谱边）
+// ═══════════════════════════════════════════════════════
+
+export type ExperimentRelation = {
+  id: string;
+  source_exp_id: string;
+  target_exp_id: string;
+  relation_type: "sample_shared" | "device_shared" | "semantic_similar" | "temporal" | "operator_shared" | "custom";
+  metadata: Record<string, unknown>;
+  similarity: number | null;
+  created_at: string;
+};
+
+export const RELATION_LABELS: Record<ExperimentRelation["relation_type"], string> = {
+  sample_shared: "共享样品",
+  device_shared: "共享设备",
+  semantic_similar: "语义相似",
+  temporal: "时序关联",
+  operator_shared: "相同操作人",
+  custom: "自定义",
+};
+
+/** 获取某个实验的所有关系 */
+export async function fetchExperimentRelations(expId: string): Promise<ExperimentRelation[]> {
+  if (!isSupabaseReady() || !expId) return [];
+  const { data, error } = await supabase
+    .from("experiment_relations")
+    .select("*")
+    .or(`source_exp_id.eq.${expId},target_exp_id.eq.${expId}`)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchRelations error:", error);
+    return [];
+  }
+  return (data as ExperimentRelation[]) ?? [];
+}
+
+/** 添加关系 */
+export async function addExperimentRelation(
+  sourceExpId: string,
+  targetExpId: string,
+  relationType: ExperimentRelation["relation_type"],
+  metadata?: Record<string, unknown>,
+): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("experiment_relations").insert({
+    source_exp_id: sourceExpId,
+    target_exp_id: targetExpId,
+    relation_type: relationType,
+    metadata: metadata ?? {},
+  });
+  if (error) {
+    console.error("[Supabase] addRelation error:", error);
+    return false;
+  }
+  return true;
+}
+
+/** 删除关系 */
+export async function deleteExperimentRelation(relationId: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase
+    .from("experiment_relations")
+    .delete()
+    .eq("id", relationId);
+  if (error) {
+    console.error("[Supabase] deleteRelation error:", error);
+    return false;
+  }
+  return true;
+}
+
+/** AI 推断实验关系 */
+export async function suggestRelations(
+  sourceExp: Experiment,
+  allExperiments: Experiment[],
+): Promise<Array<{ targetId: string; targetName: string; type: ExperimentRelation["relation_type"]; reason: string }>> {
+  // 排除自己
+  const others = allExperiments.filter((e) => e.id !== sourceExp.id);
+  if (others.length === 0) return [];
+
+  const ctx = others.map((e) => ({
+    id: e.id,
+    name: e.name,
+    discipline: e.discipline,
+    device: e.device.name,
+    sample: e.sample.id,
+    operator: e.operator,
+    purpose: e.purpose?.slice(0, 80),
+  }));
+
+  const prompt = `你是科研知识图谱构建助手。以下是一个实验和候选关联实验列表，请推断它们之间的关系。
+
+【当前实验】
+名称: ${sourceExp.name}
+学科: ${sourceExp.discipline}
+设备: ${sourceExp.device.name}
+样品: ${sourceExp.sample.id}
+操作人: ${sourceExp.operator}
+目的: ${sourceExp.purpose?.slice(0, 100)}
+
+【候选实验】
+${JSON.stringify(ctx, null, 2)}
+
+请找出与当前实验有关系的实验（最多5个），关系类型只能是: sample_shared(共享样品), device_shared(共享设备), semantic_similar(语义相似), temporal(时序关联), operator_shared(相同操作人), custom(自定义)
+
+输出纯JSON数组（不要markdown）:
+[{"targetId":"...","type":"...","reason":"一句话解释为什么关联"}]`;
+
+  try {
+    const { chat } = await import("./siliconflow");
+    const raw = await chat("deepseek-ai/DeepSeek-V3", [
+      { role: "system", content: "你是科研知识图谱构建助手。输出严格JSON数组。" },
+      { role: "user", content: prompt },
+    ], 2048);
+
+    // 提取 JSON
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const suggestions = JSON.parse(match[0]);
+    return suggestions.map((s: any) => ({
+      targetId: s.targetId,
+      targetName: others.find((o) => o.id === s.targetId)?.name ?? "",
+      type: s.type as ExperimentRelation["relation_type"],
+      reason: s.reason || "",
+    }));
+  } catch (err) {
+    console.error("[Supabase] suggestRelations error:", err);
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // RAG 问答 — 委托给 server functions
 // ═══════════════════════════════════════════════════════
 

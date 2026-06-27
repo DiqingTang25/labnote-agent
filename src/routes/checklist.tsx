@@ -13,11 +13,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useCallback } from "react";
 import {
-  ListChecks, Sparkles, Upload, FileText, AlertTriangle,
+  ListChecks, Sparkles, FileText, AlertTriangle,
   CheckCircle2, Lightbulb, RotateCcw, ChevronDown, ChevronUp,
-  Download, Loader2, Search, X, Target, Shield, Zap,
-  ArrowRight, BookOpen, Beaker, Gauge, Eye, EyeOff, Copy,
-  Info, ExternalLink, Filter,
+  Download, Loader2, Target, Shield, Zap,
+  BookOpen, Beaker, Gauge, Copy,
+  Info, ExternalLink, HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -37,6 +37,13 @@ import type { DecompositionStep, DecompositionProgress } from "../lib/paper-deco
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
 import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
 
 export const Route = createFileRoute("/checklist")({
   head: () => ({
@@ -64,7 +71,6 @@ function ReproductionAuditPage() {
   const [decomposing, setDecomposing] = useState(false);
   const [progress, setProgress] = useState<DecompositionProgress>({ step: "connecting" });
   const [audit, setAudit] = useState<ReproductionAudit | null>(null);
-  const [showPreset, setShowPreset] = useState(true);
 
   // UI 状态
   const [activeTab, setActiveTab] = useState<"params" | "gaps" | "protocol">("params");
@@ -100,7 +106,6 @@ function ReproductionAuditPage() {
   // ===== 使用预设 Audit =====
   const loadPresetAudit = useCallback(() => {
     setAudit(SRTIO3_PRESET_AUDIT);
-    setShowPreset(false);
     toast.success("已加载真实论文预设 Audit（SrTiO₃/rGO/g-C₃N₄）");
   }, []);
 
@@ -778,52 +783,11 @@ function ReproductionAuditPage() {
               论文实验方法拆解 · 参数确定性标注 · 缺口智能推断 · 复现协议生成
             </p>
           </div>
+          <HelpButton />
         </div>
-
-        {/* How it works */}
-        {showPreset && (
-          <div className="card-soft p-6 mb-6">
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-              <Target size={20} className="text-primary"/> 如何解决"AI 只能靠推测"的问题？
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <StepCard
-                num={1}
-                title="拆解而非猜测"
-                desc="AI 系统性地从论文 Methods 中提取每一个数值参数，区分「论文明确写出」「论文隐含」「需要推断」三个等级。不确定就是不确定，不假装知道。"
-              />
-              <StepCard
-                num={2}
-                title="领域知识校验"
-                desc="每个推断都基于真实科研文献中的典型参数范围和公共数据库（Materials Project、NIST）。置信度透明标注，研究者可随时覆盖。"
-              />
-              <StepCard
-                num={3}
-                title="缺口驱动复现"
-                desc="自动识别缺失但复现必需的信息，按关键程度排序。研究者逐项审核/补全后，生成可执行的复现协议。"
-              />
-            </div>
-          </div>
-        )}
 
         {/* Paper Input */}
         {renderPaperInput()}
-
-        {/* Quick info */}
-        <div className="mt-6 rounded-xl bg-secondary/30 p-4 text-xs text-muted-foreground">
-          <p className="flex items-center gap-2 font-medium text-foreground mb-1">
-            <Info size={14}/> 支持的真实数据来源
-          </p>
-          <ul className="space-y-1 ml-6 list-disc">
-            <li>Materials Project API — 15万+ 无机材料计算属性 (band gap, formation energy, crystal structure)</li>
-            <li>NIST Chemistry WebBook — 化合物热力学数据</li>
-            <li>开放获取论文 — Scientific Reports, RSC Advances, MDPI Catalysts 等</li>
-            <li>领域知识库 — 基于 2024 年发表的 10+ 篇光催化/材料论文的典型参数</li>
-          </ul>
-        </div>
-
-        {/* Technical Documentation — 可折叠 */}
-        <TechDocs />
       </div>
       </RequireAuth>
     );
@@ -847,11 +811,12 @@ function ReproductionAuditPage() {
           </p>
         </div>
         <button
-          onClick={() => { setAudit(null); setShowPreset(true); }}
+          onClick={() => { setAudit(null); }}
           className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
         >
           <RotateCcw size={14}/> 重新开始
         </button>
+        <HelpButton />
       </div>
 
       {/* Paper info */}
@@ -952,20 +917,6 @@ function MiniStat({ label, value, icon }: { label: string; value: string; icon: 
       </div>
       <div className="text-lg font-bold tabular-nums">{value}</div>
       <div className="text-[10px] text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-function StepCard({ num, title, desc }: { num: number; title: string; desc: string }) {
-  return (
-    <div className="rounded-xl border border-border p-4 hover:border-primary/30 transition">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-          {num}
-        </span>
-        <h3 className="text-sm font-semibold">{title}</h3>
-      </div>
-      <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
     </div>
   );
 }
