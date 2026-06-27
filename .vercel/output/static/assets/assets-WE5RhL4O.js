@@ -1,0 +1,26 @@
+import{u as j,j as e,P as x,l as u,A as g,i as b,F as h,B as f,t as p,n as v}from"./index-CPw6Ypdx.js";import{F as N,T as y}from"./trending-up-C3rmok9F.js";import{C as w}from"./circle-check-ZtIoALqp.js";import{C as $}from"./clock-w38MT50d.js";function O(){const{experiments:s}=j(),r=s.reduce((t,o)=>t+o.params.length,0),a=s.filter(t=>t.results&&t.purpose).length,l=[...new Set(s.map(t=>t.discipline).filter(Boolean))],i=t=>{if(s.length===0){p.error("暂无可导出的实验卡片");return}if(t==="json"){const o=new Blob([JSON.stringify(s,null,2)],{type:"application/json"}),c=URL.createObjectURL(o),n=document.createElement("a");n.href=c,n.download=`LabNote-资产包-${new Date().toISOString().slice(0,10)}.json`,n.click(),URL.revokeObjectURL(c)}else{const o=s.map(L).join(`
+
+---
+
+`),c=new Blob([o],{type:"text/markdown"}),n=URL.createObjectURL(c),m=document.createElement("a");m.href=n,m.download=`LabNote-资产包-${new Date().toISOString().slice(0,10)}.md`,m.click(),URL.revokeObjectURL(n)}p.success(`已导出 ${s.length} 张卡片`)};return s.length===0?e.jsxs("div",{className:"mx-auto max-w-4xl px-4 py-20 text-center",children:[e.jsx(x,{size:48,className:"mx-auto text-muted-foreground"}),e.jsx("h1",{className:"mt-4 text-2xl font-bold",children:"实验资产包"}),e.jsx("p",{className:"mt-2 text-muted-foreground",children:"尚无实验卡片，请先到工作台上传实验数据。"}),e.jsxs(u,{to:"/workbench",className:"mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm text-primary-foreground",children:["前往工作台 ",e.jsx(g,{size:14})]})]}):e.jsxs("div",{className:"mx-auto max-w-7xl px-4 py-8",children:[e.jsxs("div",{className:"flex items-start justify-between flex-wrap gap-4 mb-8",children:[e.jsxs("div",{children:[e.jsxs("h1",{className:"text-2xl font-bold flex items-center gap-3",children:[e.jsx("span",{className:"brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white",children:e.jsx(b,{size:20})}),"实验资产包"]}),e.jsx("p",{className:"mt-2 text-sm text-muted-foreground",children:"结构化实验数据资产，可追溯、可导出、可直接用于论文"})]}),e.jsxs("div",{className:"flex gap-2",children:[e.jsxs("button",{onClick:()=>i("md"),className:"flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm hover:border-primary/40 transition",children:[e.jsx(h,{size:14})," 导出 Markdown"]}),e.jsxs("button",{onClick:()=>i("json"),className:"flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 transition",children:[e.jsx(N,{size:14})," 导出 JSON"]})]})]}),e.jsxs("div",{className:"grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8",children:[e.jsx(d,{icon:e.jsx(x,{size:18}),label:"实验卡片",value:s.length,color:"blue"}),e.jsx(d,{icon:e.jsx(w,{size:18}),label:"完整卡片",value:a,sub:`/${s.length}`,color:"green"}),e.jsx(d,{icon:e.jsx(y,{size:18}),label:"参数字段",value:r,color:"amber"}),e.jsx(d,{icon:e.jsx(f,{size:18}),label:"学科领域",value:l.length,color:"violet"})]}),e.jsx("div",{className:"grid gap-4 md:grid-cols-2 lg:grid-cols-3",children:s.map(t=>e.jsx(k,{experiment:t},t.id))})]})}function d({icon:s,label:r,value:a,sub:l,color:i}){const t={blue:"border-l-blue-400",green:"border-l-green-400",amber:"border-l-amber-400",violet:"border-l-violet-400"};return e.jsxs("div",{className:`card-soft p-4 border-l-4 ${t[i]}`,children:[e.jsxs("div",{className:"flex items-center gap-2 text-muted-foreground text-xs",children:[s,r]}),e.jsxs("div",{className:"mt-1 text-2xl font-bold tabular-nums",children:[a,l&&e.jsx("span",{className:"text-base text-muted-foreground font-normal",children:l})]})]})}function k({experiment:s}){const r=s.params.slice(0,4).map(a=>`${a.name}=${a.value}${a.unit}`).join(" · ");return e.jsxs(u,{to:"/workbench",search:{id:s.id},className:"card-soft p-5 hover:border-primary/40 hover:shadow-md transition-all group",children:[e.jsxs("div",{className:"flex items-start justify-between gap-2",children:[e.jsx("h3",{className:"font-semibold text-sm leading-snug group-hover:text-primary transition",children:s.name}),e.jsx(g,{size:14,className:"text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition"})]}),e.jsxs("div",{className:"mt-2 flex flex-wrap gap-1.5",children:[e.jsxs("span",{className:"inline-flex items-center gap-1 rounded-md bg-primary-soft text-primary text-[11px] px-2 py-0.5",children:[e.jsx(v,{size:10})," ",s.discipline||"未分类"]}),e.jsxs("span",{className:"inline-flex items-center gap-1 rounded-md bg-secondary text-muted-foreground text-[11px] px-2 py-0.5",children:[e.jsx($,{size:10})," ",s.date]})]}),e.jsxs("div",{className:"mt-3 text-xs text-muted-foreground line-clamp-1",children:["🎯 ",s.purpose||"（待填写实验目的）"]}),r&&e.jsxs("div",{className:"mt-2 text-[11px] text-muted-foreground/70 border-t border-border pt-2 truncate",children:["📐 ",r]}),e.jsxs("div",{className:"mt-2 flex items-center gap-2 text-[10px] text-muted-foreground",children:[e.jsxs("span",{children:["👤 ",s.operator||"—"]}),e.jsxs("span",{children:["📎 ",s.source]})]})]})}function L(s){return`## ${s.name}
+- **时间**：${s.date}
+- **人员**：${s.operator}
+- **学科**：${s.discipline}
+- **来源**：${s.source}
+
+### 目的
+${s.purpose}
+
+### 设备
+${s.device.name} / ${s.device.model}
+
+### 样品
+${s.sample.id} (${s.sample.batch})
+
+### 参数
+${s.params.map(r=>`- ${r.name}: ${r.value} ${r.unit}`).join(`
+`)}
+
+### 结果
+${s.results}
+`}export{O as component};
