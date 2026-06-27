@@ -23,6 +23,7 @@ import type {
 } from "./reproduction-audit";
 import { buildAuditFromAI } from "./reproduction-audit";
 import { queryDomainKnowledge } from "./domain-knowledge";
+import { extractChemicalFormulas, queryMaterialsProject, summarizeMPResult } from "./materials-project";
 
 // ═══════════════════════════════════════════════════════
 // 论文拆解 System Prompt
@@ -36,6 +37,14 @@ const DECOMPOSE_SYSTEM = `你是实验复现专家。你的任务是将科研论
 3. 对于每个 inferred 参数，必须说明推断依据
 4. 识别所有缺失但复现必需的信息，标记为 gap
 5. 对于数值参数，区分"精确值"和"合理范围"
+6. 【安全参数】必须专门提取实验安全相关参数——使用 safety 类别。包括但不限于：
+   - 危险化学品(浓酸/强碱/有机溶剂)的防护要求(PPE/通风橱)
+   - 高温高压操作(煅烧/水热釜/高压灭菌)的安全条件
+   - 生物危害(人体组织/病原体/生物安全等级)
+   - 紫外/激光/辐射源的防护参数
+   - 纳米材料的吸入/接触防护
+   - 低温(液氮)和电气安全
+   论文未提及安全措施时，在 gaps 中标记 safety 类别缺口并给出行业标准建议
 
 【常见论文隐含信息的例子】
 - "室温搅拌" → 隐含温度约 25°C，但实际可能 20-30°C
@@ -76,6 +85,22 @@ const DECOMPOSE_SYSTEM = `你是实验复现专家。你的任务是将科研论
 }`;
 
 // ═══════════════════════════════════════════════════════
+// 进度回调类型
+// ═══════════════════════════════════════════════════════
+
+export type DecompositionStep =
+  | "connecting"       // 准备连接 AI 引擎
+  | "decomposing"      // AI 拆解论文 Methods
+  | "enhancing-static" // 静态领域知识库匹配
+  | "enhancing-mp"     // Materials Project API 查询
+  | "done";            // 完成
+
+export type DecompositionProgress = {
+  step: DecompositionStep;
+  detail?: string; // 如 "已查询 3 个化学式"、"匹配到 SrTiO₃"
+};
+
+// ═══════════════════════════════════════════════════════
 // 主函数：拆解论文 Methods
 // ═══════════════════════════════════════════════════════
 
@@ -84,7 +109,14 @@ export async function decomposePaperMethods(
   paperSource: string,
   methodsText: string,
   discipline: string = "材料科学",
+  onProgress?: (p: DecompositionProgress) => void,
 ): Promise<ReproductionAudit> {
+  const report = (step: DecompositionStep, detail?: string) => {
+    onProgress?.({ step, detail });
+  };
+
+  report("connecting", `模型: DeepSeek-V3, 领域: ${discipline}`);
+
   // 1. 构建 Prompt
   const prompt = `请拆解以下论文的实验方法段落，提取所有可复现的结构化参数。
 
@@ -104,6 +136,7 @@ ${methodsText.slice(0, 15000)}
   // 2. 调用 DeepSeek-V3
   let rawOutput: string;
   try {
+    report("decomposing", "DeepSeek-V3 拆解论文 Methods 段落 → 结构化参数…");
     rawOutput = await chat(
       "deepseek-ai/DeepSeek-V3",
       [
@@ -178,8 +211,10 @@ ${methodsText.slice(0, 15000)}
   }));
 
   // 7. 用领域知识增强推断
-  const enhancedParams = await enhanceWithDomainKnowledge(parameters, discipline);
+  const enhancedParams = await enhanceWithDomainKnowledge(parameters, discipline, report);
   const enhancedGaps = await enhanceGapsWithDomainKnowledge(gaps, discipline);
+
+  report("done", `提取 ${enhancedParams.length} 参数, ${enhancedGaps.length} 缺口`);
 
   // 8. 构建 Audit
   return buildAuditFromAI(
@@ -198,30 +233,111 @@ ${methodsText.slice(0, 15000)}
 async function enhanceWithDomainKnowledge(
   params: Omit<ReproductionParameter, "userConfirmed" | "userValue">[],
   discipline: string,
+  report?: (step: DecompositionStep, detail?: string) => void,
 ): Promise<Omit<ReproductionParameter, "userConfirmed" | "userValue">[]> {
   const enhanced = [...params];
 
+  // ── Step 1: 静态领域知识库（先运行，速度最快） ──
+  report?.("enhancing-static", "匹配静态领域知识库…");
   for (const p of enhanced) {
-    // 只增强 inferred 的参数
     if (p.certainty !== "inferred" && p.certainty !== "unknown") continue;
 
     const knowledge = queryDomainKnowledge(p.name, discipline);
-    if (knowledge) {
-      // 如果领域知识置信度更高，采用领域知识
-      if (knowledge.confidence > p.confidence) {
-        p.confidence = Math.min(knowledge.confidence + 10, 90); // 上限 90%
-        p.inferenceRationale = `${p.inferenceRationale}；领域知识: ${knowledge.rationale}`;
-        if (knowledge.typicalRange && !p.alternativeRange) {
-          p.alternativeRange = knowledge.typicalRange;
-        }
-        if (knowledge.dbReference) {
-          p.source = "db-reference";
-        }
+    if (knowledge && knowledge.confidence > p.confidence) {
+      p.confidence = Math.min(knowledge.confidence + 10, 90);
+      p.inferenceRationale = `${p.inferenceRationale}；领域知识: ${knowledge.rationale}`;
+      if (knowledge.typicalRange && !p.alternativeRange) {
+        p.alternativeRange = knowledge.typicalRange;
+      }
+      if (knowledge.dbReference) {
+        p.source = "db-reference";
       }
     }
   }
 
+  // ── Step 2: Materials Project API 实时查询 ──
+  // 从所有参数中提取化学式，批量查询一次
+  const allParamText = enhanced
+    .map((p) => `${p.name} ${p.value} ${p.inferenceRationale}`)
+    .join(" ");
+  const formulas = extractChemicalFormulas(allParamText);
+
+  if (formulas.length > 0) {
+    try {
+      report?.("enhancing-mp", `Materials Project 查询 ${formulas.length} 个化学式: ${formulas.join(", ")}`);
+      const mpResults = await queryMaterialsProject(formulas);
+
+      // 将 MP 数据注入匹配的参数
+      for (const p of enhanced) {
+        // only enhance non-explicit parameters
+        if (p.certainty === "explicit") continue;
+
+        const paramText = `${p.name} ${p.value} ${p.inferenceRationale}`;
+        const paramFormulas = extractChemicalFormulas(paramText);
+
+        for (const formula of paramFormulas) {
+          const results = mpResults.get(formula);
+          if (!results || results.length === 0) continue;
+
+          // 优先取最稳定的（energyAboveHull 最小）
+          const best = results.reduce((a, b) =>
+            (a.energyAboveHull ?? 999) < (b.energyAboveHull ?? 999) ? a : b,
+          );
+
+          const summary = summarizeMPResult(best);
+
+          // 如果参数涉及材料属性且 MP 有数据，显著提升置信度
+          const isPropertyMatch = matchPropertyToParameter(p.name, p.value, best);
+          const mpConfidence = isPropertyMatch ? 85 : 70;
+
+          if (mpConfidence > p.confidence) {
+            p.confidence = Math.min(mpConfidence, 92);
+            p.source = "db-reference";
+            p.inferenceRationale = `${p.inferenceRationale}；Materials Project 验证: ${summary}`;
+            if (!p.alternativeRange && best.bandGap !== null) {
+              p.alternativeRange = `${formula}: 带隙 ${best.bandGap.toFixed(2)} eV`;
+            }
+            // 添加可追溯的 DOI 引用
+            (p as Record<string, unknown>).dbSourceUrl =
+              `https://materialsproject.org/materials/${best.materialId}`;
+            break; // 一个参数只匹配一次 MP 数据
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[PaperDecomposer] MP enhancement failed, continuing:", err);
+      // MP 失败不阻塞整体流程
+    }
+  }
+
   return enhanced;
+}
+
+/**
+ * 检查参数是否涉及 MP 材料的具体属性
+ * 用于判断 MP 数据与参数的相关性强度
+ */
+function matchPropertyToParameter(
+  paramName: string,
+  paramValue: string,
+  mpData: { bandGap: number | null; crystalSystem: string | null; isMetal: boolean },
+): boolean {
+  const text = `${paramName} ${paramValue}`.toLowerCase();
+
+  if (mpData.bandGap !== null && /band.?gap|带隙|bandgap/i.test(text)) {
+    return true;
+  }
+  if (mpData.crystalSystem && /crystal|晶[体系型相格]|structure|结构/i.test(text)) {
+    return true;
+  }
+  if (mpData.isMetal && /metal|金属|conduct|导电/i.test(text)) {
+    return true;
+  }
+  if (/(formation|形成)|energy|能量/i.test(text) && /energy|能量/i.test(text)) {
+    return true;
+  }
+  // 弱匹配：参数名或值包含化学式
+  return /[A-Z][a-z]?\d/.test(paramName) || /[A-Z][a-z]?\d/.test(paramValue);
 }
 
 async function enhanceGapsWithDomainKnowledge(

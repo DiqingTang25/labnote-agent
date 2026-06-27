@@ -23,5 +23,6 @@ export function getServerConfig() {
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
     sfApiKey: process.env.SF_API_KEY,
+    mpApiKey: process.env.MP_API_KEY,
   };
 }

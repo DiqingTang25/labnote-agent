@@ -93,6 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    // 清理 localStorage 缓存 — 下一个用户从 Supabase 重新加载
+    const { clearStorage } = await import("./persistence");
+    clearStorage();
   }, []);
 
   return (

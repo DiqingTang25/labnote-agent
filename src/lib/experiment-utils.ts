@@ -31,10 +31,34 @@ export type ExperimentRow = {
   notes: string | null;
   source: string | null;
   attached_files: unknown;
+  ai_insights: string | null;
+  last_parsed_at: string | null;
+  knowledge_tags: string[] | null;
   created_at: string;
   updated_at: string;
   user_id: string | null;
 };
+
+// ═══════════════════════════════════════════════════════
+// 数据清理（防 PostgreSQL 22P05 错误）
+// ═══════════════════════════════════════════════════════
+
+/** 移除 null 字节和无效 Unicode 转义，防止 PG 报错 */
+function sanitizeText(s: string | null | undefined): string | null {
+  if (!s) return s ?? null;
+  return s.replace(/\x00/g, "").replace(/\\u0000/g, "");
+}
+
+function sanitizeJson(v: unknown): unknown {
+  if (!v) return v;
+  try {
+    const json = JSON.stringify(v);
+    const cleaned = json.replace(/\\u0000/g, "").replace(/\x00/g, "");
+    return JSON.parse(cleaned);
+  } catch {
+    return v;
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // Experiment → 扁平化 DB 行
@@ -43,12 +67,12 @@ export type ExperimentRow = {
 export function toRow(e: Experiment, userId?: string): ExperimentRow {
   return {
     id: e.id,
-    name: e.name,
-    date: e.date || null,
-    operator: e.operator || null,
-    purpose: e.purpose || null,
-    background: e.background || null,
-    discipline: e.discipline || null,
+    name: sanitizeText(e.name) || "",
+    date: sanitizeText(e.date) || null,
+    operator: sanitizeText(e.operator) || null,
+    purpose: sanitizeText(e.purpose) || null,
+    background: sanitizeText(e.background) || null,
+    discipline: sanitizeText(e.discipline) || null,
     device_name: e.device.name || null,
     device_model: e.device.model || null,
     device_vendor: e.device.vendor || null,
@@ -58,10 +82,14 @@ export function toRow(e: Experiment, userId?: string): ExperimentRow {
     params: e.params,
     environment: e.environment,
     steps: e.steps,
-    results: e.results || null,
-    notes: e.notes || null,
-    source: e.source || null,
-    attached_files: e.attachedFiles,
+    results: sanitizeText(e.results) || null,
+    notes: sanitizeText(e.notes) || null,
+    source: sanitizeText(e.source) || null,
+    attached_files: sanitizeJson(e.attachedFiles),
+    // v2 columns — 需要先运行 supabase-schema-v2.sql 迁移
+    // ai_insights: e.aiInsights || null,
+    // last_parsed_at: e.lastParsedAt || null,
+    // knowledge_tags: e.knowledgeTags || [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     user_id: userId ?? null,
@@ -102,9 +130,10 @@ export function fromRow(r: Record<string, unknown>): Experiment {
     notes: (r.notes as string) ?? "",
     source: (r.source as string) ?? "",
     attachedFiles: (r.attached_files as AttachedFile[]) ?? [],
-    lastParsedAt: (r.lastParsedAt as string) ?? null,
+    lastParsedAt: (r.last_parsed_at as string) ?? (r.lastParsedAt as string) ?? null,
     embedding: parseEmbedding(r.embedding),
     aiInsights: (r.ai_insights as string) ?? "",
+    knowledgeTags: (r.knowledge_tags as string[]) ?? [],
   };
 }
 
@@ -156,5 +185,8 @@ export function buildDbPatch(patch: Partial<Experiment>): Record<string, unknown
   if (patch.results !== undefined) dbPatch.results = patch.results;
   if (patch.notes !== undefined) dbPatch.notes = patch.notes;
   if (patch.attachedFiles !== undefined) dbPatch.attached_files = patch.attachedFiles;
+  if (patch.aiInsights !== undefined) dbPatch.ai_insights = patch.aiInsights;
+  if (patch.lastParsedAt !== undefined) dbPatch.last_parsed_at = patch.lastParsedAt;
+  if (patch.knowledgeTags !== undefined) dbPatch.knowledge_tags = patch.knowledgeTags;
   return dbPatch;
 }

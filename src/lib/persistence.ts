@@ -17,11 +17,15 @@ interface PersistedData {
   savedAt: string;
 }
 
+// SSR 安全
+const hasStorage = () => typeof localStorage !== "undefined";
+
 // ═══════════════════════════════════════════════════════
 // 实验数据
 // ═══════════════════════════════════════════════════════
 
 export function saveExperiments(experiments: Experiment[]): boolean {
+  if (!hasStorage()) return false;
   try {
     const trimmed = experiments.slice(0, MAX_EXPERIMENTS);
     const data: PersistedData = {
@@ -65,6 +69,7 @@ export function saveExperiments(experiments: Experiment[]): boolean {
 }
 
 export function loadExperiments(): Experiment[] | null {
+  if (!hasStorage()) return null;
   try {
     const raw = localStorage.getItem(EXPERIMENTS_KEY);
     if (!raw) return null;
@@ -103,6 +108,7 @@ export function saveProfile(profile: {
   org: string;
   discipline: string;
 }): void {
+  if (!hasStorage()) return;
   try {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch {
@@ -115,6 +121,7 @@ export function loadProfile(): {
   org: string;
   discipline: string;
 } | null {
+  if (!hasStorage()) return null;
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -128,6 +135,7 @@ export function loadProfile(): {
 // ═══════════════════════════════════════════════════════
 
 export function clearStorage(): void {
+  if (!hasStorage()) return;
   localStorage.removeItem(EXPERIMENTS_KEY);
   localStorage.removeItem(PROFILE_KEY);
 }
@@ -137,6 +145,7 @@ export function getStorageUsage(): {
   totalBytes: number;
   percent: number;
 } {
+  if (!hasStorage()) return { usedBytes: 0, totalBytes: 0, percent: 0 };
   let used = 0;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);

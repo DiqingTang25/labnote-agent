@@ -57,9 +57,15 @@ export function isSupabaseReady(): boolean {
 
 export async function fetchExperiments(): Promise<Experiment[]> {
   if (!isSupabaseReady()) return [];
+  // 获取当前用户 — 未登录返回空
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return [];
+  // RLS + 代码双重过滤
   const { data, error } = await supabase
     .from("experiments")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) {
     console.error("[Supabase] fetchExperiments error:", error);
@@ -93,11 +99,15 @@ export async function updateExperimentDB(
   patch: Partial<Experiment>,
 ): Promise<boolean> {
   if (!isSupabaseReady()) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
   const dbPatch = buildDbPatch(patch);
   const { error } = await supabase
     .from("experiments")
     .update(dbPatch)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId);
   if (error) {
     console.error("[Supabase] updateExperiment error:", error);
     return false;
@@ -107,7 +117,10 @@ export async function updateExperimentDB(
 
 export async function deleteExperimentDB(id: string): Promise<boolean> {
   if (!isSupabaseReady()) return false;
-  const { error } = await supabase.from("experiments").delete().eq("id", id);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
+  const { error } = await supabase.from("experiments").delete().eq("id", id).eq("user_id", userId);
   if (error) {
     console.error("[Supabase] deleteExperiment error:", error);
     return false;
@@ -229,12 +242,16 @@ export async function findSimilarExperiments(
   limit = 5,
 ): Promise<Array<{ id: string; name: string; similarity: number }>> {
   if (!isSupabaseReady() || embedding.length === 0) return [];
+  // 获取当前用户 — RLS + 代码双重过滤
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return [];
 
   const { data, error } = await supabase.rpc("match_experiments", {
     query_embedding: embedding,
     match_threshold: 0.6,
     match_count: limit,
-    filter_user_id: null,
+    filter_user_id: userId,
   });
 
   if (error) {
@@ -267,6 +284,9 @@ export type RagSource = {
 export async function ragAnswerReal(
   question: string,
 ): Promise<{ answer: string; sources: RagSource[] }> {
+  // 获取当前用户 — RAG 只搜索该用户的实验
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
   const { ragAnswer } = await import("./api/rag.functions");
-  return ragAnswer({ data: { question } });
+  return ragAnswer({ data: { question, userId } });
 }

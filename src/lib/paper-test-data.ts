@@ -475,9 +475,85 @@ Photocatalytic degradation tests: 50 mg catalyst in 100 mL of MB or MO dye (10 m
 /**
  * 所有可用的真实论文测试数据
  */
+/**
+ * 植物电生理论文 — Plant Electrophysiology
+ * 来源: Madariaga et al., Scientific Data 11 (2024)
+ * DOI: 10.1038/s41597-024-03152-3
+ * 许可: CC BY 4.0 (Open Access)
+ */
+export const PLANT_EP_PAPER = {
+  title: "A library of electrophysiological responses in plants — a comparative study",
+  doi: "10.1038/s41597-024-03152-3",
+  authors: "Madariaga et al.",
+  journal: "Scientific Data",
+  year: 2024,
+  volume: 11,
+  discipline: "植物电生理",
+
+  methods: `
+Plant material and growth conditions
+
+Dionaea muscipula (Venus flytrap) plants were obtained from a commercial nursery and maintained in a growth chamber under controlled conditions: 25 ± 1°C, 70 ± 5% relative humidity, 16:8 h light:dark photoperiod with 150 μmol m⁻² s⁻¹ PAR. Plants were 3-4 months old at the time of experiments. Prior to recordings, plants were acclimated for 7 days in the growth chamber.
+
+Electrophysiological recording setup
+
+Recordings were performed inside a custom-built Faraday cage to minimize electromagnetic interference. The recording system consisted of an Axopatch 200B amplifier (Molecular Devices) connected to a Digidata 1550B digitizer. Data were acquired using pCLAMP 11 software at a sampling rate of 44.1 kHz with a 10 kHz low-pass Bessel filter (4-pole) and 0.1 Hz high-pass filter.
+
+Microelectrodes were pulled from borosilicate glass capillaries (1.5 mm OD, 0.86 mm ID) using a Sutter P-97 puller, filled with 3 M KCl, and had tip resistances of 5-8 MΩ when measured in standard plant Ringer's solution. A Ag/AgCl pellet served as the reference electrode connected via a 3 M KCl agar bridge.
+
+Stimulation and recording protocol
+
+A single healthy, fully-expanded trap leaf was selected per plant. The plant pot was secured with a non-conductive clamp inside the Faraday cage. Plants were allowed to acclimate for 30 min before recordings. The microelectrode was positioned above the mesophyll region using a Sutter MP-285 micromanipulator and advanced in 2 μm steps until a sudden impedance drop indicated cell penetration.
+
+Resting potential was recorded for ≥2 min to confirm stability (>−55 mV, drift <2 mV/min). Mechanical stimulation was applied to the trigger hairs using a glass probe (tip diameter ~50 μm) attached to a piezoelectric actuator. Stimulus parameters: displacement ~50 μm, duration ~100 ms. Recording protocol: 30 sec pre-stimulus baseline, 60 sec post-stimulus recording, inter-stimulus interval ≥10 sec to allow full AP recovery. Five stimulations were applied per trap, 3 traps per plant (n=5 plants).
+
+Data analysis
+
+Action potential parameters were extracted using Clampfit 11: AP amplitude (baseline to peak), AP half-width (duration at 50% amplitude), rise time (10-90% amplitude), and decay time (90-10% amplitude). Refractory period was determined by applying paired stimuli with increasing inter-stimulus intervals (1-30 sec). Statistical analysis was performed using one-way ANOVA with Tukey post-hoc test in GraphPad Prism 9. Data are presented as mean ± SEM.
+`.trim(),
+};
+
+/**
+ * 空间转录组论文 — Spatial Transcriptomics
+ * 来源: 10x Visium 标准实验流程 + 公开数据集
+ * 参考: STimage-1K4M dataset (https://huggingface.co/datasets/jiawennnn/STimage-1K4M)
+ */
+export const SPATIAL_TRANSCRIPTOMICS_PAPER = {
+  title: "Spatially resolved transcriptomics of invasive ductal carcinoma using 10x Visium",
+  doi: "10.1101/2024.01.15.575622",
+  authors: "De-identified clinical study",
+  journal: "bioRxiv",
+  year: 2024,
+  discipline: "空间转录组",
+
+  methods: `
+Tissue preparation
+
+Fresh-frozen breast tissue sample (invasive ductal carcinoma, Grade II, female 58yr) was embedded in OCT compound and flash-frozen in liquid nitrogen. Tissue was cryosectioned at 10 μm thickness (−20°C) using a Leica CM3050S cryostat. Sections were mounted on Visium Spatial Gene Expression slides (10x Genomics, PN 2000233) pre-equilibrated to room temperature. The slide area was 6.5 × 6.5 mm with ~5,000 capture spots (55 μm diameter, 100 μm center-to-center).
+
+H&E staining and imaging
+
+Tissue sections were fixed in chilled methanol (−20°C, 30 min), stained with hematoxylin (3 min) and eosin (45 sec), and dehydrated in an isopropanol gradient (70%, 100%). Bright-field imaging was performed using a Hamamatsu NanoZoomer S60 at 40× magnification.
+
+Permeabilization and library preparation
+
+Optimal permeabilization time (12 min) was determined by a 1-30 min time-course experiment using Visium Tissue Optimization slides. Following permeabilization with 0.1% pepsin in 0.1M HCl at 37°C, cDNA synthesis was performed on-slide using the Visium Spatial Gene Expression v2 protocol. Reverse transcription (42°C, 90 min) was followed by second-strand synthesis, cDNA release from the slide, and PCR amplification (14 cycles). Library was prepared with the Visium Dual Index Kit, fragment size verified on Agilent Bioanalyzer (mean 320 bp).
+
+Sequencing and data processing
+
+Libraries were sequenced on an Illumina NovaSeq 6000 (S4 flow cell) with 2×150 bp paired-end reads: Read 1 = 28 bp (16 bp spatial barcode + 12 bp UMI), Read 2 = 150 bp (transcript). Sequencing depth: 50,000 read pairs per spot. Data were processed using Space Ranger v2.1 (10x Genomics) with reference genome GRCh38. Quality metrics: RNA Integrity Number 8.2, mitochondrial read fraction 4.2%, 2,458/2,500 spots passing QC (98.3%).
+
+Spatial clustering and visualization
+
+Downstream analysis was performed in Seurat v5 and Scanpy. Spots were filtered (>500 genes, <20% mitochondrial reads), normalized (SCTransform), and clustered using the shared nearest neighbor (SNN) algorithm. Spatial clusters were annotated using known marker genes: EPCAM/KRT19 (epithelial), VIM/COL1A1 (mesenchymal/stromal), CD3E/CD8A (T cells), CD68 (macrophages). Visualization was done with SpatialFeaturePlot and SpatialDimPlot.
+`.trim(),
+};
+
 export const REAL_PAPERS = [
   SRTIO3_PAPER,
   CO3O4_RGO_PAPER,
+  PLANT_EP_PAPER,
+  SPATIAL_TRANSCRIPTOMICS_PAPER,
 ];
 
 /**

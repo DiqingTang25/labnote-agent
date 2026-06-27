@@ -107,6 +107,7 @@ function createBlank(add: (e: Experiment) => void): string {
     lastParsedAt: null,
     embedding: null,
     aiInsights: "",
+    knowledgeTags: [],
   };
   add(blank);
   return blank.id;

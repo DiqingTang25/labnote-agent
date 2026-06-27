@@ -158,6 +158,7 @@ function asPartialExperiment(item: unknown): Partial<Experiment> {
     lastParsedAt: null,
     embedding: null,
     aiInsights: asString(obj.aiInsights) || asString(obj.ai_insights),
+    knowledgeTags: Array.isArray((obj as any).knowledgeTags) ? (obj as any).knowledgeTags : [],
   };
 }
 
@@ -219,5 +220,6 @@ export function normalizeExperiment(
     lastParsedAt: raw.lastParsedAt ?? defaults?.lastParsedAt ?? null,
     embedding: (raw as Experiment).embedding ?? defaults?.embedding ?? null,
     aiInsights: (raw as Experiment).aiInsights || defaults?.aiInsights || "",
+    knowledgeTags: (raw as Experiment).knowledgeTags || defaults?.knowledgeTags || [],
   };
 }
