@@ -66,6 +66,7 @@ function sanitizeJson(v: unknown): unknown {
 // ═══════════════════════════════════════════════════════
 
 export function toRow(e: Experiment, userId?: string): ExperimentRow {
+  const searchText = [e.name, e.purpose, e.results, e.notes, e.device.name, e.device.model, e.sample.id, e.operator, e.discipline].filter(Boolean).join(" ");
   return {
     id: e.id,
     name: sanitizeText(e.name) || "",
@@ -90,6 +91,7 @@ export function toRow(e: Experiment, userId?: string): ExperimentRow {
     ai_insights: sanitizeText(e.aiInsights) || null,
     last_parsed_at: e.lastParsedAt || null,
     knowledge_tags: e.knowledgeTags || [],
+    search_text: searchText || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     user_id: userId ?? null,
