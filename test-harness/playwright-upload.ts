@@ -20,10 +20,7 @@ const EMAIL = "Diqing.Tang25@student.xjtlu.edu.cn";
 const PASSWORD = "123456";
 
 const EXPERIMENTS = [
-  { name: "exp1-plant-electrophysiology", label: "植物电生理", files: 5 },
-  { name: "exp2-tcell-migration", label: "T细胞迁移", files: 4 },
-  { name: "exp3-spatial-transcriptomics", label: "空间转录组", files: 5 },
-  { name: "exp4-materials-characterization", label: "纳米材料表征", files: 3 },
+  { name: "exp5-cell-biology", label: "细胞生物学", files: 7 },
 ];
 
 async function main() {
