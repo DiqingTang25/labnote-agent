@@ -33,11 +33,11 @@ import {
   calculateReproducibilityScore,
 } from "../lib/reproduction-audit";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
-import { startBackgroundDecomposition, getTask, getAllTasks, clearDoneTasks } from "../lib/background-task";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
 import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
 import { useAuth } from "../lib/auth-context";
+import { decomposeOnServer } from "../lib/api/decompose.functions";
 import { saveAudit, fetchAudits, deleteAudit } from "../lib/supabase";
 import {
   Dialog,
@@ -129,35 +129,15 @@ function ReproductionAuditPage() {
   }, [savedAuditId, loadHistory]);
 
   // ═══════════════════════════════════════════════════════
-  // 后台任务：挂载恢复 + 轮询
+  // 后台任务轮询 — 组件卸载后任务继续跑
   // ═══════════════════════════════════════════════════════
 
-  // 挂载时恢复进行中/已完成的后台任务
-  useEffect(() => {
-    const allTasks = getAllTasks();
-    const running = allTasks.find((t) => t.status === "running");
-    const latest = allTasks.reduce((a, b) => (a.startedAt > b.startedAt ? a : b), null as BgTask | null);
-
-    if (running) {
-      // 有进行中的任务 → 恢复进度显示
-      setDecomposing(true);
-      setActiveTaskId(running.id);
-      setProgress(running.progress);
-    } else if (latest?.status === "done" && latest.result) {
-      // 有已完成的任务 → 静默恢复，不显示 toast
-      if (!audit) {
-        setAudit(latest.result);
-        setSavedAuditId((latest as any).savedAuditId || null);
-        loadHistory();
-      }
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 轮询激活的后台任务进度
+  // 轮询激活的后台任务
   useEffect(() => {
     if (!activeTaskId) return;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
+      return; // disabled - using server-side decomposition
       const task = getTask(activeTaskId);
       if (!task) {
         setDecomposing(false);
@@ -170,18 +150,18 @@ function ReproductionAuditPage() {
       if (task.status === "done" && task.result) {
         clearInterval(interval);
         setAudit(task.result);
-        setSavedAuditId((task as any).savedAuditId || null);
+        setSavedAuditId(task.savedAuditId);
         setDecomposing(false);
         setActiveTaskId(null);
         loadHistory();
-        toast.success(`拆解完成：${task.result.parameters.length} 个参数，${task.result.gaps.length} 个缺口`);
+        toast.success(`拆解完成：${task.result.parameters.length} 个参数，${task.result.gaps.length} 个缺口，已保存到云端`);
       } else if (task.status === "error") {
         clearInterval(interval);
         setDecomposing(false);
         setActiveTaskId(null);
         toast.error(`拆解失败: ${task.error || "未知错误"}`);
       }
-    }, 500);
+    }, 300);
 
     return () => clearInterval(interval);
   }, [activeTaskId, loadHistory]);
@@ -229,8 +209,7 @@ function ReproductionAuditPage() {
       }));
     } catch { /* localStorage 不可用则跳过 */ }
 
-    // 调用服务端拆解（fire-and-forget — 不等待响应）
-    const { decomposeOnServer } = await import("../lib/api/decompose.functions");
+    // 服务端拆解 — fire-and-forget，切换页面不中断
     decomposeOnServer({
       data: {
         paperTitle: paper.title,
@@ -240,18 +219,14 @@ function ReproductionAuditPage() {
         userId,
       },
     }).then((res) => {
-      // 成功回调 — 即使页面已切换也会在浏览器中执行
       try { localStorage.removeItem(pendingKey); } catch {}
       if (res.saved) {
         loadHistory();
-        if (document.querySelector("[data-audit-page]")) {
-          // 用户还在页面
-          toast.success(`✅ 服务端拆解完成：${res.paramCount} 个参数已保存`);
-        }
+        toast.success(`✅ 拆解完成：${res.paramCount} 个参数已保存到云端`);
       }
     }).catch((err) => {
       try { localStorage.removeItem(pendingKey); } catch {}
-      console.error("[Decompose] server error:", err);
+      console.error("[Decompose] error:", err);
     });
 
     // 启动轮询检测结果
