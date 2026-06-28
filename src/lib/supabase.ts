@@ -225,16 +225,28 @@ export async function embedExperiment(expId: string): Promise<void> {
     .filter(Boolean)
     .join(" ");
 
-  // 整卡 embedding（向后兼容 + fallback）
+  // 整卡 embedding（向后兼容 + fallback），带内容哈希缓存
   if (semanticText.trim()) {
-    const { generateEmbedding } = await import("./api/ai.functions");
-    const vec = await generateEmbedding({ data: { text: semanticText } });
+    const { contentHash, getCachedEmbedding, setCachedEmbedding } = await import("./rag-cache");
+    const hash = contentHash(semanticText);
+    const cached = getCachedEmbedding(expId, hash);
 
-    if (Array.isArray(vec) && vec.length > 0) {
+    if (cached) {
       await supabase
         .from("experiments")
-        .update({ embedding: vec, updated_at: new Date().toISOString() })
+        .update({ embedding: cached, updated_at: new Date().toISOString() })
         .eq("id", expId);
+    } else {
+      const { generateEmbedding } = await import("./api/ai.functions");
+      const vec = await generateEmbedding({ data: { text: semanticText } });
+
+      if (Array.isArray(vec) && vec.length > 0) {
+        await supabase
+          .from("experiments")
+          .update({ embedding: vec, updated_at: new Date().toISOString() })
+          .eq("id", expId);
+        setCachedEmbedding(expId, hash, vec);
+      }
     }
   }
 
@@ -532,6 +544,8 @@ export type RagSource = {
   page: string;
   confidence: string;
   link: string;
+  chunkType?: string;
+  snippet?: string;
 };
 
 /**
@@ -716,6 +730,36 @@ export async function deleteAudit(id: string): Promise<boolean> {
     .eq("user_id", userId);
   if (error) {
     console.error("[Audit] deleteAudit error:", error);
+    return false;
+  }
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════
+// 反馈闭环 — 👍👎
+// ═══════════════════════════════════════════════════════
+
+export async function submitFeedback(params: {
+  question: string;
+  answer: string;
+  sources: RagSource[];
+  rating: "up" | "down";
+}): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
+
+  const { error } = await supabase.from("rag_feedback").insert({
+    user_id: userId,
+    question: params.question,
+    answer: params.answer,
+    sources: params.sources,
+    rating: params.rating,
+  });
+
+  if (error) {
+    console.error("[Feedback] submit error:", error);
     return false;
   }
   return true;

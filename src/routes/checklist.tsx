@@ -34,7 +34,7 @@ import {
 } from "../lib/reproduction-audit";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
-import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
+import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER, getPresetAudit } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
 import { useAuth } from "../lib/auth-context";
 import { decomposeOnServer } from "../lib/api/decompose.functions";
@@ -75,6 +75,7 @@ function ReproductionAuditPage() {
   // 处理状态
   const [decomposing, setDecomposing] = useState(false);
   const [progress, setProgress] = useState<DecompositionProgress>({ step: "connecting" });
+  const [decomposeError, setDecomposeError] = useState<string | null>(null);
   const [audit, setAudit] = useState<ReproductionAudit | null>(null);
   const [savedAuditId, setSavedAuditId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -128,43 +129,8 @@ function ReproductionAuditPage() {
     }
   }, [savedAuditId, loadHistory]);
 
-  // ═══════════════════════════════════════════════════════
-  // 后台任务轮询 — 组件卸载后任务继续跑
-  // ═══════════════════════════════════════════════════════
-
-  // 轮询激活的后台任务
-  useEffect(() => {
-    if (!activeTaskId) return;
-
-    const interval = setInterval(async () => {
-      return; // disabled - using server-side decomposition
-      const task = getTask(activeTaskId);
-      if (!task) {
-        setDecomposing(false);
-        setActiveTaskId(null);
-        return;
-      }
-
-      setProgress(task.progress);
-
-      if (task.status === "done" && task.result) {
-        clearInterval(interval);
-        setAudit(task.result);
-        setSavedAuditId(task.savedAuditId);
-        setDecomposing(false);
-        setActiveTaskId(null);
-        loadHistory();
-        toast.success(`拆解完成：${task.result.parameters.length} 个参数，${task.result.gaps.length} 个缺口，已保存到云端`);
-      } else if (task.status === "error") {
-        clearInterval(interval);
-        setDecomposing(false);
-        setActiveTaskId(null);
-        toast.error(`拆解失败: ${task.error || "未知错误"}`);
-      }
-    }, 300);
-
-    return () => clearInterval(interval);
-  }, [activeTaskId, loadHistory]);
+  // Background task polling disabled — using server-side decomposition instead.
+  // The activeTaskId-based polling (see below) handles server-side result detection.
 
   // ===== 获取当前论文内容 =====
   const getCurrentPaperData = useCallback(() => {
@@ -197,6 +163,7 @@ function ReproductionAuditPage() {
     }
 
     setDecomposing(true);
+    setDecomposeError(null);
     setProgress({ step: "connecting" });
 
     // 保存 pending 标记到 localStorage（切换页面后恢复用）
@@ -223,10 +190,17 @@ function ReproductionAuditPage() {
       if (res.saved) {
         loadHistory();
         toast.success(`✅ 拆解完成：${res.paramCount} 个参数已保存到云端`);
+      } else {
+        toast.error(`⚠️ 拆解完成但保存失败：${(res as any).error || "未知错误"}`);
       }
     }).catch((err) => {
       try { localStorage.removeItem(pendingKey); } catch {}
-      console.error("[Decompose] error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Decompose] error:", msg);
+      setDecomposeError(msg);
+      setDecomposing(false);
+      setActiveTaskId(null);
+      toast.error(`❌ AI 拆解失败：${msg.slice(0, 120)}。请检查 SF_API_KEY 环境和网络连接。`);
     });
 
     // 启动轮询检测结果
@@ -253,13 +227,16 @@ function ReproductionAuditPage() {
       setProgress({ step: "decomposing", detail: "服务端正拆解中…" });
     }
 
+    let stopped = false;
     const interval = setInterval(async () => {
-      // 检查服务端是否有新结果
-      await loadHistory();
+      if (stopped) return;
+      // 直接调用 fetchAudits 获取最新数据（不依赖外层 state 闭包）
+      const latestAudits = await fetchAudits();
+      if (stopped) return;
 
-      // 检查当前 paper title 是否已出现在历史中
+      // 检查当前 paper title 是否已出现在最新历史中
       const paper = getCurrentPaperData();
-      const found = auditHistory.find((a) =>
+      const found = latestAudits.find((a) =>
         a.paperTitle === paper.title &&
         Date.now() - new Date(a.auditedAt).getTime() < 120000 // 2分钟内
       );
@@ -267,12 +244,10 @@ function ReproductionAuditPage() {
       if (found) {
         clearInterval(interval);
         // 清理所有 pending 标记
-        const allKeys = [...pendingKeys];
         try {
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key?.startsWith("decompose_pending_")) {
-              allKeys.push(key);
               localStorage.removeItem(key);
             }
           }
@@ -286,8 +261,11 @@ function ReproductionAuditPage() {
       }
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, [activeTaskId, decomposing, loadHistory, getCurrentPaperData, auditHistory]);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [activeTaskId, decomposing, getCurrentPaperData]);
 
   // ===== 参数操作 =====
   const confirmParam = useCallback((paramName: string, value: string) => {
@@ -479,7 +457,7 @@ function ReproductionAuditPage() {
       )}
 
       {/* Action buttons */}
-      <div className="mt-4 flex gap-3">
+      <div className="mt-4 flex gap-3 flex-wrap">
         <button
           onClick={runDecomposition}
           disabled={decomposing}
@@ -491,6 +469,21 @@ function ReproductionAuditPage() {
             <><Sparkles size={15}/> AI 拆解论文 → 复现参数</>
           )}
         </button>
+        {paperSource !== "custom" && (
+          <button
+            onClick={() => {
+              const paper = getCurrentPaperData();
+              const preset = getPresetAudit(paper.title);
+              setAudit(preset);
+              setSavedAuditId(null);
+              saveCurrentAudit(preset);
+              toast.success(`✅ 已加载预设 Audit：${preset.parameters.length} 参数，${preset.gaps.length} 缺口`);
+            }}
+            className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-2.5 text-sm hover:bg-primary/10 transition"
+          >
+            <Zap size={15}/> 加载预设 Audit（快速演示）
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1190,6 +1183,33 @@ function ReproductionAuditPage() {
       {/* Loading — 多步骤进度 */}
       {decomposing && <DecompositionProgressBar progress={progress} />}
 
+      {/* Error display */}
+      {decomposeError && !decomposing && (
+        <div className="card-soft p-4 mb-6 rounded-xl bg-red-50 border border-red-200">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-red-700">AI 拆解失败</p>
+              <p className="text-xs text-red-600 mt-1 leading-relaxed">{decomposeError}</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => setDecomposeError(null)}
+                  className="text-xs text-red-600 underline hover:text-red-800"
+                >
+                  关闭
+                </button>
+                <button
+                  onClick={() => { setDecomposeError(null); runDecomposition(); }}
+                  className="text-xs text-red-600 underline hover:text-red-800"
+                >
+                  重试
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Score */}
       {audit && renderScoreDashboard()}
 
@@ -1288,6 +1308,7 @@ const PIPELINE_STEPS: { step: DecompositionStep; icon: string; label: string }[]
   { step: "decomposing",      icon: "🧠", label: "AI 拆解论文 Methods" },
   { step: "enhancing-static", icon: "📚", label: "静态领域知识库匹配" },
   { step: "enhancing-mp",     icon: "🌐", label: "Materials Project 查询" },
+  { step: "enhancing-nist",   icon: "🌡️", label: "NIST Chemistry WebBook 查询" },
   { step: "done",             icon: "✅", label: "生成复现审计报告" },
 ];
 
@@ -1432,6 +1453,11 @@ function HelpModal() {
             <div className="ml-[13ch]">│   · 返回: band_gap, formation_energy, crystal_system…</div>
             <div className="ml-[13ch]">│   · 会话缓存 (同化学式不重复请求)</div>
             <div className="ml-[13ch]">│</div>
+            <div>──────────→ <span className="text-primary font-semibold">NIST Chemistry WebBook</span> (热力学数据)</div>
+            <div className="ml-[13ch]">│   · 按化学式/名称查询化合物热力学属性</div>
+            <div className="ml-[13ch]">│   · 返回: ΔHf°, S°, Cp, 分子量, 沸点/熔点, CAS</div>
+            <div className="ml-[13ch]">│   · 热力学相关参数置信度提升至 82-90%</div>
+            <div className="ml-[13ch]">│</div>
             <div>──────────→ <span className="text-primary font-semibold">复现审计报告</span> (ReproductionAudit)</div>
           </div>
         </section>
@@ -1521,7 +1547,7 @@ function HelpModal() {
           </h4>
           <ul className="space-y-1 text-xs text-muted-foreground list-disc ml-4">
             <li>Materials Project API — 15万+ 无机材料计算属性 (band gap, formation energy, crystal structure)</li>
-            <li>NIST Chemistry WebBook — 化合物热力学数据</li>
+            <li>NIST Chemistry WebBook — 化合物热力学数据 (ΔHf°, S°, Cp, 沸点/熔点)</li>
             <li>开放获取论文 — Scientific Reports, RSC Advances, MDPI Catalysts 等</li>
             <li>领域知识库 — 基于 2024 年发表的 10+ 篇光催化/材料论文的典型参数</li>
           </ul>

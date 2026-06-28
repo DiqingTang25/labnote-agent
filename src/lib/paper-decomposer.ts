@@ -24,6 +24,7 @@ import type {
 import { buildAuditFromAI } from "./reproduction-audit";
 import { queryDomainKnowledge } from "./domain-knowledge";
 import { extractChemicalFormulas, queryMaterialsProject, summarizeMPResult } from "./materials-project";
+import { extractNISTQueries, queryNIST, summarizeNISTResult } from "./nist";
 
 // ═══════════════════════════════════════════════════════
 // 论文拆解 System Prompt
@@ -93,6 +94,7 @@ export type DecompositionStep =
   | "decomposing"      // AI 拆解论文 Methods
   | "enhancing-static" // 静态领域知识库匹配
   | "enhancing-mp"     // Materials Project API 查询
+  | "enhancing-nist"   // NIST Chemistry WebBook 查询
   | "done";            // 完成
 
 export type DecompositionProgress = {
@@ -307,6 +309,48 @@ async function enhanceWithDomainKnowledge(
     } catch (err) {
       console.warn("[PaperDecomposer] MP enhancement failed, continuing:", err);
       // MP 失败不阻塞整体流程
+    }
+  }
+
+  // ── Step 3: NIST Chemistry WebBook 实时查询 ──
+  const nistQueries = extractNISTQueries(allParamText);
+  if (nistQueries.length > 0) {
+    try {
+      report?.("enhancing-nist", `NIST Chemistry WebBook 查询 ${nistQueries.length} 个化合物: ${nistQueries.map(q => q.value).join(", ")}`);
+      const nistResults = await queryNIST(nistQueries);
+
+      for (const p of enhanced) {
+        if (p.certainty === "explicit") continue;
+
+        const paramText = `${p.name} ${p.value} ${p.inferenceRationale}`;
+        const paramQueries = extractNISTQueries(paramText);
+
+        for (const q of paramQueries) {
+          const results = nistResults.get(q.value);
+          if (!results || results.length === 0) continue;
+
+          const best = results[0]; // 取第一个匹配
+          const summary = summarizeNISTResult(best);
+
+          // NIST 数据可提升热力学相关参数的置信度
+          const isThermoParam = /焓|熵|热容|enthalpy|entropy|heat|capacity|formation|energy|比热|ΔH|ΔS|Cp/i.test(paramText);
+          const nistConfidence = isThermoParam && best.enthalpyOfFormation !== null ? 82 : 65;
+
+          if (nistConfidence > p.confidence) {
+            p.confidence = Math.min(nistConfidence, 90);
+            p.source = "db-reference";
+            p.inferenceRationale = `${p.inferenceRationale}；NIST WebBook 验证: ${summary}`;
+            if (best.casNumber) {
+              (p as Record<string, unknown>).dbSourceUrl =
+                `https://webbook.nist.gov/cgi/cbook.cgi?ID=${best.casNumber}`;
+            }
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[PaperDecomposer] NIST enhancement failed, continuing:", err);
+      // NIST 失败不阻塞整体流程
     }
   }
 

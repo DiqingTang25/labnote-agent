@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "download-media": "node scripts/download-media.mjs",
+    "build": "node scripts/download-media.mjs && vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
@@ -52,6 +53,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
+    "jimp": "^1.6.1",
     "lucide-react": "^0.575.0",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",

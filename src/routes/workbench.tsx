@@ -7,7 +7,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { z } from "zod";
 import {
   Upload, FilePlus2, Save, Download, FileJson, Printer, Trash2,
-  Plus, X, CheckCircle2, AlertCircle, Sparkles, Send, ClipboardCopy,
+  Plus, X, CheckCircle2, AlertCircle, Sparkles, Send, ClipboardCopy, ThumbsUp, ThumbsDown,
   Loader2, Package, Clock, FileText, Bot, Target, MapPin, ArrowUpRight,
   FolderOpen, GitBranch, Link2, Unlink,
 } from "lucide-react";
@@ -18,7 +18,7 @@ import {
   type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
 import {
-  ragAnswerReal, ragAnswerRealStream, fetchExperimentRelations, addExperimentRelation,
+  ragAnswerReal, ragAnswerRealStream, submitFeedback, fetchExperimentRelations, addExperimentRelation,
   deleteExperimentRelation, suggestRelations,
   RELATION_LABELS, type ExperimentRelation,
 } from "../lib/supabase";
@@ -1026,7 +1026,7 @@ function ReproAssistant({ experiment }: { experiment: Experiment }) {
     </div>
   );
 }
-type Source ={ doc: string; page: string; confidence: string; link: string };
+type Source ={ doc: string; page: string; confidence: string; link: string; chunkType?: string; snippet?: string };
 
 function RagPanel() {
   const { experiments } = useLab();
@@ -1037,6 +1037,7 @@ function RagPanel() {
   const [q, setQ] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState<Record<number, "up" | "down" | null>>({});
 
   const send = async (text?: string) => {
     const t = (text ?? q).trim();
@@ -1139,21 +1140,39 @@ function RagPanel() {
                 <div className="text-[10px] text-muted-foreground font-semibold mb-1.5 flex items-center gap-1"><FileText size={10}/>来源文档</div>
                 <ul className="space-y-1.5">
                   {m.sources.map((s, idx) => (
-                    <li key={idx} className="flex items-center justify-between text-[11px]">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="inline-flex items-center gap-1 text-muted-foreground"><MapPin size={10}/>{s.page}</span>
-                        <span className="truncate text-foreground">{s.doc}</span>
+                    <li key={idx} className="text-[11px] py-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex items-center gap-1 text-muted-foreground"><MapPin size={10}/>{s.page}</span>
+                          <span className="truncate text-foreground">{s.doc}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[color:var(--color-success)]"><Target size={10}/>{s.confidence}</span>
+                          <button onClick={() => navigate({ to: s.link })}
+                            className="inline-flex items-center gap-0.5 text-primary hover:underline">
+                            <ArrowUpRight size={10}/>查看卡片
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="inline-flex items-center gap-1 text-[color:var(--color-success)]"><Target size={10}/>{s.confidence}</span>
-                        <button onClick={() => navigate({ to: s.link })}
-                          className="inline-flex items-center gap-0.5 text-primary hover:underline">
-                          <ArrowUpRight size={10}/>查看卡片
-                        </button>
-                      </div>
+                      {s.snippet && (
+                        <div className="mt-0.5 pl-5 text-[9px] text-muted-foreground truncate">{s.snippet.slice(0, 100)}</div>
+                      )}
                     </li>
                   ))}
                 </ul>
+                {/* 反馈按钮 */}
+                <div className="flex items-center gap-1 mt-1.5 justify-end">
+                  {feedback[i] === "up" ? (
+                    <span className="text-[10px] text-[color:var(--color-success)] flex items-center gap-0.5"><ThumbsUp size={10}/> 有用</span>
+                  ) : feedback[i] === "down" ? (
+                    <span className="text-[10px] text-muted-foreground">已反馈</span>
+                  ) : (
+                    <>
+                      <button onClick={() => { setFeedback({ ...feedback, [i]: "up" }); submitFeedback({ question: chat[i - 1]?.text ?? "", answer: m.text, sources: m.sources ?? [], rating: "up" }); }} className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-[color:var(--color-success)]"><ThumbsUp size={11}/></button>
+                      <button onClick={() => { setFeedback({ ...feedback, [i]: "down" }); submitFeedback({ question: chat[i - 1]?.text ?? "", answer: m.text, sources: m.sources ?? [], rating: "down" }); }} className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-destructive"><ThumbsDown size={11}/></button>
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </div>
