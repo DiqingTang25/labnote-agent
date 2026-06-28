@@ -30,12 +30,41 @@ export const chatCompletion = createServerFn({ method: "POST" })
       })),
       maxTokens: z.number().optional().default(2048),
       temperature: z.number().optional().default(0.3),
+      sanitized: z.boolean().optional().default(false),
     }),
   )
   .handler(async ({ data }) => {
     const config = getServerConfig();
     const apiKey = config.sfApiKey;
     if (!apiKey) throw new Error("SF_API_KEY not configured");
+
+    // ── 服务端脱敏二次校验 ──
+    if (!data.sanitized) {
+      try {
+        const { scanSensitivity } = await import("../sanitizer/detector");
+        const text = extractTextForScan(data.messages as Array<{ role: string; content: unknown }>);
+        const scan = scanSensitivity(text);
+
+        if (scan.hasSensitive && scan.highRiskCount > 0) {
+          console.warn(
+            `[Sanitizer:Server] ⚠️ HIGH-RISK data detected in outgoing API call:\n` +
+            `  Model: ${data.model}\n` +
+            `  High-risk items: ${scan.highRiskCount}\n` +
+            `  Summary: ${scan.summary}\n` +
+            `  Content length: ${text.length} chars\n` +
+            `  First 3 matches: ${scan.matches.slice(0, 3).map(m => `${m.label}("…${m.matched.slice(0, 40)}…")`).join("; ")}`
+          );
+        } else if (scan.hasSensitive) {
+          console.warn(
+            `[Sanitizer:Server] Medium/low-risk data in outgoing API call (${scan.matches.length} items). ` +
+            `Model: ${data.model}, Content: ${text.length} chars`
+          );
+        }
+      } catch (err) {
+        // 脱敏扫描失败不阻塞业务
+        console.warn("[Sanitizer:Server] Scan failed:", String(err).slice(0, 100));
+      }
+    }
 
     const res = await apiFetch(`${SF_BASE}/chat/completions`, {
       method: "POST",
@@ -256,3 +285,24 @@ export const rewriteQuery = createServerFn({ method: "POST" })
       return data.question; // 失败静默降级
     }
   });
+
+// ═══════════════════════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════════════════════
+
+/** 从 messages 中提取纯文本用于脱敏扫描 */
+function extractTextForScan(messages: Array<{ role: string; content: unknown }>): string {
+  const parts: string[] = [];
+  for (const msg of messages) {
+    if (typeof msg.content === "string") {
+      parts.push(msg.content);
+    } else if (Array.isArray(msg.content)) {
+      for (const block of msg.content as Array<{ type?: string; text?: string; image_url?: unknown }>) {
+        if (block.type === "text" && block.text) {
+          parts.push(block.text);
+        }
+      }
+    }
+  }
+  return parts.join("\n");
+}

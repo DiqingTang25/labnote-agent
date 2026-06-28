@@ -15,7 +15,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   ListChecks, Sparkles, FileText, AlertTriangle,
   CheckCircle2, Lightbulb, RotateCcw, ChevronDown, ChevronUp,
-  Download, Loader2, Target, Shield, Zap,
+  Download, Loader2, Target, Shield, Zap, Activity,
   BookOpen, Beaker, Gauge, Copy,
   Info, ExternalLink, HelpCircle, X,
 } from "lucide-react";
@@ -34,11 +34,14 @@ import {
 } from "../lib/reproduction-audit";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
-import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER, getPresetAudit } from "../lib/paper-test-data";
+import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER, WESTERN_BLOT_PAPER, MTT_ASSAY_PAPER, PATCH_CLAMP_PAPER, getPresetAudit } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
 import { useAuth } from "../lib/auth-context";
 import { decomposeOnServer } from "../lib/api/decompose.functions";
 import { saveAudit, fetchAudits, deleteAudit } from "../lib/supabase";
+import { scanSensitivity, applySanitization } from "../lib/sanitizer";
+import type { ScanResult, SensitivityMatch } from "../lib/sanitizer";
+import { UsageDashboard } from "../components/usage-dashboard";
 import {
   Dialog,
   DialogContent,
@@ -66,7 +69,7 @@ function ReproductionAuditPage() {
   const userId = user?.id || "dev-user";
 
   // 输入状态
-  const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "preset-plant-ep" | "preset-spatial" | "custom">("preset-srtio3");
+  const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "preset-plant-ep" | "preset-spatial" | "preset-western" | "preset-mtt" | "preset-patch" | "custom">("preset-srtio3");
   const [customPaperTitle, setCustomPaperTitle] = useState("");
   const [customPaperDoi, setCustomPaperDoi] = useState("");
   const [customMethods, setCustomMethods] = useState("");
@@ -84,6 +87,13 @@ function ReproductionAuditPage() {
   const [auditHistory, setAuditHistory] = useState<ReproductionAudit[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // 脱敏状态
+  const [pendingSanitize, setPendingSanitize] = useState<{
+    scan: ScanResult;
+    paperText: string;
+    onResolve: (action: "sanitize" | "send_raw" | "cancel", sanitizedText?: string) => void;
+  } | null>(null);
 
   // UI 状态
   const [activeTab, setActiveTab] = useState<"params" | "gaps" | "protocol">("params");
@@ -146,6 +156,15 @@ function ReproductionAuditPage() {
     if (paperSource === "preset-spatial") {
       return { title: SPATIAL_TRANSCRIPTOMICS_PAPER.title, doi: SPATIAL_TRANSCRIPTOMICS_PAPER.doi, methods: SPATIAL_TRANSCRIPTOMICS_PAPER.methods, discipline: SPATIAL_TRANSCRIPTOMICS_PAPER.discipline };
     }
+    if (paperSource === "preset-western") {
+      return { title: WESTERN_BLOT_PAPER.title, doi: WESTERN_BLOT_PAPER.doi, methods: WESTERN_BLOT_PAPER.methods, discipline: WESTERN_BLOT_PAPER.discipline };
+    }
+    if (paperSource === "preset-mtt") {
+      return { title: MTT_ASSAY_PAPER.title, doi: MTT_ASSAY_PAPER.doi, methods: MTT_ASSAY_PAPER.methods, discipline: MTT_ASSAY_PAPER.discipline };
+    }
+    if (paperSource === "preset-patch") {
+      return { title: PATCH_CLAMP_PAPER.title, doi: PATCH_CLAMP_PAPER.doi, methods: PATCH_CLAMP_PAPER.methods, discipline: PATCH_CLAMP_PAPER.discipline };
+    }
     return {
       title: customPaperTitle || "未命名论文",
       doi: customPaperDoi || "手动输入",
@@ -160,6 +179,35 @@ function ReproductionAuditPage() {
     if (!paper.methods.trim()) {
       toast.error("请先输入论文的实验方法段落");
       return;
+    }
+
+    // ── 数据脱敏检测 ──
+    const scan = scanSensitivity(paper.methods);
+    if (scan.hasSensitive) {
+      // 等待用户确认
+      const decision = await new Promise<"sanitize" | "send_raw" | "cancel">((resolve) => {
+        setPendingSanitize({
+          scan,
+          paperText: paper.methods,
+          onResolve: (action) => {
+            setPendingSanitize(null);
+            resolve(action);
+          },
+        });
+      });
+
+      if (decision === "cancel") {
+        toast.error("已取消发送");
+        return;
+      }
+
+      if (decision === "sanitize") {
+        // 应用脱敏
+        const result = applySanitization(paper.methods, scan.matches);
+        paper.methods = result.sanitized;
+        toast.success(`已脱敏 ${result.appliedCount} 项敏感信息`);
+      }
+      // send_raw → 使用原始文本
     }
 
     setDecomposing(true);
@@ -385,7 +433,7 @@ function ReproductionAuditPage() {
 
       {/* Preset / Custom toggle */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {(["preset-srtio3", "preset-co3o4", "preset-plant-ep", "preset-spatial", "custom"] as const).map((opt) => (
+        {(["preset-srtio3", "preset-co3o4", "preset-plant-ep", "preset-spatial", "preset-western", "preset-mtt", "preset-patch", "custom"] as const).map((opt) => (
           <button
             key={opt}
             onClick={() => setPaperSource(opt)}
@@ -395,10 +443,13 @@ function ReproductionAuditPage() {
                 : "border border-border hover:border-primary/40"
             }`}
           >
-            {opt === "preset-srtio3" ? "📄 SrTiO₃ (Sci Rep)" :
-             opt === "preset-co3o4" ? "📄 Co₃O₄-rGO (Catalysts)" :
-             opt === "preset-plant-ep" ? "🌿 植物电生理 (Sci Data)" :
-             opt === "preset-spatial" ? "🧬 空间转录组 (bioRxiv)" :
+            {opt === "preset-srtio3" ? "📄 SrTiO₃" :
+             opt === "preset-co3o4" ? "📄 Co₃O₄-rGO" :
+             opt === "preset-plant-ep" ? "🌿 植物电生理" :
+             opt === "preset-spatial" ? "🧬 空间转录组" :
+             opt === "preset-western" ? "🧪 Western Blot" :
+             opt === "preset-mtt" ? "💊 MTT 细胞毒" :
+             opt === "preset-patch" ? "⚡ 膜片钳" :
              "✏️ 自定义输入"}
           </button>
         ))}
@@ -446,12 +497,18 @@ function ReproductionAuditPage() {
             {paperSource === "preset-srtio3" ? SRTIO3_PAPER.title :
              paperSource === "preset-co3o4" ? REAL_PAPERS[1].title :
              paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.title :
-             SPATIAL_TRANSCRIPTOMICS_PAPER.title}
+             paperSource === "preset-spatial" ? SPATIAL_TRANSCRIPTOMICS_PAPER.title :
+             paperSource === "preset-western" ? WESTERN_BLOT_PAPER.title :
+             paperSource === "preset-mtt" ? MTT_ASSAY_PAPER.title :
+             PATCH_CLAMP_PAPER.title}
           </div>
           <p>DOI: {paperSource === "preset-srtio3" ? SRTIO3_PAPER.doi :
                    paperSource === "preset-co3o4" ? REAL_PAPERS[1].doi :
                    paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.doi :
-                   SPATIAL_TRANSCRIPTOMICS_PAPER.doi}</p>
+                   paperSource === "preset-spatial" ? SPATIAL_TRANSCRIPTOMICS_PAPER.doi :
+                   paperSource === "preset-western" ? WESTERN_BLOT_PAPER.doi :
+                   paperSource === "preset-mtt" ? MTT_ASSAY_PAPER.doi :
+                   PATCH_CLAMP_PAPER.doi}</p>
           <p className="mt-1">Methods 段落已预加载（真实论文内容），点击上方按钮开始 AI 拆解。</p>
         </div>
       )}
@@ -1063,6 +1120,13 @@ function ReproductionAuditPage() {
   if (!audit && !decomposing) {
     return (
       <RequireAuth>
+      {pendingSanitize && (
+        <SanitizeConfirmDialog
+          scan={pendingSanitize.scan}
+          paperText={pendingSanitize.paperText}
+          onResolve={pendingSanitize.onResolve}
+        />
+      )}
       <div className="mx-auto max-w-4xl px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
@@ -1139,6 +1203,16 @@ function ReproductionAuditPage() {
 
         {/* Paper Input */}
         {renderPaperInput()}
+
+        {/* API 用量仪表盘 */}
+        <details className="mt-6">
+          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1.5">
+            <Activity size={13} /> API 用量
+          </summary>
+          <div className="mt-3 card-soft p-4">
+            <UsageDashboard />
+          </div>
+        </details>
       </div>
       </RequireAuth>
     );
@@ -1149,6 +1223,13 @@ function ReproductionAuditPage() {
   // ═══════════════════════════════
   return (
     <RequireAuth>
+    {pendingSanitize && (
+      <SanitizeConfirmDialog
+        scan={pendingSanitize.scan}
+        paperText={pendingSanitize.paperText}
+        onResolve={pendingSanitize.onResolve}
+      />
+    )}
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
@@ -1276,10 +1357,138 @@ function ReproductionAuditPage() {
             {activeTab === "gaps" && renderGaps()}
             {activeTab === "protocol" && renderProtocol()}
           </div>
+
+          {/* API 用量仪表盘 */}
+          <details className="mt-6">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1.5">
+              <Activity size={13} /> API 用量
+            </summary>
+            <div className="mt-3 card-soft p-4">
+              <UsageDashboard />
+            </div>
+          </details>
         </>
       )}
     </div>
     </RequireAuth>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 数据脱敏确认弹窗
+// ═══════════════════════════════════════════════════════
+
+function SanitizeConfirmDialog({
+  scan,
+  paperText,
+  onResolve,
+}: {
+  scan: ScanResult;
+  paperText: string;
+  onResolve: (action: "sanitize" | "send_raw" | "cancel", sanitizedText?: string) => void;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const impactConfig = { high: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: "🔴" }, medium: { color: "text-amber-600", bg: "bg-amber-50",border: "border-amber-200", icon: "🟡" }, low: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", icon: "🟢" } };
+
+  return (
+    <Dialog open={true} onOpenChange={() => onResolve("cancel")}>
+      <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Shield size={18} className="text-red-500" />
+            数据脱敏提醒
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          {/* 摘要 */}
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+            <p className="font-semibold text-red-700">{scan.summary}</p>
+          </div>
+
+          {/* 风险统计 */}
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="rounded-lg bg-red-50 p-2 text-center">
+              <p className="text-lg">🔴</p>
+              <p className="font-bold text-red-700">{scan.highRiskCount}</p>
+              <p className="text-muted-foreground">高风险</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 p-2 text-center">
+              <p className="text-lg">🟡</p>
+              <p className="font-bold text-amber-700">{scan.mediumRiskCount}</p>
+              <p className="text-muted-foreground">中风险</p>
+            </div>
+            <div className="rounded-lg bg-blue-50 p-2 text-center">
+              <p className="text-lg">🟢</p>
+              <p className="font-bold text-blue-700">{scan.matches.length - scan.highRiskCount - scan.mediumRiskCount}</p>
+              <p className="text-muted-foreground">低风险</p>
+            </div>
+          </div>
+
+          {/* 匹配详情（可展开） */}
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition"
+          >
+            {showDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            匹配详情 ({scan.matches.length} 项)
+          </button>
+
+          {showDetails && (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {scan.matches.map((m, i) => {
+                const ic = impactConfig[m.risk];
+                return (
+                  <div key={i} className={`rounded-md ${ic.bg} border ${ic.border} p-2 text-xs`}>
+                    <div className="flex items-center gap-1.5">
+                      <span>{ic.icon}</span>
+                      <span className={`font-medium ${ic.color}`}>{m.label}</span>
+                    </div>
+                    <p className="mt-0.5 font-mono text-muted-foreground truncate">
+                      …{m.matched.slice(0, 80)}{m.matched.length > 80 ? "…" : ""}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5">
+                      → 替换为: <span className="font-medium">{m.replacement}</span>
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 提示 */}
+          <div className="rounded-lg bg-amber-50/50 border border-amber-200 p-3 text-xs text-amber-700 leading-relaxed">
+            <p className="font-semibold mb-1">⚠️ 你的数据将发送到第三方 AI 服务</p>
+            <p>检测到论文内容包含敏感信息。选择「脱敏后发送」将自动替换敏感字段后再发送；选择「发送原始数据」表示你知悉风险并同意发送；选择「取消」返回编辑。</p>
+          </div>
+
+          {/* 操作按钮 */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                const result = applySanitization(paperText, scan.matches);
+                onResolve("sanitize", result.sanitized);
+              }}
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground hover:bg-primary/90 transition"
+            >
+              <CheckCircle2 size={15} /> 脱敏后发送（推荐）
+            </button>
+            <button
+              onClick={() => onResolve("send_raw")}
+              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-700 hover:bg-amber-100 transition"
+            >
+              发送原始数据
+            </button>
+            <button
+              onClick={() => onResolve("cancel")}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm text-muted-foreground hover:bg-secondary transition"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
