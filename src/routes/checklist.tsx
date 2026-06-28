@@ -33,7 +33,6 @@ import {
   calculateReproducibilityScore,
 } from "../lib/reproduction-audit";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
-import { startBackgroundDecomposition, getTask, getLatestTask, clearDoneTasks } from "../lib/background-task";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
 import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
@@ -81,37 +80,17 @@ function ReproductionAuditPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   // ═══════════════════════════════════════════════════════
-  // 后台任务轮询 — 组件卸载后任务继续跑，重新挂载后恢复
+  // 后台任务轮询 — 组件卸载后任务继续跑
   // ═══════════════════════════════════════════════════════
-
-  // 挂载时检查是否有进行中/已完成的后台任务
-  useEffect(() => {
-    const latest = getLatestTask();
-    if (!latest) return;
-
-    if (latest.status === "running") {
-      // 有进行中的任务 → 恢复进度显示
-      setDecomposing(true);
-      setActiveTaskId(latest.id);
-      setProgress(latest.progress);
-    } else if (latest.status === "done" && latest.result) {
-      // 有刚完成的任务 → 直接加载结果
-      setAudit(latest.result);
-      setSavedAuditId(latest.savedAuditId);
-      loadHistory();
-      toast.success(`后台任务完成：${latest.result.parameters.length} 个参数已保存到云端`);
-      clearDoneTasks();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 轮询激活的后台任务
   useEffect(() => {
     if (!activeTaskId) return;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
+      const { getTask } = await import("../lib/background-task");
       const task = getTask(activeTaskId);
       if (!task) {
-        // 任务已被清理
         setDecomposing(false);
         setActiveTaskId(null);
         return;
@@ -120,7 +99,6 @@ function ReproductionAuditPage() {
       setProgress(task.progress);
 
       if (task.status === "done" && task.result) {
-        // 任务完成
         clearInterval(interval);
         setAudit(task.result);
         setSavedAuditId(task.savedAuditId);
@@ -216,7 +194,7 @@ function ReproductionAuditPage() {
   }, [loadHistory]);
 
   // ===== AI 拆解（后台任务，切换页面不中断）=====
-  const runDecomposition = useCallback(() => {
+  const runDecomposition = useCallback(async () => {
     const paper = getCurrentPaperData();
     if (!paper.methods.trim()) {
       toast.error("请先输入论文的实验方法段落");
@@ -226,7 +204,8 @@ function ReproductionAuditPage() {
     setDecomposing(true);
     setProgress({ step: "connecting" });
 
-    // 启动后台任务 — 立即返回 taskId，不阻塞
+    // 动态 import 后台任务模块
+    const { startBackgroundDecomposition } = await import("../lib/background-task");
     const taskId = startBackgroundDecomposition(
       paper.title,
       paper.doi,
@@ -971,7 +950,7 @@ function ReproductionAuditPage() {
           </p>
         </div>
         <button
-          onClick={() => { setAudit(null); setActiveTaskId(null); setDecomposing(false); clearDoneTasks(); }}
+          onClick={async () => { setAudit(null); setActiveTaskId(null); setDecomposing(false); const { clearDoneTasks } = await import("../lib/background-task"); clearDoneTasks(); }}
           className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
         >
           <RotateCcw size={14}/> 重新开始

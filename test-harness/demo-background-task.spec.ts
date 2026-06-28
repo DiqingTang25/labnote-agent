@@ -4,7 +4,7 @@
 import { test, expect } from "@playwright/test";
 import path from "path";
 
-const BASE = "https://labnote-vault-main.vercel.app";
+const BASE = "http://localhost:4180";
 const SCREENSHOT_DIR = path.resolve("test-harness/demo-screenshots");
 const EMAIL = "diqing.tang25@student.xjtlu.edu.cn";
 const PASSWORD = "123456";
