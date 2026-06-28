@@ -10,6 +10,7 @@
  */
 import { createBrowserClient } from "@supabase/ssr";
 import type { Experiment } from "./labStore";
+import type { ReproductionAudit, ReproductionParameter, ReproductionGap } from "./reproduction-audit";
 import { toRow, fromRow, buildDbPatch } from "./experiment-utils";
 import type { ExperimentRow } from "./experiment-utils";
 
@@ -85,6 +86,20 @@ export async function insertExperiment(
     const { data: sessionData } = await supabase.auth.getSession();
     uid = sessionData.session?.user?.id;
   }
+  if (!uid) return false;
+
+  // 去重：检查同名实验是否已存在
+  const { data: existing } = await supabase
+    .from("experiments")
+    .select("id")
+    .eq("name", exp.name)
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (existing) {
+    console.log(`[Supabase] 跳过重复实验: "${exp.name}" (已存在: ${(existing as any).id})`);
+    return true; // 不算失败，只是跳过
+  }
+
   const row = toRow(exp, uid);
   const { error } = await supabase.from("experiments").insert(row);
   if (error) {
@@ -289,6 +304,46 @@ export const RELATION_LABELS: Record<ExperimentRelation["relation_type"], string
   custom: "自定义",
 };
 
+/** 自动为实验生成关系（共享设备/样品/操作人 + AI 语义） */
+export async function autoGenerateRelations(exp: Experiment): Promise<number> {
+  if (!isSupabaseReady()) return 0;
+
+  // 获取同用户所有其他实验
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return 0;
+
+  const { data: others } = await supabase
+    .from("experiments")
+    .select("id, name, device_name, sample_id, operator, discipline")
+    .eq("user_id", userId)
+    .neq("id", exp.id);
+
+  if (!others || others.length === 0) return 0;
+
+  let count = 0;
+  const otherList = others as Array<{ id: string; name: string; device_name: string | null; sample_id: string | null; operator: string | null; discipline: string | null }>;
+
+  for (const other of otherList) {
+    // 1. 共享设备
+    if (exp.device.name && other.device_name && exp.device.name === other.device_name) {
+      const ok = await addExperimentRelation(exp.id, other.id, "device_shared", { device: exp.device.name });
+      if (ok) count++;
+    }
+    // 2. 共享样品
+    if (exp.sample.id && other.sample_id && exp.sample.id === other.sample_id) {
+      const ok = await addExperimentRelation(exp.id, other.id, "sample_shared", { sample: exp.sample.id });
+      if (ok) count++;
+    }
+    // 3. 相同操作人
+    if (exp.operator && other.operator && exp.operator === other.operator) {
+      const ok = await addExperimentRelation(exp.id, other.id, "operator_shared", { operator: exp.operator });
+      if (ok) count++;
+    }
+  }
+  return count;
+}
+
 /** 获取某个实验的所有关系 */
 export async function fetchExperimentRelations(expId: string): Promise<ExperimentRelation[]> {
   if (!isSupabaseReady() || !expId) return [];
@@ -422,4 +477,158 @@ export async function ragAnswerReal(
   const userId = sessionData.session?.user?.id;
   const { ragAnswer } = await import("./api/rag.functions");
   return ragAnswer({ data: { question, userId } });
+}
+
+// ═══════════════════════════════════════════════════════
+// 复现审计 CRUD
+// ═══════════════════════════════════════════════════════
+
+/** DB 行格式 */
+type AuditRow = {
+  id: string;
+  user_id: string;
+  paper_title: string;
+  paper_source: string;
+  discipline: string;
+  parameters: ReproductionParameter[];
+  gaps: ReproductionGap[];
+  reproducibility_score: number;
+  score_breakdown: string;
+  ai_assessment: string;
+  critical_risks: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+function auditFromRow(row: AuditRow): ReproductionAudit {
+  return {
+    id: row.id,
+    paperTitle: row.paper_title,
+    paperSource: row.paper_source,
+    auditedAt: row.created_at,
+    parameters: row.parameters ?? [],
+    gaps: row.gaps ?? [],
+    reproducibilityScore: row.reproducibility_score ?? 0,
+    scoreBreakdown: row.score_breakdown ?? "",
+    aiAssessment: row.ai_assessment ?? "",
+    criticalRisks: row.critical_risks ?? [],
+  };
+}
+
+/** 保存审计（insert or update）返回审计 id */
+export async function saveAudit(
+  audit: ReproductionAudit,
+  discipline: string = "材料科学",
+): Promise<string | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) {
+    console.warn("[Audit] saveAudit skipped: no user session");
+    return null;
+  }
+
+  const row = {
+    id: audit.id,
+    user_id: userId,
+    paper_title: audit.paperTitle,
+    paper_source: audit.paperSource,
+    discipline,
+    parameters: audit.parameters,
+    gaps: audit.gaps,
+    reproducibility_score: audit.reproducibilityScore,
+    score_breakdown: audit.scoreBreakdown,
+    ai_assessment: audit.aiAssessment,
+    critical_risks: audit.criticalRisks,
+  };
+
+  // Upsert: if exists → update, else → insert
+  const { data: existing } = await supabase
+    .from("reproduction_audits")
+    .select("id")
+    .eq("id", audit.id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("reproduction_audits")
+      .update(row)
+      .eq("id", audit.id)
+      .eq("user_id", userId);
+    if (error) {
+      console.error("[Audit] update error:", error);
+      return null;
+    }
+    return audit.id;
+  }
+
+  const { error } = await supabase
+    .from("reproduction_audits")
+    .insert(row);
+  if (error) {
+    console.error("[Audit] insert error:", error);
+    return null;
+  }
+  return audit.id;
+}
+
+/** 获取当前用户的所有审计历史（按时间倒序） */
+export async function fetchAudits(): Promise<ReproductionAudit[]> {
+  if (!isSupabaseReady()) return [];
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("reproduction_audits")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[Audit] fetchAudits error:", error);
+    return [];
+  }
+  return ((data as AuditRow[]) ?? []).map(auditFromRow);
+}
+
+/** 获取单个审计 */
+export async function fetchAudit(id: string): Promise<ReproductionAudit | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from("reproduction_audits")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error("[Audit] fetchAudit error:", error);
+    return null;
+  }
+  return auditFromRow(data as AuditRow);
+}
+
+/** 删除审计 */
+export async function deleteAudit(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
+
+  const { error } = await supabase
+    .from("reproduction_audits")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[Audit] deleteAudit error:", error);
+    return false;
+  }
+  return true;
 }

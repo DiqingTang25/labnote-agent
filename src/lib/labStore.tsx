@@ -18,6 +18,7 @@ import {
   fetchProfile,
   upsertProfile,
   embedExperiment,
+  autoGenerateRelations,
 } from "./supabase";
 
 export type Param = { name: string; value: string; unit: string };
@@ -132,9 +133,14 @@ export function LabProvider({ children }: { children: ReactNode }) {
       scheduleSave(next);
       return next;
     });
-    // 异步写 Supabase + 生成 embedding
+    // 异步写 Supabase + 生成 embedding + 自动关系
     if (isSupabaseReady()) {
-      insertExperiment(e).then(() => embedExperiment(e.id));
+      insertExperiment(e).then((ok) => {
+        if (ok) {
+          embedExperiment(e.id);
+          autoGenerateRelations(e);
+        }
+      });
     }
   }, []);
   const updateExperiment = useCallback(
