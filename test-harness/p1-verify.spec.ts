@@ -135,33 +135,33 @@ test("P1: AI 拆解流程 + 多步骤进度条", async ({ page }) => {
 // Test 3: 技术文档面板内容
 // ═══════════════════════════════════════════════════════
 
-test("P1: 技术文档面板内容完整性", async ({ page }) => {
+test("P1: 帮助弹窗内容完整性", async ({ page }) => {
   test.setTimeout(30000);
 
   await page.goto(`${BASE}/checklist`, { waitUntil: "networkidle" });
 
-  // 展开技术文档
-  await page.getByRole("button", { name: /技术文档/ }).click();
-  await page.waitForTimeout(300);
+  // 点击帮助按钮打开弹窗
+  await page.getByRole("button", { name: /帮助/ }).click();
+  await page.waitForTimeout(500);
 
-  // 验证四个章节
-  const sections = ["管道架构", "确定性四级分类", "Materials Project 集成", "复现可行性评分公式"];
+  // 验证帮助弹窗的章节
+  const sections = ["AI 管道架构", "确定性四级分类", "Materials Project 集成", "复现可行性评分公式"];
   for (const section of sections) {
     await expect(page.getByText(section)).toBeVisible({ timeout: 3000 });
   }
-  console.log("[Test] ✅ All 4 documentation sections visible");
+  console.log("[Test] ✅ All 4 help sections visible in modal");
 
-  // 验证确定性分类表（定位到 table 元素避免与管道图中的文本冲突）
-  const table = page.locator("table");
+  // 验证确定性分类表
+  const table = page.locator("[role=dialog] table");
   const certaintyLevels = ["explicit", "implied", "inferred", "unknown"];
   for (const level of certaintyLevels) {
     await expect(table.getByText(level)).toBeVisible();
   }
-  console.log("[Test] ✅ Certainty classification table");
+  console.log("[Test] ✅ Certainty classification table in modal");
 
   // 验证评分公式
   await expect(page.getByText(/score = avgConfidence/)).toBeVisible();
-  console.log("[Test] ✅ Scoring formula");
+  console.log("[Test] ✅ Scoring formula in modal");
 
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/p1-08-tech-docs-full.png`, fullPage: true });
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/p1-08-help-modal.png`, fullPage: true });
 });
