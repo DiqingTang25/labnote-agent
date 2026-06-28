@@ -471,12 +471,29 @@ export type RagSource = {
  */
 export async function ragAnswerReal(
   question: string,
+  selectedIds?: string[],
 ): Promise<{ answer: string; sources: RagSource[] }> {
   // 获取当前用户 — RAG 只搜索该用户的实验
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user?.id;
   const { ragAnswer } = await import("./api/rag.functions");
-  return ragAnswer({ data: { question, userId } });
+  return ragAnswer({ data: { question, userId, selectedIds } });
+}
+
+/**
+ * 流式 RAG：question → embedding → pgvector → DeepSeek-V3 (SSE)
+ * 返回原始 Response 对象，由调用方读取 ReadableStream
+ * 失败时调用方应 fallback 到 ragAnswerReal
+ */
+export async function ragAnswerRealStream(
+  question: string,
+  selectedIds?: string[],
+): Promise<Response> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  const { ragAnswerStream } = await import("./api/rag.functions");
+  // TanStack createServerFn 类型推断不知道返回值是 Response（运行时通过 x-tss-raw header 透传）
+  return ragAnswerStream({ data: { question, userId, selectedIds } }) as unknown as Response;
 }
 
 // ═══════════════════════════════════════════════════════

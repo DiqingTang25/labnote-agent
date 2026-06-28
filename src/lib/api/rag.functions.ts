@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getServiceSupabase } from "../supabase-server.server";
 import { generateEmbedding, chatCompletion } from "./ai.functions";
+import { getServerConfig } from "../config.server";
 import { fromRow } from "../experiment-utils";
 
 // ═══════════════════════════════════════════════════════
@@ -20,6 +21,7 @@ export const ragSearch = createServerFn({ method: "POST" })
       question: z.string().min(1),
       limit: z.number().optional().default(3),
       userId: z.string().optional().nullable(),
+      selectedIds: z.array(z.string()).optional(),
     }),
   )
   .handler(async ({ data }) => {
@@ -29,12 +31,13 @@ export const ragSearch = createServerFn({ method: "POST" })
     const qVec = await generateEmbedding({ data: { text: data.question } });
     if (!Array.isArray(qVec) || qVec.length === 0) return [];
 
-    // 2. pgvector RPC 相似度搜索（user_id 隔离）
+    // 2. pgvector RPC 相似度搜索（user_id 隔离 + 可选卡片过滤）
     const { data: similar, error } = await supabase.rpc("match_experiments", {
       query_embedding: qVec,
       match_threshold: 0.6,
       match_count: data.limit,
       filter_user_id: data.userId ?? null,
+      filter_ids: data.selectedIds ?? null,
     });
 
     if (error || !similar || !Array.isArray(similar)) return [];
@@ -76,7 +79,7 @@ export const ragSearch = createServerFn({ method: "POST" })
       return {
         id: r.id,
         name: r.name,
-        text: text.slice(0, 1000),
+        text: text.slice(0, 8000),
         similarity: simMap.get(r.id) ?? 0,
       };
     });
@@ -103,12 +106,13 @@ export const ragAnswer = createServerFn({ method: "POST" })
     z.object({
       question: z.string().min(1),
       userId: z.string().optional().nullable(),
+      selectedIds: z.array(z.string()).optional(),
     }),
   )
   .handler(async ({ data }) => {
-    // 1. 向量检索 Top-3 相关实验（按用户隔离）
+    // 1. 向量检索 Top-3 相关实验（按用户隔离 + 可选卡片边界）
     const contexts = await ragSearch({
-      data: { question: data.question, limit: 3, userId: data.userId },
+      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds },
     });
 
     if (!Array.isArray(contexts) || contexts.length === 0) {
@@ -160,4 +164,210 @@ export const ragAnswer = createServerFn({ method: "POST" })
     }));
 
     return { answer, sources };
+  });
+
+// ═══════════════════════════════════════════════════════
+// RAG 流式问答（SSE）
+// ═══════════════════════════════════════════════════════
+
+const SF_BASE = "https://api.siliconflow.cn/v1";
+
+export const ragAnswerStream = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      question: z.string().min(1),
+      userId: z.string().optional().nullable(),
+      selectedIds: z.array(z.string()).optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    // 1. RAG 检索（复用 ragSearch）
+    const contexts = await ragSearch({
+      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds },
+    });
+
+    let sources: RagSource[] = [];
+    let contextBlock = "";
+
+    if (Array.isArray(contexts) && contexts.length > 0) {
+      sources = contexts.map((c) => ({
+        doc: c.name,
+        page: "实验卡片",
+        confidence: `${(c.similarity * 100).toFixed(0)}%`,
+        link: `/workbench?id=${c.id}`,
+      }));
+
+      contextBlock = contexts
+        .map(
+          (c, i) =>
+            `[实验${i + 1}] ${c.name}\n内容：${c.text}\n相似度：${(c.similarity * 100).toFixed(0)}%`,
+        )
+        .join("\n\n");
+    }
+
+    // 2. 构建 prompt
+    const prompt = contextBlock
+      ? `基于以下实验记录回答用户问题。\n\n实验记录：\n${contextBlock}\n\n用户问题：${data.question}\n\n请用2-4句话回答，并引用相关实验名称。`
+      : data.question;
+
+    const config = getServerConfig();
+    const apiKey = config.sfApiKey;
+    if (!apiKey) throw new Error("SF_API_KEY not configured");
+
+    const encoder = new TextEncoder();
+
+    // 3. 无上下文时直接返回非流式响应
+    if (!contextBlock) {
+      const body = JSON.stringify({
+        type: "done",
+        answer: "知识库中暂无与您问题相关的实验记录。建议：① 先上传实验数据 ② 使用更具体的关键词 ③ 直接在实验卡片中搜索。",
+        sources: [],
+      });
+      return new Response(
+        encoder.encode(`data: ${JSON.stringify({ type: "sources", sources: [] })}\n\ndata: ${JSON.stringify({ type: "token", content: "知识库中暂无与您问题相关的实验记录。" })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`),
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "x-tss-raw": "true",
+          },
+        },
+      );
+    }
+
+    // 4. 调用 SiliconFlow 流式 API
+    let sfRes: Response;
+    try {
+      sfRes = await fetch(`${SF_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-ai/DeepSeek-V3",
+          messages: [
+            { role: "system", content: RAG_SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 512,
+          temperature: 0.3,
+          stream: true,
+        }),
+      });
+    } catch (err) {
+      // Network error: return error SSE
+      const errMsg = err instanceof Error ? err.message : "网络请求失败";
+      return new Response(
+        encoder.encode(
+          `data: ${JSON.stringify({ type: "error", message: errMsg })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`
+        ),
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "x-tss-raw": "true",
+          },
+        },
+      );
+    }
+
+    if (!sfRes.ok) {
+      const errText = await sfRes.text().catch(() => "");
+      return new Response(
+        encoder.encode(
+          `data: ${JSON.stringify({ type: "error", message: `API ${sfRes.status}: ${errText.slice(0, 200)}` })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`
+        ),
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "x-tss-raw": "true",
+          },
+        },
+      );
+    }
+
+    // 5. 构建 SSE 流：先发 sources，再 pipe SiliconFlow token 流
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    // 先写 sources 事件
+    writer.write(
+      encoder.encode(
+        `data: ${JSON.stringify({ type: "sources", sources })}\n\n`
+      )
+    );
+
+    // 异步 pipe SiliconFlow SSE stream
+    const sfReader = sfRes.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    (async () => {
+      try {
+        while (true) {
+          const { done, value } = await sfReader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr || jsonStr === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const content = parsed?.choices?.[0]?.delta?.content;
+                if (content) {
+                  writer.write(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ type: "token", content })}\n\n`
+                    )
+                  );
+                }
+              } catch {
+                // Skip malformed SSE lines
+              }
+            }
+          }
+        }
+        // 处理 buffer 中剩余的行
+        if (buffer.startsWith("data: ") && buffer.slice(6).trim() && buffer.slice(6).trim() !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(buffer.slice(6).trim());
+            const content = parsed?.choices?.[0]?.delta?.content;
+            if (content) {
+              writer.write(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "token", content })}\n\n`
+                )
+              );
+            }
+          } catch { /* skip */ }
+        }
+        writer.write(
+          encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
+        );
+      } catch (err) {
+        writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "error", message: "流中断" })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`
+          )
+        );
+      } finally {
+        try { await writer.close(); } catch { /* already closed */ }
+      }
+    })();
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "x-tss-raw": "true",
+      },
+    });
   });

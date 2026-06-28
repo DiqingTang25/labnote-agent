@@ -41,7 +41,8 @@ CREATE TRIGGER trg_audit_updated_at
 -- 4. Row Level Security
 ALTER TABLE reproduction_audits ENABLE ROW LEVEL SECURITY;
 
--- 用户只能访问自己的审计
+-- 先删除可能存在的旧策略，再创建新的
+DROP POLICY IF EXISTS audits_user_isolation ON reproduction_audits;
 CREATE POLICY audits_user_isolation ON reproduction_audits
   FOR ALL
   USING (user_id = auth.uid())

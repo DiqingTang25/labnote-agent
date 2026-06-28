@@ -6,8 +6,8 @@ import path from "path";
 
 const BASE = "https://labnote-vault-main.vercel.app";
 const SCREENSHOT_DIR = path.resolve("test-harness/demo-screenshots");
-const EMAIL = "Diqing.Tang25@student.xjtlu.edu.cn";
-const PASSWORD = "Cici070628";
+const EMAIL = "diqing.tang25@student.xjtlu.edu.cn";
+const PASSWORD = "123456";
 
 test("完整登录 + 复现审计持久化演示", async ({ page }) => {
   test.setTimeout(90000);

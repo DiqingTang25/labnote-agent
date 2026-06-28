@@ -18,7 +18,7 @@ import {
   type Experiment, type Param, type AttachedFile,
 } from "../lib/labStore";
 import {
-  ragAnswerReal, fetchExperimentRelations, addExperimentRelation,
+  ragAnswerReal, ragAnswerRealStream, fetchExperimentRelations, addExperimentRelation,
   deleteExperimentRelation, suggestRelations,
   RELATION_LABELS, type ExperimentRelation,
 } from "../lib/supabase";
@@ -1044,15 +1044,74 @@ function RagPanel() {
     setChat((c) => [...c, { role: "user", text: t }]);
     setQ("");
     setLoading(true);
+
+    // 插入占位 entry，逐 token 更新（流式优先，失败降级）
+    setChat((c) => [...c, { role: "agent", text: "", sources: [] }]);
+
     try {
-      const { answer, sources } = await ragAnswerReal(t);
-      setChat((c) => [...c, { role: "agent", text: answer, sources }]);
-    } catch {
-      setChat((c) => [...c, {
-        role: "agent",
-        text: "抱歉，RAG 检索暂时不可用。请稍后重试或直接在实验卡片中搜索。",
-        sources: [],
-      }]);
+      const response = await ragAnswerRealStream(t);
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const answerParts: string[] = [];
+      let sources: Source[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+          try {
+            const event = JSON.parse(jsonStr);
+            switch (event.type) {
+              case "sources":
+                sources = event.sources as Source[];
+                break;
+              case "token":
+                answerParts.push(event.content);
+                setChat((c) => {
+                  const updated = [...c];
+                  updated[updated.length - 1] = { ...updated[updated.length - 1], text: answerParts.join(""), sources };
+                  return updated;
+                });
+                break;
+              case "error":
+                throw new Error(event.message || "Stream error");
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Stream error") throw e;
+          }
+        }
+      }
+
+      // 确保最终状态
+      setChat((c) => {
+        const updated = [...c];
+        updated[updated.length - 1] = { ...updated[updated.length - 1], text: answerParts.join("") || updated[updated.length - 1].text, sources };
+        return updated;
+      });
+    } catch (err) {
+      console.warn("[RAG] 流式失败，降级到非流式:", err);
+      setChat((c) => c.slice(0, -1)); // 移除占位 entry
+      try {
+        const { answer, sources } = await ragAnswerReal(t);
+        setChat((c) => [...c, { role: "agent", text: answer, sources }]);
+      } catch {
+        setChat((c) => [...c, {
+          role: "agent",
+          text: "抱歉，RAG 检索暂时不可用。请稍后重试或直接在实验卡片中搜索。",
+          sources: [],
+        }]);
+      }
     } finally {
       setLoading(false);
     }

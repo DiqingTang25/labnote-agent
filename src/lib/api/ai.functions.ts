@@ -82,7 +82,7 @@ export const generateEmbedding = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         model: EMBEDDING_MODEL,
-        input: [data.text.slice(0, 512)],
+        input: [data.text.slice(0, 1500)],
       }),
     });
 

@@ -3,7 +3,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLab } from "../lib/labStore";
-import { ragAnswerReal } from "../lib/supabase";
+import { ragAnswerReal, ragAnswerRealStream } from "../lib/supabase";
 import {
   MessageCircle, X, Sparkles, Loader2, Send, FileText, Target,
   ArrowUpRight, CheckCircle2, Filter, BookOpen, Brain, Search,
@@ -73,6 +73,15 @@ export function AIAgent() {
     setLoading(true);
     setWorkflowStep(0);
 
+    // 根据 scope 计算知识边界 ID 列表
+    const ids = scope === "all"
+      ? undefined
+      : scope === "single"
+        ? (experiments[0] ? [experiments[0].id] : undefined)
+        : selectedIds.size > 0
+          ? Array.from(selectedIds)
+          : undefined;
+
     // 逐步展示工作流
     const delays = [600, 1000, 800, 1200, 700];
     let step = 0;
@@ -82,26 +91,108 @@ export function AIAgent() {
         setWorkflowStep(step);
         setTimeout(advanceStep, delays[step]);
       } else {
-        // 最后一步：真实 RAG 检索 + LLM 生成
-        ragAnswerReal(t).then(({ answer, sources }) => {
-          setChat((c) => [...c, {
-            role: "agent",
-            text: answer,
-            sources: sources.map((s) => ({ doc: s.doc, conf: s.confidence, link: s.link })),
-          }]);
-        }).catch(() => {
-          setChat((c) => [...c, {
-            role: "agent",
-            text: "抱歉，知识检索暂时不可用。请在实验卡片中直接查看数据。",
-            sources: [],
-          }]);
-        }).finally(() => {
-          setLoading(false);
-          setWorkflowStep(-1);
-        });
+        // 最后一步：流式 RAG 检索 + LLM 生成（带卡片边界过滤 + 降级）
+        executeStreamingRag(t, ids);
       }
     };
     setTimeout(advanceStep, delays[0]);
+  };
+
+  // ===== 流式 RAG 执行（SSE 优先，失败降级到非流式）=====
+  const executeStreamingRag = async (question: string, ids?: string[]) => {
+    // 插入占位 chat entry，后续逐 token 更新
+    setChat((c) => [...c, { role: "agent", text: "", sources: [] }]);
+
+    try {
+      const response = await ragAnswerRealStream(question, ids);
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const answerParts: string[] = [];
+      let sources: Array<{ doc: string; conf: string; link: string }> = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+          try {
+            const event = JSON.parse(jsonStr);
+            switch (event.type) {
+              case "sources":
+                sources = (event.sources as any[]).map((s: any) => ({
+                  doc: s.doc ?? "",
+                  conf: s.confidence ?? "",
+                  link: s.link ?? "",
+                }));
+                break;
+              case "token":
+                answerParts.push(event.content);
+                // 逐 token 更新 chat（追加到占位 entry）
+                setChat((c) => {
+                  const updated = [...c];
+                  updated[updated.length - 1] = {
+                    ...updated[updated.length - 1],
+                    text: answerParts.join(""),
+                    sources,
+                  };
+                  return updated;
+                });
+                break;
+              case "error":
+                throw new Error(event.message || "Stream error");
+              case "done":
+                // 流正常结束
+                break;
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Stream error") throw e;
+            // 跳过解析错误（malformed SSE line）
+          }
+        }
+      }
+
+      // 确保最终状态正确
+      setChat((c) => {
+        const updated = [...c];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          text: answerParts.join("") || updated[updated.length - 1].text,
+          sources,
+        };
+        return updated;
+      });
+    } catch (err) {
+      console.warn("[RAG] 流式失败，降级到非流式:", err);
+      // 降级：移除占位 entry，改用非流式
+      setChat((c) => c.slice(0, -1));
+      try {
+        const { answer, sources } = await ragAnswerReal(question, ids);
+        setChat((c) => [...c, {
+          role: "agent",
+          text: answer,
+          sources: sources.map((s) => ({ doc: s.doc, conf: s.confidence, link: s.link })),
+        }]);
+      } catch {
+        setChat((c) => [...c, {
+          role: "agent",
+          text: "抱歉，知识检索暂时不可用。请在实验卡片中直接查看数据。",
+          sources: [],
+        }]);
+      }
+    } finally {
+      setLoading(false);
+      setWorkflowStep(-1);
+    }
   };
 
   return (
