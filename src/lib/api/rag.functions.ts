@@ -324,10 +324,15 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
         .join("\n\n");
     }
 
-    // 2. 构建 prompt
+    // 2. 构建 prompt + 对话历史
     const prompt = contextBlock
       ? `基于以下实验记录回答用户问题。\n\n实验记录：\n${contextBlock}\n\n用户问题：${data.question}\n\n请用2-4句话回答，并引用相关实验名称。`
       : data.question;
+
+    const historyMessages = (data.history ?? []).slice(-6).map((h) => ({
+      role: h.role,
+      content: h.role === "assistant" ? h.content.slice(0, 300) : h.content,
+    }));
 
     const config = getServerConfig();
     const apiKey = config.sfApiKey;
@@ -367,6 +372,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
           model: "deepseek-ai/DeepSeek-V3",
           messages: [
             { role: "system", content: RAG_SYSTEM_PROMPT },
+            ...historyMessages,
             { role: "user", content: prompt },
           ],
           max_tokens: 512,

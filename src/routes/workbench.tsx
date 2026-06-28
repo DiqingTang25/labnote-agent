@@ -1045,11 +1045,19 @@ function RagPanel() {
     setQ("");
     setLoading(true);
 
+    // 构建对话历史（最近 3 轮 = 6 条消息）
+    const history = chat
+      .slice(-6)
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text,
+      }));
+
     // 插入占位 entry，逐 token 更新（流式优先，失败降级）
     setChat((c) => [...c, { role: "agent", text: "", sources: [] }]);
 
     try {
-      const response = await ragAnswerRealStream(t);
+      const response = await ragAnswerRealStream(t, undefined, history);
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -1103,7 +1111,7 @@ function RagPanel() {
       console.warn("[RAG] 流式失败，降级到非流式:", err);
       setChat((c) => c.slice(0, -1)); // 移除占位 entry
       try {
-        const { answer, sources } = await ragAnswerReal(t);
+        const { answer, sources } = await ragAnswerReal(t, undefined, history);
         setChat((c) => [...c, { role: "agent", text: answer, sources }]);
       } catch {
         setChat((c) => [...c, {
