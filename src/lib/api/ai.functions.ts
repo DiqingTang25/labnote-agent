@@ -91,3 +91,89 @@ export const generateEmbedding = createServerFn({ method: "POST" })
     };
     return json.data?.[0]?.embedding ?? [];
   });
+
+// ═══════════════════════════════════════════════════════
+// 批量 Embedding 生成（多 chunk 一次调用）
+// ═══════════════════════════════════════════════════════
+
+export const generateEmbeddings = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      texts: z.array(z.string().min(1)).max(16),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const config = getServerConfig();
+    const apiKey = config.sfApiKey;
+    if (!apiKey) return [] as number[][];
+
+    const res = await fetch(`${SF_BASE}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL,
+        input: data.texts.map((t) => t.slice(0, 1500)),
+      }),
+    });
+
+    const json = (await res.json()) as {
+      data?: Array<{ embedding: number[] }>;
+    };
+    return (json.data ?? []).map((d) => d.embedding);
+  });
+
+// ═══════════════════════════════════════════════════════
+// Reranker — 交叉编码器精排
+// ═══════════════════════════════════════════════════════
+
+const RERANK_MODEL = "BAAI/bge-reranker-v2-m3";
+
+export const rerank = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      query: z.string().min(1),
+      documents: z.array(z.string().min(1)).max(50),
+      topN: z.number().optional().default(3),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const config = getServerConfig();
+    const apiKey = config.sfApiKey;
+    if (!apiKey) return [] as Array<{ index: number; score: number }>;
+
+    try {
+      const res = await fetch(`${SF_BASE}/rerank`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: RERANK_MODEL,
+          query: data.query,
+          documents: data.documents,
+          top_n: data.topN,
+          return_documents: false,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(`[Rerank] API error ${res.status}:`, await res.text().catch(() => ""));
+        return [];
+      }
+
+      const json = (await res.json()) as {
+        results?: Array<{ index: number; relevance_score: number }>;
+      };
+      return (json.results ?? []).map((r) => ({
+        index: r.index,
+        score: r.relevance_score,
+      }));
+    } catch (err) {
+      console.error("[Rerank] call failed:", err);
+      return [];
+    }
+  });

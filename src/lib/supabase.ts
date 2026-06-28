@@ -203,26 +203,21 @@ export async function upsertProfile(p: {
 // ═══════════════════════════════════════════════════════
 
 /**
- * 为实验生成 embedding 并写入 DB
- * embedding 生成通过 server function（API key 不暴露）
+ * 为实验生成 embedding 并写入 DB（整卡 embedding + 分块 embedding）
+ * 分块 embedding 用于精确检索
  */
 export async function embedExperiment(expId: string): Promise<void> {
   if (!isSupabaseReady()) return;
 
   const { data } = await supabase
     .from("experiments")
-    .select("name, purpose, results, steps")
+    .select("*")
     .eq("id", expId)
     .maybeSingle();
 
   if (!data) return;
 
-  const r = data as {
-    name?: string;
-    purpose?: string;
-    results?: string;
-    steps?: unknown;
-  };
+  const r = data as Record<string, unknown>;
   const stepsText = Array.isArray(r.steps)
     ? (r.steps as string[]).join(" ")
     : "";
@@ -230,18 +225,92 @@ export async function embedExperiment(expId: string): Promise<void> {
     .filter(Boolean)
     .join(" ");
 
-  if (!semanticText.trim()) return;
+  // 整卡 embedding（向后兼容 + fallback）
+  if (semanticText.trim()) {
+    const { generateEmbedding } = await import("./api/ai.functions");
+    const vec = await generateEmbedding({ data: { text: semanticText } });
 
-  // 通过 server function 生成 embedding（API key 在服务端）
-  const { generateEmbedding } = await import("./api/ai.functions");
-  const vec = await generateEmbedding({ data: { text: semanticText } });
+    if (Array.isArray(vec) && vec.length > 0) {
+      await supabase
+        .from("experiments")
+        .update({ embedding: vec, updated_at: new Date().toISOString() })
+        .eq("id", expId);
+    }
+  }
 
-  if (!Array.isArray(vec) || vec.length === 0) return;
+  // 分块 embedding
+  await embedExperimentChunks(expId);
+}
 
-  await supabase
+// ═══════════════════════════════════════════════════════
+// 分块 embedding CRUD
+// ═══════════════════════════════════════════════════════
+
+async function embedExperimentChunks(expId: string): Promise<void> {
+  if (!isSupabaseReady()) return;
+
+  // 获取完整实验数据用于分块
+  const { data } = await supabase
     .from("experiments")
-    .update({ embedding: vec, updated_at: new Date().toISOString() })
-    .eq("id", expId);
+    .select("*")
+    .eq("id", expId)
+    .maybeSingle();
+
+  if (!data) return;
+
+  const { splitExperimentIntoChunks } = await import("./experiment-utils");
+  const exp = fromRow(data as Record<string, unknown>);
+  const chunks = splitExperimentIntoChunks(exp);
+
+  if (chunks.length === 0) return;
+
+  // 批量生成 embedding
+  const { generateEmbeddings } = await import("./api/ai.functions");
+  const texts = chunks.map((c) => c.content);
+  const vecs = await generateEmbeddings({ data: { texts } });
+
+  if (!Array.isArray(vecs) || vecs.length === 0) return;
+
+  // 获取 user_id
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return;
+
+  // 删除旧 chunks
+  await supabase
+    .from("experiment_chunks")
+    .delete()
+    .eq("experiment_id", expId);
+
+  // 插入新 chunks
+  const rows = chunks.map((c, i) => ({
+    experiment_id: expId,
+    user_id: userId,
+    chunk_type: c.chunkType,
+    content: c.content,
+    embedding: vecs[i] ?? null,
+  }));
+
+  const { error } = await supabase.from("experiment_chunks").insert(rows);
+  if (error) {
+    console.error("[Supabase] chunk insert error:", error);
+  }
+}
+
+/** 查询指定实验的所有 chunks */
+export async function fetchExperimentChunks(
+  expId: string,
+): Promise<Array<{ chunkType: string; content: string }>> {
+  if (!isSupabaseReady()) return [];
+  const { data } = await supabase
+    .from("experiment_chunks")
+    .select("chunk_type, content")
+    .eq("experiment_id", expId)
+    .order("chunk_type");
+  return (data as Array<{ chunk_type: string; content: string }>)?.map((r) => ({
+    chunkType: r.chunk_type,
+    content: r.content,
+  })) ?? [];
 }
 
 // ═══════════════════════════════════════════════════════
