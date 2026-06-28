@@ -36,6 +36,7 @@ import type { DecompositionStep, DecompositionProgress } from "../lib/paper-deco
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
 import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
+import { useAuth } from "../lib/auth-context";
 import { saveAudit, fetchAudits, deleteAudit } from "../lib/supabase";
 import {
   Dialog,
@@ -60,6 +61,9 @@ export const Route = createFileRoute("/checklist")({
 // ═══════════════════════════════════════════════════════
 
 function ReproductionAuditPage() {
+  const { user } = useAuth();
+  const userId = user?.id || "dev-user";
+
   // 输入状态
   const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "preset-plant-ep" | "preset-spatial" | "custom">("preset-srtio3");
   const [customPaperTitle, setCustomPaperTitle] = useState("");
@@ -132,7 +136,7 @@ function ReproductionAuditPage() {
     if (!activeTaskId) return;
 
     const interval = setInterval(async () => {
-      const { getTask } = await import("../lib/background-task");
+      return; // disabled - using server-side decomposition
       const task = getTask(activeTaskId);
       if (!task) {
         setDecomposing(false);
@@ -183,7 +187,7 @@ function ReproductionAuditPage() {
     };
   }, [paperSource, customPaperTitle, customPaperDoi, customMethods, discipline]);
 
-  // ===== AI 拆解（后台任务，切换页面不中断）=====
+  // ===== AI 拆解（服务端执行，切换页面不中断）=====
   const runDecomposition = useCallback(async () => {
     const paper = getCurrentPaperData();
     if (!paper.methods.trim()) {
@@ -194,17 +198,100 @@ function ReproductionAuditPage() {
     setDecomposing(true);
     setProgress({ step: "connecting" });
 
-    // 动态 import 后台任务模块
-    const { startBackgroundDecomposition } = await import("../lib/background-task");
-    const taskId = startBackgroundDecomposition(
-      paper.title,
-      paper.doi,
-      paper.methods,
-      paper.discipline || discipline,
-    );
-    setActiveTaskId(taskId);
-    toast.success("🔗 后台任务已启动，可自由切换页面，拆解不会中断");
-  }, [getCurrentPaperData, discipline]);
+    // 保存 pending 标记到 localStorage（切换页面后恢复用）
+    const pendingKey = `decompose_pending_${Date.now()}`;
+    try {
+      localStorage.setItem(pendingKey, JSON.stringify({
+        paperTitle: paper.title,
+        discipline: paper.discipline || discipline,
+        startedAt: Date.now(),
+      }));
+    } catch { /* localStorage 不可用则跳过 */ }
+
+    // 调用服务端拆解（fire-and-forget — 不等待响应）
+    const { decomposeOnServer } = await import("../lib/api/decompose.functions");
+    decomposeOnServer({
+      data: {
+        paperTitle: paper.title,
+        paperDoi: paper.doi,
+        methodsText: paper.methods,
+        discipline: paper.discipline || discipline,
+        userId,
+      },
+    }).then((res) => {
+      // 成功回调 — 即使页面已切换也会在浏览器中执行
+      try { localStorage.removeItem(pendingKey); } catch {}
+      if (res.saved) {
+        loadHistory();
+        if (document.querySelector("[data-audit-page]")) {
+          // 用户还在页面
+          toast.success(`✅ 服务端拆解完成：${res.paramCount} 个参数已保存`);
+        }
+      }
+    }).catch((err) => {
+      try { localStorage.removeItem(pendingKey); } catch {}
+      console.error("[Decompose] server error:", err);
+    });
+
+    // 启动轮询检测结果
+    setActiveTaskId(pendingKey);
+    toast.success("🔗 服务端任务已启动，可自由切换页面，拆解不会中断");
+  }, [getCurrentPaperData, discipline, userId, loadHistory]);
+
+  // 轮询检测服务端拆解结果
+  useEffect(() => {
+    if (!activeTaskId) return;
+
+    // 如果页面之前离开过，检查 localStorage pending 标记
+    const pendingKeys: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("decompose_pending_")) pendingKeys.push(key);
+      }
+    } catch {}
+
+    // 如果有 pending 但 activeTaskId 未设置，恢复 decomposing 状态
+    if (!decomposing && pendingKeys.length > 0) {
+      setDecomposing(true);
+      setProgress({ step: "decomposing", detail: "服务端正拆解中…" });
+    }
+
+    const interval = setInterval(async () => {
+      // 检查服务端是否有新结果
+      await loadHistory();
+
+      // 检查当前 paper title 是否已出现在历史中
+      const paper = getCurrentPaperData();
+      const found = auditHistory.find((a) =>
+        a.paperTitle === paper.title &&
+        Date.now() - new Date(a.auditedAt).getTime() < 120000 // 2分钟内
+      );
+
+      if (found) {
+        clearInterval(interval);
+        // 清理所有 pending 标记
+        const allKeys = [...pendingKeys];
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key?.startsWith("decompose_pending_")) {
+              allKeys.push(key);
+              localStorage.removeItem(key);
+            }
+          }
+        } catch {}
+
+        setAudit(found);
+        setSavedAuditId(found.id);
+        setDecomposing(false);
+        setActiveTaskId(null);
+        toast.success(`✅ 拆解完成：${found.parameters.length} 个参数，${found.gaps.length} 个缺口`);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [activeTaskId, decomposing, loadHistory, getCurrentPaperData, auditHistory]);
 
   // ===== 参数操作 =====
   const confirmParam = useCallback((paramName: string, value: string) => {
@@ -1086,7 +1173,7 @@ function ReproductionAuditPage() {
           </p>
         </div>
         <button
-          onClick={async () => { setAudit(null); setActiveTaskId(null); setDecomposing(false); const { clearDoneTasks } = await import("../lib/background-task"); clearDoneTasks(); }}
+          onClick={() => { setAudit(null); setActiveTaskId(null); setDecomposing(false); }}
           className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
         >
           <RotateCcw size={14}/> 重新开始

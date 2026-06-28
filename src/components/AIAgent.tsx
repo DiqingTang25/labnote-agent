@@ -100,11 +100,20 @@ export function AIAgent() {
 
   // ===== 流式 RAG 执行（SSE 优先，失败降级到非流式）=====
   const executeStreamingRag = async (question: string, ids?: string[]) => {
+    // 构建对话历史（最近 3 轮 = 6 条消息，不含当前占位）
+    const history = chat
+      .filter((m) => !m.workflow)
+      .slice(-6)
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text,
+      }));
+
     // 插入占位 chat entry，后续逐 token 更新
     setChat((c) => [...c, { role: "agent", text: "", sources: [] }]);
 
     try {
-      const response = await ragAnswerRealStream(question, ids);
+      const response = await ragAnswerRealStream(question, ids, history);
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -176,7 +185,7 @@ export function AIAgent() {
       // 降级：移除占位 entry，改用非流式
       setChat((c) => c.slice(0, -1));
       try {
-        const { answer, sources } = await ragAnswerReal(question, ids);
+        const { answer, sources } = await ragAnswerReal(question, ids, history);
         setChat((c) => [...c, {
           role: "agent",
           text: answer,

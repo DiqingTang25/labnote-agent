@@ -541,12 +541,13 @@ export type RagSource = {
 export async function ragAnswerReal(
   question: string,
   selectedIds?: string[],
+  history?: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<{ answer: string; sources: RagSource[] }> {
   // 获取当前用户 — RAG 只搜索该用户的实验
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user?.id;
   const { ragAnswer } = await import("./api/rag.functions");
-  return ragAnswer({ data: { question, userId, selectedIds } });
+  return ragAnswer({ data: { question, userId, selectedIds, history } });
 }
 
 /**
@@ -557,12 +558,13 @@ export async function ragAnswerReal(
 export async function ragAnswerRealStream(
   question: string,
   selectedIds?: string[],
+  history?: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<Response> {
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user?.id;
   const { ragAnswerStream } = await import("./api/rag.functions");
   // TanStack createServerFn 类型推断不知道返回值是 Response（运行时通过 x-tss-raw header 透传）
-  return ragAnswerStream({ data: { question, userId, selectedIds } }) as unknown as Response;
+  return ragAnswerStream({ data: { question, userId, selectedIds, history } }) as unknown as Response;
 }
 
 // ═══════════════════════════════════════════════════════
