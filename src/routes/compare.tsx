@@ -72,11 +72,20 @@ function ComparePage() {
 
   useEffect(() => {
     if (experiments.length === 0) return;
-    // 选字段最完整的那个
+    // 优先选有多模态文件的实验
     let best: Experiment | null = null;
     let bestScore = -1;
     for (const e of experiments) {
       let s = 0;
+      const files = e.attachedFiles ?? [];
+      // 多模态加分（视频/音频/图片优先）
+      const hasVideo = files.some(f => f.name.match(/\.(mp4|webm|mov)$/i));
+      const hasAudio = files.some(f => f.name.match(/\.(wav|m4a|mp3)$/i));
+      const hasImage = files.some(f => f.name.match(/\.(png|jpg|jpeg)$/i));
+      if (hasVideo) s += 5;
+      if (hasAudio) s += 4;
+      if (hasImage) s += 3;
+      // 字段完整度
       if (e.name && e.name !== "未命名实验") s++;
       if (e.discipline) s++;
       if (e.operator) s++;
@@ -89,7 +98,7 @@ function ComparePage() {
       if (e.results && e.results.length > 50) s += 2; else if (e.results) s++;
       if (e.aiInsights) s++;
       if (e.background) s++;
-      if ((e.attachedFiles ?? []).length >= 3) s++;
+      if (files.length >= 5) s += 2; else if (files.length >= 3) s++;
       if (s > bestScore) { bestScore = s; best = e; }
     }
     setExp(best);
