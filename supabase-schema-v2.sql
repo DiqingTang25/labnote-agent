@@ -60,7 +60,8 @@ CREATE OR REPLACE FUNCTION match_experiments(
   match_threshold FLOAT DEFAULT 0.6,
   match_count INT DEFAULT 5,
   filter_user_id UUID DEFAULT NULL,
-  filter_tags TEXT[] DEFAULT NULL
+  filter_tags TEXT[] DEFAULT NULL,
+  filter_ids TEXT[] DEFAULT NULL
 )
 RETURNS TABLE (
   id TEXT,
@@ -82,6 +83,7 @@ BEGIN
     AND 1 - (e.embedding <=> query_embedding) > match_threshold
     AND (filter_user_id IS NULL OR e.user_id = filter_user_id)
     AND (filter_tags IS NULL OR e.knowledge_tags && filter_tags)
+    AND (filter_ids IS NULL OR e.id = ANY(filter_ids))
   ORDER BY e.embedding <=> query_embedding
   LIMIT match_count;
 END;

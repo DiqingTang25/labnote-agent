@@ -32,8 +32,8 @@ import {
   generateReproductionProtocol,
   calculateReproducibilityScore,
 } from "../lib/reproduction-audit";
-import { decomposePaperMethods } from "../lib/paper-decomposer";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
+import { startBackgroundDecomposition, getTask, getLatestTask, clearDoneTasks } from "../lib/background-task";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
 import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
@@ -73,11 +73,71 @@ function ReproductionAuditPage() {
   const [progress, setProgress] = useState<DecompositionProgress>({ step: "connecting" });
   const [audit, setAudit] = useState<ReproductionAudit | null>(null);
   const [savedAuditId, setSavedAuditId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   // 历史存档
   const [auditHistory, setAuditHistory] = useState<ReproductionAudit[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // ═══════════════════════════════════════════════════════
+  // 后台任务轮询 — 组件卸载后任务继续跑，重新挂载后恢复
+  // ═══════════════════════════════════════════════════════
+
+  // 挂载时检查是否有进行中/已完成的后台任务
+  useEffect(() => {
+    const latest = getLatestTask();
+    if (!latest) return;
+
+    if (latest.status === "running") {
+      // 有进行中的任务 → 恢复进度显示
+      setDecomposing(true);
+      setActiveTaskId(latest.id);
+      setProgress(latest.progress);
+    } else if (latest.status === "done" && latest.result) {
+      // 有刚完成的任务 → 直接加载结果
+      setAudit(latest.result);
+      setSavedAuditId(latest.savedAuditId);
+      loadHistory();
+      toast.success(`后台任务完成：${latest.result.parameters.length} 个参数已保存到云端`);
+      clearDoneTasks();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 轮询激活的后台任务
+  useEffect(() => {
+    if (!activeTaskId) return;
+
+    const interval = setInterval(() => {
+      const task = getTask(activeTaskId);
+      if (!task) {
+        // 任务已被清理
+        setDecomposing(false);
+        setActiveTaskId(null);
+        return;
+      }
+
+      setProgress(task.progress);
+
+      if (task.status === "done" && task.result) {
+        // 任务完成
+        clearInterval(interval);
+        setAudit(task.result);
+        setSavedAuditId(task.savedAuditId);
+        setDecomposing(false);
+        setActiveTaskId(null);
+        loadHistory();
+        toast.success(`拆解完成：${task.result.parameters.length} 个参数，${task.result.gaps.length} 个缺口，已保存到云端`);
+      } else if (task.status === "error") {
+        clearInterval(interval);
+        setDecomposing(false);
+        setActiveTaskId(null);
+        toast.error(`拆解失败: ${task.error || "未知错误"}`);
+      }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [activeTaskId, loadHistory]);
 
   // UI 状态
   const [activeTab, setActiveTab] = useState<"params" | "gaps" | "protocol">("params");
@@ -155,8 +215,8 @@ function ReproductionAuditPage() {
     toast.success("已加载预设 Audit 并保存到云端");
   }, [loadHistory]);
 
-  // ===== AI 拆解 =====
-  const runDecomposition = useCallback(async () => {
+  // ===== AI 拆解（后台任务，切换页面不中断）=====
+  const runDecomposition = useCallback(() => {
     const paper = getCurrentPaperData();
     if (!paper.methods.trim()) {
       toast.error("请先输入论文的实验方法段落");
@@ -165,32 +225,17 @@ function ReproductionAuditPage() {
 
     setDecomposing(true);
     setProgress({ step: "connecting" });
-    try {
-      const result = await decomposePaperMethods(
-        paper.title,
-        paper.doi,
-        paper.methods,
-        paper.discipline || discipline,
-        (p) => setProgress(p),
-      );
-      setAudit(result);
-      toast.success(`拆解完成：${result.parameters.length} 个参数，${result.gaps.length} 个缺口`);
-      // 自动保存到 Supabase
-      const savedId = await saveAudit(result, paper.discipline || discipline);
-      if (savedId) {
-        setSavedAuditId(savedId);
-        toast.success("📤 已保存到云端");
-        loadHistory();
-      } else {
-        toast.error("⚠️ 云端保存失败，数据仅存于当前会话");
-      }
-    } catch (err) {
-      console.error("[Audit] decomposition failed:", err);
-      toast.error(`拆解失败: ${err instanceof Error ? err.message : "未知错误"}`);
-    } finally {
-      setDecomposing(false);
-    }
-  }, [getCurrentPaperData, discipline, loadHistory]);
+
+    // 启动后台任务 — 立即返回 taskId，不阻塞
+    const taskId = startBackgroundDecomposition(
+      paper.title,
+      paper.doi,
+      paper.methods,
+      paper.discipline || discipline,
+    );
+    setActiveTaskId(taskId);
+    toast.success("🔗 后台任务已启动，可自由切换页面，拆解不会中断");
+  }, [getCurrentPaperData, discipline]);
 
   // ===== 参数操作 =====
   const confirmParam = useCallback((paramName: string, value: string) => {
@@ -926,7 +971,7 @@ function ReproductionAuditPage() {
           </p>
         </div>
         <button
-          onClick={() => { setAudit(null); }}
+          onClick={() => { setAudit(null); setActiveTaskId(null); setDecomposing(false); clearDoneTasks(); }}
           className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
         >
           <RotateCcw size={14}/> 重新开始
