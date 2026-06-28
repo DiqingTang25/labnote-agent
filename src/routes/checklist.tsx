@@ -34,7 +34,7 @@ import {
 } from "../lib/reproduction-audit";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
-import { SRTIO3_PAPER, SRTIO3_PRESET_AUDIT, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
+import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER } from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
 import { saveAudit, fetchAudits, deleteAudit } from "../lib/supabase";
 import {
@@ -183,15 +183,6 @@ function ReproductionAuditPage() {
     };
   }, [paperSource, customPaperTitle, customPaperDoi, customMethods, discipline]);
 
-  // ===== 使用预设 Audit =====
-  const loadPresetAudit = useCallback(() => {
-    setAudit(SRTIO3_PRESET_AUDIT);
-    saveAudit(SRTIO3_PRESET_AUDIT, "材料科学").then((id) => {
-      if (id) { setSavedAuditId(id); loadHistory(); }
-    });
-    toast.success("已加载预设 Audit 并保存到云端");
-  }, [loadHistory]);
-
   // ===== AI 拆解（后台任务，切换页面不中断）=====
   const runDecomposition = useCallback(async () => {
     const paper = getCurrentPaperData();
@@ -258,6 +249,20 @@ function ReproductionAuditPage() {
     const gap = audit.gaps.find((g) => g.description === gapDesc);
     if (!gap?.aiSuggestion) return;
     fillGap(gapDesc, gap.aiSuggestion);
+  }, [audit, fillGap]);
+
+  // 一键 AI 自动补全全部缺口
+  const autoFillAllGaps = useCallback(() => {
+    if (!audit) return;
+    const fillableGaps = audit.gaps.filter((g) => g.status === "open" && g.aiSuggestion);
+    if (fillableGaps.length === 0) {
+      toast.error("没有可自动补全的缺口");
+      return;
+    }
+    for (const gap of fillableGaps) {
+      fillGap(gap.description, gap.aiSuggestion!);
+    }
+    toast.success(`✅ AI 已自动补全 ${fillableGaps.length} 个缺口`);
   }, [audit, fillGap]);
 
   // ===== 导出协议 =====
@@ -386,7 +391,7 @@ function ReproductionAuditPage() {
                    paperSource === "preset-co3o4" ? REAL_PAPERS[1].doi :
                    paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.doi :
                    SPATIAL_TRANSCRIPTOMICS_PAPER.doi}</p>
-          <p className="mt-1">Methods 段落已预加载（真实论文内容），可直接拆解或使用预设结果。</p>
+          <p className="mt-1">Methods 段落已预加载（真实论文内容），点击上方按钮开始 AI 拆解。</p>
         </div>
       )}
 
@@ -402,13 +407,6 @@ function ReproductionAuditPage() {
           ) : (
             <><Sparkles size={15}/> AI 拆解论文 → 复现参数</>
           )}
-        </button>
-        <button
-          onClick={loadPresetAudit}
-          disabled={decomposing}
-          className="flex items-center gap-2 rounded-xl border border-border px-5 py-2.5 text-sm hover:border-primary/40 hover:bg-primary-soft/10 transition"
-        >
-          <Zap size={15}/> 使用预设 Audit（快速演示）
         </button>
       </div>
     </div>
@@ -530,6 +528,18 @@ function ReproductionAuditPage() {
 
     return (
       <div className="space-y-4">
+        {/* 引导说明 */}
+        <div className="rounded-lg bg-blue-50/50 border border-blue-200 p-3 text-xs text-blue-800 leading-relaxed">
+          <p className="font-semibold mb-1">📋 参数审核指南</p>
+          <p>AI 从论文中提取了 {audit.parameters.length} 个实验参数，按确定性分为四级：</p>
+          <div className="grid grid-cols-2 gap-1 mt-1.5">
+            <span>✅ <b>论文明确</b> = 论文中直接写出的数值</span>
+            <span>📖 <b>论文隐含</b> = 可从上下文合理推断</span>
+            <span>🤖 <b>AI推断</b> = 基于领域知识猜测，<b className="text-amber-600">建议核对</b></span>
+            <span>❓ <b>未知</b> = 完全不确定，标记为缺口</span>
+          </div>
+          <p className="mt-1.5">点击参数可展开详情并修改确认。已确认的参数不计入缺口。</p>
+        </div>
         {Array.from(grouped.entries()).map(([cat, params]) => (
           <div key={cat}>
             <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
@@ -706,8 +716,27 @@ function ReproductionAuditPage() {
       );
     }
 
+    const openGaps = sortedGaps.filter((g) => g.status === "open" && g.aiSuggestion);
+
     return (
       <div className="space-y-3">
+        {/* 引导说明 */}
+        <div className="rounded-lg bg-amber-50/50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
+          <p className="font-semibold mb-1">🔍 缺口补全指南</p>
+          <p>发现 {sortedGaps.length} 个信息缺口（复现必需但论文未提及），按关键程度排序。</p>
+          <p className="mt-1">你可以：① 手动填入你已知的值 → ② 或让 AI 一键自动补全：</p>
+        </div>
+
+        {/* AI 一键补全按钮 */}
+        {openGaps.length > 0 && (
+          <button
+            onClick={autoFillAllGaps}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 text-white px-4 py-2.5 text-sm font-semibold hover:bg-amber-600 transition"
+          >
+            <Sparkles size={15} /> 🤖 AI 自动补全全部 {openGaps.length} 个缺口
+          </button>
+        )}
+
         {sortedGaps.map((gap) => renderGapRow(gap))}
       </div>
     );
@@ -813,33 +842,141 @@ function ReproductionAuditPage() {
   };
 
   // ═══════════════════════════════
-  // Protocol Tab
+  // Protocol Tab — 动态实验 Checklist
   // ═══════════════════════════════
+
+  // 协议 checklist 勾选状态
+  const [checkedSteps, setCheckedSteps] = useState<Set<string>>(new Set());
+
+  const toggleCheckStep = (stepKey: string) => {
+    setCheckedSteps((prev) => {
+      const next = new Set(prev);
+      next.has(stepKey) ? next.delete(stepKey) : next.add(stepKey);
+      return next;
+    });
+  };
+
   const renderProtocol = () => {
     if (!audit) return null;
-    const md = generateReproductionProtocol(audit);
+
+    // 按实验阶段组织参数（排除 safety 放最前）
+    const phaseOrder: { cat: ParameterCategory[]; icon: string; label: string }[] = [
+      { cat: ["safety"], icon: "🦺", label: "安全防护（实验前必读）" },
+      { cat: ["precursor"], icon: "🧪", label: "前驱体与原料准备" },
+      { cat: ["equipment"], icon: "🔬", label: "设备与仪器" },
+      { cat: ["synthesis"], icon: "⚗️", label: "合成步骤" },
+      { cat: ["post-processing"], icon: "🔥", label: "后处理" },
+      { cat: ["characterization"], icon: "📊", label: "表征条件" },
+      { cat: ["testing"], icon: "🧫", label: "性能测试" },
+      { cat: ["environment"], icon: "🌡️", label: "环境条件" },
+    ];
+
+    // 计算总步骤数
+    let totalSteps = 0;
+    let completedSteps = 0;
+    const phaseItems: { cat: ParameterCategory[]; icon: string; label: string; items: { key: string; text: string; isGap: boolean }[] }[] = [];
+
+    for (const phase of phaseOrder) {
+      const params = audit.parameters.filter((p) => phase.cat.includes(p.category));
+      const phaseGaps = audit.gaps.filter((g) => phase.cat.includes(g.category));
+      const items: { key: string; text: string; isGap: boolean }[] = [];
+
+      for (const p of params) {
+        const statusIcon = p.userConfirmed ? "✅" : p.certainty === "explicit" ? "📄" : p.certainty === "inferred" ? "🤖" : "❓";
+        const key = `param-${p.name}`;
+        items.push({ key, text: `${statusIcon} ${p.name}: ${p.userValue || p.value} ${p.unit}${p.paperQuote ? ` (原文: "${p.paperQuote.slice(0, 60)}")` : ""}`, isGap: false });
+        totalSteps++;
+        if (checkedSteps.has(key)) completedSteps++;
+      }
+      for (const g of phaseGaps) {
+        const key = `gap-${g.description}`;
+        const filled = g.status === "user-filled" || g.status === "resolved";
+        items.push({ key, text: `${filled ? "✅" : "⚠️"} ${filled ? g.userFill || g.aiSuggestion : g.description} ${filled ? "" : "— 需补全"}`, isGap: !filled });
+        totalSteps++;
+        if (checkedSteps.has(key) || filled) completedSteps++;
+      }
+
+      if (items.length > 0) {
+        phaseItems.push({ ...phase, items });
+      }
+    }
+
+    const progressPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 100;
+
     return (
       <div className="space-y-4">
-        <div className="flex gap-3">
-          <button
-            onClick={exportProtocol}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground hover:bg-primary/90"
-          >
-            <Download size={14}/> 下载 Markdown 协议
-          </button>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(md);
-              toast.success("协议已复制到剪贴板");
-            }}
-            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-xs hover:bg-secondary"
-          >
-            <Copy size={14}/> 复制全文
+        {/* 引导说明 */}
+        <div className="rounded-lg bg-green-50/50 border border-green-200 p-3 text-xs text-green-800 leading-relaxed">
+          <p className="font-semibold mb-1">📄 可执行实验方案</p>
+          <p>以下是按实验流程组织的详细步骤。逐项核对，完成打勾。开始实验前请先阅读安全防护部分。</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex-1 h-2 rounded-full bg-green-200 overflow-hidden">
+              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="text-[11px] font-mono text-green-700">{completedSteps}/{totalSteps} 步完成</span>
+          </div>
+        </div>
+
+        {/* 下载按钮 */}
+        <div className="flex gap-2">
+          <button onClick={exportProtocol} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-[11px] text-primary-foreground hover:bg-primary/90">
+            <Download size={12}/> 下载 Markdown
           </button>
         </div>
-        <pre className="rounded-xl bg-secondary/50 p-5 text-xs leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-auto font-mono">
-          {md}
-        </pre>
+
+        {/* 关键风险提示 */}
+        {audit.criticalRisks.length > 0 && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+            <p className="text-xs font-semibold text-red-700 mb-1.5">🔴 关键风险提示</p>
+            {audit.criticalRisks.map((r, i) => (
+              <p key={i} className="text-[11px] text-red-700 ml-4">• {r}</p>
+            ))}
+          </div>
+        )}
+
+        {/* 按阶段展示步骤 */}
+        {phaseItems.map((phase) => (
+          <div key={phase.label} className="rounded-lg border border-border bg-card p-4">
+            <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              {phase.icon} {phase.label}
+              <span className="text-[10px] text-muted-foreground">({phase.items.length} 项)</span>
+            </h4>
+            <div className="space-y-2">
+              {phase.items.map((item) => (
+                <label
+                  key={item.key}
+                  className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition ${
+                    checkedSteps.has(item.key) ? "bg-green-50/30" : "hover:bg-secondary/50"
+                  } ${item.isGap ? "border border-amber-200" : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checkedSteps.has(item.key)}
+                    onChange={() => toggleCheckStep(item.key)}
+                    className="mt-0.5 shrink-0 accent-primary"
+                  />
+                  <span className={`text-xs leading-relaxed flex-1 ${
+                    checkedSteps.has(item.key) ? "text-muted-foreground line-through" :
+                    item.isGap ? "text-amber-700 font-medium" : "text-foreground"
+                  }`}>
+                    {item.text}
+                  </span>
+                  {item.isGap && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">待补全</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* 底部风险复述 */}
+        {audit.criticalRisks.length > 0 && (
+          <div className="rounded-lg bg-secondary/30 p-3 text-[11px] text-muted-foreground">
+            <p className="font-semibold text-foreground mb-1">⚠️ 开始实验前请确认：</p>
+            {audit.criticalRisks.map((r, i) => (
+              <p key={i} className="ml-4">• {r}</p>
+            ))}
+          </div>
+        )}
       </div>
     );
   };

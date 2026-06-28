@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowRight, FileText, Sparkles, CheckCircle2,
   Microscope, Layers, BarChart3, Atom, Music,
-  FileSpreadsheet, Loader2,
+  FileSpreadsheet, Loader2, Play, Pause, Volume2,
 } from "lucide-react";
 import { RequireAuth } from "../lib/auth-guard";
 import { useLab, type Experiment, type AttachedFile } from "../lib/labStore";
@@ -171,8 +171,60 @@ function ComparePage() {
                   </span>
                 </div>
 
-                {/* 文本文件：显示原始内容 */}
-                {text ? (
+                {/* 视频文件 */}
+                {f.name.match(/\.(mp4|webm|mov)$/i) ? (
+                  <div className="rounded-lg overflow-hidden bg-black">
+                    <video controls className="w-full max-h-[300px]" poster="/media/hela-cells.jpg">
+                      <source src={`/media/${f.name}`} type={`video/${f.name.split('.').pop()}`} />
+                      您的浏览器不支持视频播放
+                    </video>
+                    <div className="flex items-center justify-between px-3 py-2 bg-black/80 text-white text-[10px]">
+                      <span className="flex items-center gap-1"><Play size={10}/> {f.name}</span>
+                      <span>{(f.size/1024).toFixed(1)}KB</span>
+                    </div>
+                  </div>
+                ) : f.name.match(/\.(wav|m4a|mp3)$/i) ? (
+                  /* 音频文件 */
+                  <div className="rounded-lg bg-gradient-to-r from-pink-900/20 to-rose-900/20 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Volume2 size={16} className="text-pink-500"/>
+                      <span className="text-xs font-medium">{f.name}</span>
+                    </div>
+                    <audio controls className="w-full">
+                      <source src={`/media/${f.name}`} type={`audio/${f.name.split('.').pop()}`} />
+                    </audio>
+                    <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
+                      <span>{(f.size/1024).toFixed(1)}KB</span>
+                      <span>44.1kHz</span>
+                      <span>双音调心音模拟</span>
+                    </div>
+                  </div>
+                ) : f.name.match(/\.(png|jpg|jpeg)$/i) ? (
+                  /* 图片文件 */
+                  <div className="rounded-lg overflow-hidden border border-border">
+                    <img
+                      src={`/media/${f.name}`}
+                      alt={f.name}
+                      className="w-full max-h-[300px] object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    <div className="px-3 py-2 bg-secondary/30 text-[10px] text-muted-foreground">
+                      {f.name} · {(f.size/1024).toFixed(1)}KB
+                    </div>
+                  </div>
+                ) : f.name.match(/\.pdf$/i) ? (
+                  /* PDF 文档 */
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <iframe src={`/media/${f.name}`} className="w-full h-[300px]" title={f.name} />
+                    <div className="px-3 py-2 bg-secondary/30 text-[10px] text-muted-foreground flex items-center justify-between">
+                      <span>{f.name}</span>
+                      <a href={`/media/${f.name}`} target="_blank" className="text-primary hover:underline">在新窗口打开</a>
+                    </div>
+                  </div>
+                ) : text ? (
+                /* 文本文件：显示原始内容 */
                   f.name.endsWith(".csv") ? (
                     (() => {
                       const lines = text.trim().split("\n");

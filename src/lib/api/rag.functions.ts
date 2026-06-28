@@ -31,21 +31,114 @@ export const ragSearch = createServerFn({ method: "POST" })
     const qVec = await generateEmbedding({ data: { text: data.question } });
     if (!Array.isArray(qVec) || qVec.length === 0) return [];
 
-    // 2. pgvector RPC 相似度搜索（user_id 隔离 + 可选卡片过滤）
-    const { data: similar, error } = await supabase.rpc("match_experiments", {
-      query_embedding: qVec,
-      match_threshold: 0.6,
-      match_count: data.limit,
-      filter_user_id: data.userId ?? null,
-      filter_ids: data.selectedIds ?? null,
-    });
+    // 2. 优先用 chunk 级搜索（精确匹配字段），失败 fallback 到整卡搜索
+    let simMap = new Map<string, { name: string; similarity: number; bestChunk: string }>();
 
-    if (error || !similar || !Array.isArray(similar)) return [];
+    // 2a. 尝试 chunk 级向量搜索
+    const { data: chunkSimilar, error: chunkErr } = await supabase.rpc(
+      "match_experiment_chunks",
+      {
+        query_embedding: qVec,
+        match_threshold: 0.55, // 稍低阈值，chunk 粒度更细
+        match_count: 20, // 多召回一些，后续按实验去重
+        filter_user_id: data.userId ?? null,
+        filter_ids: data.selectedIds ?? null,
+      },
+    );
 
-    const simList = similar as Array<{ id: string; name: string; similarity: number }>;
+    if (!chunkErr && Array.isArray(chunkSimilar) && chunkSimilar.length > 0) {
+      const chunkList = chunkSimilar as Array<{
+        experiment_id: string;
+        experiment_name: string;
+        chunk_type: string;
+        chunk_content: string;
+        similarity: number;
+      }>;
+      // 按 experiment_id 去重，取最佳匹配 chunk
+      for (const c of chunkList) {
+        const existing = simMap.get(c.experiment_id);
+        if (!existing || c.similarity > existing.similarity) {
+          simMap.set(c.experiment_id, {
+            name: c.experiment_name,
+            similarity: c.similarity,
+            bestChunk: `[${c.chunk_type}] ${c.chunk_content}`,
+          });
+        }
+      }
+    }
 
-    // 3. 拉取完整实验数据
-    const ids = simList.map((s) => s.id);
+    // 2b. Fallback: 混合搜索（语义 + 关键词 BM25）
+    if (simMap.size === 0) {
+      const { data: hybrid } = await supabase.rpc("hybrid_search_experiments", {
+        query_text: data.question,
+        query_embedding: qVec,
+        match_threshold: 0.5,
+        match_count: data.limit * 4,
+        semantic_weight: 0.7,
+        keyword_weight: 0.3,
+        filter_user_id: data.userId ?? null,
+        filter_ids: data.selectedIds ?? null,
+      });
+
+      if (Array.isArray(hybrid)) {
+        const hList = hybrid as Array<{
+          id: string;
+          name: string;
+          similarity: number;
+          keyword_score: number;
+          hybrid_score: number;
+        }>;
+        for (const h of hList) {
+          simMap.set(h.id, {
+            name: h.name,
+            similarity: h.hybrid_score,
+            bestChunk: h.keyword_score > 0 ? `关键词匹配: ${data.question}` : "",
+          });
+        }
+      }
+    }
+
+    if (simMap.size === 0) return [];
+
+    // 2c. Reranker 精排（候选 > limit 时启用，失败静默降级）
+    if (simMap.size > data.limit) {
+      try {
+        const entries = [...simMap.entries()];
+        // 构建文档: 实验名 + 最佳匹配 chunk
+        const documents = entries.map(([, info]) =>
+          `${info.name}: ${info.bestChunk || ""}`.slice(0, 1000),
+        );
+        const { rerank } = await import("./ai.functions");
+        const reranked = await rerank({
+          data: { query: data.question, documents, topN: data.limit },
+        });
+
+        if (Array.isArray(reranked) && reranked.length > 0) {
+          // 用 reranker 得分替换 similarity
+          const rerankMap = new Map<string, { name: string; similarity: number; bestChunk: string }>();
+          for (const r of reranked) {
+            const entry = entries[r.index];
+            if (entry) {
+              rerankMap.set(entry[0], {
+                ...entry[1],
+                similarity: r.score, // reranker 得分覆盖向量相似度
+              });
+            }
+          }
+          simMap = rerankMap;
+        }
+      } catch (err) {
+        console.warn("[RAG] Reranker failed, using vector scores:", err);
+        // 降级：继续用向量/混合搜索分数
+      }
+    }
+
+    // 3. 取 top-N 个实验，拉取完整数据
+    const topEntries = [...simMap.entries()]
+      .sort((a, b) => b[1].similarity - a[1].similarity)
+      .slice(0, data.limit);
+
+    const ids = topEntries.map(([id]) => id);
     const { data: full } = await supabase
       .from("experiments")
       .select("id, name, purpose, results, steps, params")
@@ -62,27 +155,33 @@ export const ragSearch = createServerFn({ method: "POST" })
       params?: unknown;
     }>;
 
-    const simMap = new Map(simList.map((s) => [s.id, s.similarity]));
+    // 按原始相似度排序
+    const idOrder = new Map(ids.map((id, i) => [id, i]));
 
-    return rows.map((r) => {
-      const stepsText = Array.isArray(r.steps)
-        ? (r.steps as string[]).join("; ")
-        : "";
-      const paramsText = Array.isArray(r.params)
-        ? (r.params as Array<{ name: string; value: string; unit: string }>)
-            .map((p) => `${p.name ?? ""}: ${p.value ?? ""}${p.unit ?? ""}`)
-            .join(", ")
-        : "";
-      const text = [r.purpose, r.results, stepsText, paramsText]
-        .filter(Boolean)
-        .join(" | ");
-      return {
-        id: r.id,
-        name: r.name,
-        text: text.slice(0, 8000),
-        similarity: simMap.get(r.id) ?? 0,
-      };
-    });
+    return rows
+      .map((r) => {
+        const stepsText = Array.isArray(r.steps)
+          ? (r.steps as string[]).join("; ")
+          : "";
+        const paramsText = Array.isArray(r.params)
+          ? (r.params as Array<{ name: string; value: string; unit: string }>)
+              .map((p) => `${p.name ?? ""}: ${p.value ?? ""}${p.unit ?? ""}`)
+              .join(", ")
+          : "";
+        const fullText = [r.purpose, r.results, stepsText, paramsText]
+          .filter(Boolean)
+          .join(" | ");
+        // 如果有 chunk 精准匹配，优先用 chunk 内容
+        const chunkText = simMap.get(r.id)?.bestChunk ?? "";
+        const text = chunkText || fullText.slice(0, 8000);
+        return {
+          id: r.id,
+          name: r.name,
+          text: text.slice(0, 8000),
+          similarity: simMap.get(r.id)?.similarity ?? 0,
+        };
+      })
+      .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99));
   });
 
 // ═══════════════════════════════════════════════════════
@@ -96,6 +195,11 @@ export type RagSource = {
   link: string;
 };
 
+export type HistoryEntry = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 const RAG_SYSTEM_PROMPT = `你是 LabNote Agent，一个科研实验数据治理助手。
 你的回答必须基于提供的实验记录上下文，不要编造数据。
 如果上下文中没有相关信息，诚实告知用户"知识库中暂无相关记录"。
@@ -107,6 +211,10 @@ export const ragAnswer = createServerFn({ method: "POST" })
       question: z.string().min(1),
       userId: z.string().optional().nullable(),
       selectedIds: z.array(z.string()).optional(),
+      history: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })).optional(),
     }),
   )
   .handler(async ({ data }) => {
@@ -131,8 +239,14 @@ export const ragAnswer = createServerFn({ method: "POST" })
       )
       .join("\n\n");
 
-    // 3. 调 DeepSeek-V3 生成回答
+    // 3. 调 DeepSeek-V3 生成回答（含对话历史）
     const prompt = `基于以下实验记录回答用户问题。\n\n实验记录：\n${contextBlock}\n\n用户问题：${data.question}\n\n请用2-4句话回答，并引用相关实验名称。`;
+
+    // 构建 messages：system + 历史（最近 N 轮）+ 当前问题
+    const historyMessages = (data.history ?? []).slice(-6).map((h) => ({
+      role: h.role,
+      content: h.role === "assistant" ? h.content.slice(0, 300) : h.content,
+    }));
 
     let answer: string;
     try {
@@ -141,6 +255,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
           model: "deepseek-ai/DeepSeek-V3",
           messages: [
             { role: "system", content: RAG_SYSTEM_PROMPT },
+            ...historyMessages,
             { role: "user", content: prompt },
           ],
           maxTokens: 512,
@@ -178,6 +293,10 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       question: z.string().min(1),
       userId: z.string().optional().nullable(),
       selectedIds: z.array(z.string()).optional(),
+      history: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })).optional(),
     }),
   )
   .handler(async ({ data }) => {

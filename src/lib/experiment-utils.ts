@@ -34,6 +34,7 @@ export type ExperimentRow = {
   ai_insights: string | null;
   last_parsed_at: string | null;
   knowledge_tags: string[] | null;
+  search_text: string | null;
   created_at: string;
   updated_at: string;
   user_id: string | null;
@@ -89,6 +90,11 @@ export function toRow(e: Experiment, userId?: string): ExperimentRow {
     ai_insights: sanitizeText(e.aiInsights) || null,
     last_parsed_at: e.lastParsedAt || null,
     knowledge_tags: e.knowledgeTags || [],
+    search_text: [
+      e.name, e.purpose, e.results, e.notes,
+      e.device.name, e.device.model,
+      e.sample.id, e.operator, e.discipline,
+    ].filter(Boolean).join(" "),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     user_id: userId ?? null,
@@ -187,5 +193,95 @@ export function buildDbPatch(patch: Partial<Experiment>): Record<string, unknown
   if (patch.aiInsights !== undefined) dbPatch.ai_insights = patch.aiInsights;
   if (patch.lastParsedAt !== undefined) dbPatch.last_parsed_at = patch.lastParsedAt;
   if (patch.knowledgeTags !== undefined) dbPatch.knowledge_tags = patch.knowledgeTags;
+
+  // 任一文本字段变更时重建 search_text（混合检索用）
+  const textFields = ["name", "purpose", "results", "notes", "operator", "discipline"];
+  const hasTextField = textFields.some((k) => (patch as any)[k] !== undefined)
+    || patch.device !== undefined
+    || patch.sample !== undefined;
+  if (hasTextField) {
+    const parts = [
+      patch.name, patch.purpose, patch.results, patch.notes,
+      patch.device?.name, patch.device?.model,
+      patch.sample?.id, patch.operator, patch.discipline,
+    ].filter(Boolean);
+    if (parts.length > 0) dbPatch.search_text = parts.join(" ");
+  }
+
   return dbPatch;
+}
+
+// ═══════════════════════════════════════════════════════
+// 语义分块 — 将 Experiment 拆为 5 个独立 chunk
+// ═══════════════════════════════════════════════════════
+
+export type ExperimentChunk = {
+  chunkType: "meta" | "purpose" | "device_sample" | "params_steps" | "results";
+  content: string;
+};
+
+export function splitExperimentIntoChunks(exp: Experiment): ExperimentChunk[] {
+  const chunks: ExperimentChunk[] = [];
+
+  // chunk 1: meta — 谁、什么时候、什么学科
+  const metaParts = [
+    exp.name,
+    exp.date ? `日期: ${exp.date}` : "",
+    exp.operator ? `操作人: ${exp.operator}` : "",
+    exp.discipline ? `学科: ${exp.discipline}` : "",
+  ].filter(Boolean);
+  if (metaParts.length > 0) {
+    chunks.push({ chunkType: "meta", content: metaParts.join("; ") });
+  }
+
+  // chunk 2: purpose — 为什么做
+  const purposeParts = [
+    exp.purpose ? `目的: ${exp.purpose}` : "",
+    exp.background ? `背景: ${exp.background}` : "",
+  ].filter(Boolean);
+  if (purposeParts.length > 0) {
+    chunks.push({ chunkType: "purpose", content: purposeParts.join("; ") });
+  }
+
+  // chunk 3: device_sample — 用什么设备和样品
+  const dsParts = [
+    exp.device.name ? `设备: ${exp.device.name}` : "",
+    exp.device.model ? `型号: ${exp.device.model}` : "",
+    exp.device.vendor ? `厂家: ${exp.device.vendor}` : "",
+    exp.sample.id ? `样品编号: ${exp.sample.id}` : "",
+    exp.sample.batch ? `批次: ${exp.sample.batch}` : "",
+    exp.sample.source ? `来源: ${exp.sample.source}` : "",
+  ].filter(Boolean);
+  if (dsParts.length > 0) {
+    chunks.push({ chunkType: "device_sample", content: dsParts.join("; ") });
+  }
+
+  // chunk 4: params_steps — 实验参数和操作步骤
+  const paramsText = exp.params
+    .filter((p) => p.name)
+    .map((p) => `${p.name}: ${p.value}${p.unit ? " " + p.unit : ""}`)
+    .join(", ");
+  const stepsText = exp.steps
+    .filter((s) => s)
+    .map((s, i) => `步骤${i + 1}: ${s}`)
+    .join("; ");
+  const psParts = [
+    paramsText ? `参数: ${paramsText}` : "",
+    stepsText ? `步骤: ${stepsText}` : "",
+  ].filter(Boolean);
+  if (psParts.length > 0) {
+    chunks.push({ chunkType: "params_steps", content: psParts.join("; ") });
+  }
+
+  // chunk 5: results — 结果和 AI 洞察
+  const resultParts = [
+    exp.results ? `结果: ${exp.results}` : "",
+    exp.notes ? `备注: ${exp.notes}` : "",
+    exp.aiInsights ? `AI洞察: ${exp.aiInsights}` : "",
+  ].filter(Boolean);
+  if (resultParts.length > 0) {
+    chunks.push({ chunkType: "results", content: resultParts.join("; ") });
+  }
+
+  return chunks;
 }
