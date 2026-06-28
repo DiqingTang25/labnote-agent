@@ -4,23 +4,167 @@
  *
  * AI 调用通过 server functions 代理 — API key 仅在服务端
  * 文件处理辅助函数（fileToBase64 等）保留在客户端
+ *
+ * 数据脱敏集成：
+ *   chat() 和 chatWithSanitizer() 支持在发送前扫描敏感信息
+ *   通过 onSensitive 回调让 UI 层展示确认弹窗
  */
+import type { ScanResult, AuditLogEntry } from "./sanitizer";
+import { scanSensitivity, applySanitization, createAuditEntry, persistAuditEntry } from "./sanitizer";
 
 // ===== 模型选择（不暴露给 UI） =====
-const MODEL_TEXT = "deepseek-ai/DeepSeek-V3";
-const MODEL_VL = "Qwen/Qwen3-VL-32B-Instruct";
-const MODEL_OMNI = "Qwen/Qwen3-Omni-30B-A3B-Instruct";
-const MODEL_OCR = "deepseek-ai/DeepSeek-OCR";
+export const MODEL_TEXT = "deepseek-ai/DeepSeek-V3";
+export const MODEL_VL = "Qwen/Qwen3-VL-32B-Instruct";
+export const MODEL_OMNI = "Qwen/Qwen3-Omni-30B-A3B-Instruct";
+export const MODEL_OCR = "deepseek-ai/DeepSeek-OCR";
+
+/** 脱敏回调 — UI 层实现，返回脱敏后的文本或 null 表示取消 */
+export type SanitizeHook = (
+  scan: ScanResult,
+  originalText: string,
+) => Promise<{ action: "sanitize" | "send_raw" | "cancel"; sanitizedText?: string }>;
+
+/** 脱敏配置 */
+export type SanitizeConfig = {
+  /** 是否启用脱敏检测 */
+  enabled: boolean;
+  /** 脱敏回调（UI 确认弹窗）。如果未提供，默认行为：高风险 → 报错，中低风险 → 自动脱敏 */
+  onSensitive?: SanitizeHook;
+  /** 数据类型（用于审计日志） */
+  dataType?: AuditLogEntry["dataType"];
+  /** 用户 ID */
+  userId?: string;
+};
 
 export async function chat(
   model: string,
   messages: Array<{ role: string; content: unknown }>,
   maxTokens = 2048,
+  sanitize?: SanitizeConfig,
 ): Promise<string> {
+  // ── 脱敏检测 ──
+  if (sanitize?.enabled) {
+    const textContent = extractTextContent(messages);
+    const scan = scanSensitivity(textContent);
+
+    if (scan.hasSensitive) {
+      let sendText = textContent;
+
+      if (sanitize.onSensitive) {
+        // 有 UI 回调 → 让用户决定
+        const decision = await sanitize.onSensitive(scan, textContent);
+        if (decision.action === "cancel") {
+          throw new SanitizeBlockedError(scan);
+        }
+        if (decision.action === "sanitize" && decision.sanitizedText) {
+          sendText = decision.sanitizedText;
+        }
+        // action === "send_raw" → 使用原始文本
+      } else {
+        // 无回调 → 默认策略：高风险自动报错
+        if (scan.highRiskCount > 0) {
+          throw new SanitizeBlockedError(scan);
+        }
+        // 中低风险 → 自动脱敏
+        const result = applySanitization(textContent, scan.matches);
+        sendText = result.sanitized;
+      }
+
+      // 如果文本被修改了，需要重建 messages
+      if (sendText !== textContent) {
+        messages = rebuildMessagesWithText(messages, sendText);
+      }
+
+      // 记录审计日志
+      const audit = await createAuditEntry({
+        dataType: sanitize.dataType ?? "paper",
+        targetApi: "SiliconFlow",
+        model,
+        content: sendText,
+        sanitized: sendText !== textContent,
+        sanitizeStrategies: sendText !== textContent ? ["mask", "generalize", "placeholder"] : [],
+        sensitivityMatchCount: scan.matches.length,
+        userConfirmation: sanitize.onSensitive ? "manual_approve" : "auto_sanitized",
+        userId: sanitize.userId,
+      });
+      persistAuditEntry(audit).catch(() => {});
+    } else {
+      // 无敏感信息
+      const audit = await createAuditEntry({
+        dataType: sanitize.dataType ?? "paper",
+        targetApi: "SiliconFlow",
+        model,
+        content: textContent,
+        sanitized: false,
+        sensitivityMatchCount: 0,
+        userConfirmation: "none_needed",
+        userId: sanitize.userId,
+      });
+      persistAuditEntry(audit).catch(() => {});
+    }
+  }
+
   // 通过 server function 代理（API key 在服务端）
   const { chatCompletion } = await import("./api/ai.functions");
   return chatCompletion({
-    data: { model, messages, maxTokens, temperature: 0.3 },
+    data: {
+      model,
+      messages,
+      maxTokens,
+      temperature: 0.3,
+      sanitized: sanitize?.enabled ?? false,
+    },
+  });
+}
+
+/** 脱敏检测被阻断时抛出的错误 */
+export class SanitizeBlockedError extends Error {
+  scan: ScanResult;
+  constructor(scan: ScanResult) {
+    super(`数据包含 ${scan.matches.length} 项敏感信息，已阻止发送：${scan.summary}`);
+    this.name = "SanitizeBlockedError";
+    this.scan = scan;
+  }
+}
+
+/** 提取消息中的纯文本内容（用于扫描） */
+function extractTextContent(messages: Array<{ role: string; content: unknown }>): string {
+  const parts: string[] = [];
+  for (const msg of messages) {
+    if (typeof msg.content === "string") {
+      parts.push(msg.content);
+    } else if (Array.isArray(msg.content)) {
+      for (const block of msg.content as Array<{ type?: string; text?: string }>) {
+        if (block.type === "text" && block.text) {
+          parts.push(block.text);
+        }
+      }
+    }
+  }
+  return parts.join("\n");
+}
+
+/** 将脱敏后的文本重建到 messages 中 */
+function rebuildMessagesWithText(
+  messages: Array<{ role: string; content: unknown }>,
+  newText: string,
+): Array<{ role: string; content: unknown }> {
+  return messages.map((msg) => {
+    if (typeof msg.content === "string") {
+      return { ...msg, content: newText };
+    }
+    if (Array.isArray(msg.content)) {
+      return {
+        ...msg,
+        content: (msg.content as Array<{ type: string; text?: string }>).map((block) => {
+          if (block.type === "text" && block.text) {
+            return { ...block, text: newText };
+          }
+          return block;
+        }),
+      };
+    }
+    return msg;
   });
 }
 
