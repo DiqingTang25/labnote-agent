@@ -7,8 +7,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getServiceSupabase } from "../supabase-server.server";
-import { generateEmbedding, chatCompletion } from "./ai.functions";
+import { generateEmbedding, chatCompletion, rewriteQuery } from "./ai.functions";
 import { getServerConfig } from "../config.server";
+import { getProxiedFetch } from "../proxy-fetch.server";
 import { fromRow } from "../experiment-utils";
 
 // ═══════════════════════════════════════════════════════
@@ -22,17 +23,26 @@ export const ragSearch = createServerFn({ method: "POST" })
       limit: z.number().optional().default(3),
       userId: z.string().optional().nullable(),
       selectedIds: z.array(z.string()).optional(),
+      history: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })).optional(),
     }),
   )
   .handler(async ({ data }) => {
     const supabase = getServiceSupabase();
 
-    // 1. 生成问题的 embedding
-    const qVec = await generateEmbedding({ data: { text: data.question } });
+    // 1. Query 改写：模糊问题 → 精确检索词（失败静默降级）
+    const searchQuery = await rewriteQuery({
+      data: { question: data.question, history: data.history },
+    });
+
+    // 2. 生成改写后问题的 embedding
+    const qVec = await generateEmbedding({ data: { text: searchQuery } });
     if (!Array.isArray(qVec) || qVec.length === 0) return [];
 
     // 2. 优先用 chunk 级搜索（精确匹配字段），失败 fallback 到整卡搜索
-    let simMap = new Map<string, { name: string; similarity: number; bestChunk: string }>();
+    let simMap = new Map<string, { name: string; similarity: number; bestChunk: string; chunkType: string }>();
 
     // 2a. 尝试 chunk 级向量搜索
     const { data: chunkSimilar, error: chunkErr } = await supabase.rpc(
@@ -61,7 +71,8 @@ export const ragSearch = createServerFn({ method: "POST" })
           simMap.set(c.experiment_id, {
             name: c.experiment_name,
             similarity: c.similarity,
-            bestChunk: `[${c.chunk_type}] ${c.chunk_content}`,
+            bestChunk: c.chunk_content,
+            chunkType: c.chunk_type,
           });
         }
       }
@@ -70,7 +81,7 @@ export const ragSearch = createServerFn({ method: "POST" })
     // 2b. Fallback: 混合搜索（语义 + 关键词 BM25）
     if (simMap.size === 0) {
       const { data: hybrid } = await supabase.rpc("hybrid_search_experiments", {
-        query_text: data.question,
+        query_text: searchQuery,
         query_embedding: qVec,
         match_threshold: 0.5,
         match_count: data.limit * 4,
@@ -92,7 +103,8 @@ export const ragSearch = createServerFn({ method: "POST" })
           simMap.set(h.id, {
             name: h.name,
             similarity: h.hybrid_score,
-            bestChunk: h.keyword_score > 0 ? `关键词匹配: ${data.question}` : "",
+            bestChunk: h.keyword_score > 0 ? `关键词匹配: ${searchQuery}` : "",
+            chunkType: h.keyword_score > 0 ? "keyword" : "",
           });
         }
       }
@@ -115,7 +127,7 @@ export const ragSearch = createServerFn({ method: "POST" })
 
         if (Array.isArray(reranked) && reranked.length > 0) {
           // 用 reranker 得分替换 similarity
-          const rerankMap = new Map<string, { name: string; similarity: number; bestChunk: string }>();
+          const rerankMap = new Map<string, { name: string; similarity: number; bestChunk: string; chunkType: string }>();
           for (const r of reranked) {
             const entry = entries[r.index];
             if (entry) {
@@ -172,13 +184,15 @@ export const ragSearch = createServerFn({ method: "POST" })
           .filter(Boolean)
           .join(" | ");
         // 如果有 chunk 精准匹配，优先用 chunk 内容
-        const chunkText = simMap.get(r.id)?.bestChunk ?? "";
+        const info = simMap.get(r.id);
+        const chunkText = info?.bestChunk ?? "";
         const text = chunkText || fullText.slice(0, 8000);
         return {
           id: r.id,
           name: r.name,
           text: text.slice(0, 8000),
-          similarity: simMap.get(r.id)?.similarity ?? 0,
+          similarity: info?.similarity ?? 0,
+          chunkType: info?.chunkType ?? "",
         };
       })
       .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99));
@@ -193,6 +207,17 @@ export type RagSource = {
   page: string;
   confidence: string;
   link: string;
+  chunkType?: string;
+  snippet?: string;
+};
+
+const CHUNK_LABELS: Record<string, string> = {
+  meta: "基本信息",
+  purpose: "实验目的",
+  device_sample: "设备/样品",
+  params_steps: "参数/步骤",
+  results: "结果/洞察",
+  keyword: "关键词匹配",
 };
 
 export type HistoryEntry = {
@@ -220,7 +245,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     // 1. 向量检索 Top-3 相关实验（按用户隔离 + 可选卡片边界）
     const contexts = await ragSearch({
-      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds },
+      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds, history: data.history },
     });
 
     if (!Array.isArray(contexts) || contexts.length === 0) {
@@ -239,7 +264,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
       )
       .join("\n\n");
 
-    // 3. 调 DeepSeek-V3 生成回答（含对话历史）
+    // 3. 调 DeepSeek-V3 生成回答（含对话历史 + LLM 响应缓存）
     const prompt = `基于以下实验记录回答用户问题。\n\n实验记录：\n${contextBlock}\n\n用户问题：${data.question}\n\n请用2-4句话回答，并引用相关实验名称。`;
 
     // 构建 messages：system + 历史（最近 N 轮）+ 当前问题
@@ -250,17 +275,31 @@ export const ragAnswer = createServerFn({ method: "POST" })
 
     let answer: string;
     try {
-      answer = await chatCompletion({
-        data: {
-          model: "deepseek-ai/DeepSeek-V3",
-          messages: [
-            { role: "system", content: RAG_SYSTEM_PROMPT },
-            ...historyMessages,
-            { role: "user", content: prompt },
-          ],
-          maxTokens: 512,
-        },
-      });
+      // LLM 响应缓存检查
+      const { contentHash: _ch, getCachedAnswer: _gca, setCachedAnswer: _sca } = await import("../rag-cache");
+      const ctxHash = _ch(contextBlock + (data.history ? JSON.stringify(data.history) : ""));
+      const cached = _gca(data.question, ctxHash);
+      if (cached) {
+        answer = cached.answer;
+      } else {
+        answer = await chatCompletion({
+          data: {
+            model: "deepseek-ai/DeepSeek-V3",
+            messages: [
+              { role: "system", content: RAG_SYSTEM_PROMPT },
+              ...historyMessages,
+              { role: "user", content: prompt },
+            ],
+            maxTokens: 512,
+          },
+        });
+        // 写入缓存
+        const sourcesForCache = contexts.map((c) => {
+          const ct = (c as any).chunkType as string | undefined;
+          return { doc: c.name, page: ct ? `实验卡片 · ${CHUNK_LABELS[ct] || ct}` : "实验卡片", confidence: `${(c.similarity * 100).toFixed(0)}%`, link: `/workbench?id=${c.id}`, chunkType: ct, snippet: ct ? c.text.slice(0, 180) : undefined };
+        });
+        _sca(data.question, ctxHash, answer, sourcesForCache as any);
+      }
     } catch (err) {
       console.error("[RAG] LLM call failed:", err);
       answer =
@@ -270,13 +309,18 @@ export const ragAnswer = createServerFn({ method: "POST" })
           .join("\n");
     }
 
-    // 4. 构建来源
-    const sources: RagSource[] = contexts.map((c) => ({
-      doc: c.name,
-      page: "实验卡片",
-      confidence: `${(c.similarity * 100).toFixed(0)}%`,
-      link: `/workbench?id=${c.id}`,
-    }));
+    // 4. 构建来源（含 chunk 级精确定位）
+    const sources: RagSource[] = contexts.map((c) => {
+      const ct = (c as any).chunkType as string | undefined;
+      return {
+        doc: c.name,
+        page: ct ? `实验卡片 · ${CHUNK_LABELS[ct] || ct}` : "实验卡片",
+        confidence: `${(c.similarity * 100).toFixed(0)}%`,
+        link: `/workbench?id=${c.id}`,
+        chunkType: ct,
+        snippet: ct ? c.text.slice(0, 180) : undefined,
+      };
+    });
 
     return { answer, sources };
   });
@@ -286,6 +330,10 @@ export const ragAnswer = createServerFn({ method: "POST" })
 // ═══════════════════════════════════════════════════════
 
 const SF_BASE = "https://api.siliconflow.cn/v1";
+
+function apiFetch(url: string, init: RequestInit): Promise<Response> {
+  return getProxiedFetch()(url, init);
+}
 
 export const ragAnswerStream = createServerFn({ method: "POST" })
   .inputValidator(
@@ -302,19 +350,24 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     // 1. RAG 检索（复用 ragSearch）
     const contexts = await ragSearch({
-      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds },
+      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds, history: data.history },
     });
 
     let sources: RagSource[] = [];
     let contextBlock = "";
 
     if (Array.isArray(contexts) && contexts.length > 0) {
-      sources = contexts.map((c) => ({
-        doc: c.name,
-        page: "实验卡片",
-        confidence: `${(c.similarity * 100).toFixed(0)}%`,
-        link: `/workbench?id=${c.id}`,
-      }));
+      sources = contexts.map((c) => {
+        const ct = (c as any).chunkType as string | undefined;
+        return {
+          doc: c.name,
+          page: ct ? `实验卡片 · ${CHUNK_LABELS[ct] || ct}` : "实验卡片",
+          confidence: `${(c.similarity * 100).toFixed(0)}%`,
+          link: `/workbench?id=${c.id}`,
+          chunkType: ct,
+          snippet: ct ? c.text.slice(0, 180) : undefined,
+        };
+      });
 
       contextBlock = contexts
         .map(
@@ -362,7 +415,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
     // 4. 调用 SiliconFlow 流式 API
     let sfRes: Response;
     try {
-      sfRes = await fetch(`${SF_BASE}/chat/completions`, {
+      sfRes = await apiFetch(`${SF_BASE}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,

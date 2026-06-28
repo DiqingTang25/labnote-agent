@@ -24,5 +24,6 @@ export function getServerConfig() {
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
     sfApiKey: process.env.SF_API_KEY,
     mpApiKey: process.env.MP_API_KEY,
+    httpProxy: process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy,
   };
 }

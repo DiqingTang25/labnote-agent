@@ -10,8 +10,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getServerConfig } from "../config.server";
+import { getProxiedFetch } from "../proxy-fetch.server";
 
 const MP_BASE = "https://api.materialsproject.org";
+
+/** Fetch with optional HTTP proxy support */
+function mpFetch(url: string, init: RequestInit): Promise<Response> {
+  return getProxiedFetch()(url, init);
+}
 
 /** 单个材料查询结果 */
 export interface MPMaterialResult {
@@ -65,7 +71,7 @@ export const searchMaterialsProject = createServerFn({ method: "GET" })
         url.searchParams.set("_limit", "3");
         url.searchParams.set("_sort_fields", "energy_above_hull");
 
-        const res = await fetch(url.toString(), { headers });
+        const res = await mpFetch(url.toString(), { headers });
 
         if (!res.ok) {
           const errText = await res.text().catch(() => "");

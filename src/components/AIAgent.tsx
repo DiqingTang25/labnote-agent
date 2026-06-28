@@ -3,11 +3,11 @@
  */
 import { useState, useMemo } from "react";
 import { useLab } from "../lib/labStore";
-import { ragAnswerReal, ragAnswerRealStream } from "../lib/supabase";
+import { ragAnswerReal, ragAnswerRealStream, submitFeedback } from "../lib/supabase";
 import {
   MessageCircle, X, Sparkles, Loader2, Send, FileText, Target,
   ArrowUpRight, CheckCircle2, Filter, BookOpen, Brain, Search,
-  GitBranch, Layers, Zap, Play,
+  GitBranch, Layers, Zap, Play, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -34,7 +34,7 @@ export function AIAgent() {
   const [scope, setScope] = useState<"all" | "selected" | "single">("selected");
 
   // 对话
-  const [chat, setChat] = useState<Array<{ role: "user" | "agent"; text: string; sources?: Array<{ doc: string; conf: string; link: string }>; workflow?: boolean }>>([
+  const [chat, setChat] = useState<Array<{ role: "user" | "agent"; text: string; sources?: Array<{ doc: string; conf: string; link: string; chunkType?: string; snippet?: string }>; workflow?: boolean }>>([
     {
       role: "agent",
       text: `你好！我是 LabNote Agent，已加载 ${experiments.length} 张实验卡片作为知识库。你可以限定查询范围，我会展示完整的分析工作流。`,
@@ -44,6 +44,7 @@ export function AIAgent() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [workflowStep, setWorkflowStep] = useState(-1);
+  const [feedback, setFeedback] = useState<Record<number, "up" | "down" | null>>({});
 
   // 当前激活的卡片（根据 scope）
   const activeCards = useMemo(() => {
@@ -142,6 +143,8 @@ export function AIAgent() {
                   doc: s.doc ?? "",
                   conf: s.confidence ?? "",
                   link: s.link ?? "",
+                  chunkType: s.chunkType ?? "",
+                  snippet: s.snippet ?? "",
                 }));
                 break;
               case "token":
@@ -189,7 +192,7 @@ export function AIAgent() {
         setChat((c) => [...c, {
           role: "agent",
           text: answer,
-          sources: sources.map((s) => ({ doc: s.doc, conf: s.confidence, link: s.link })),
+          sources: sources.map((s) => ({ doc: s.doc, conf: s.confidence, link: s.link, chunkType: s.chunkType, snippet: s.snippet })),
         }]);
       } catch {
         setChat((c) => [...c, {
@@ -306,16 +309,53 @@ export function AIAgent() {
                     </div>
                     {m.sources.map((s, idx) => (
                       <button key={idx} onClick={() => navigate({ to: s.link })}
-                        className="w-full flex items-center justify-between text-[10px] py-1 hover:bg-secondary rounded px-1">
-                        <span className="flex items-center gap-1 truncate">
-                          <Target size={9} className="text-[color:var(--color-success)]"/>
-                          {s.doc}
-                        </span>
-                        <span className="shrink-0 text-primary flex items-center gap-0.5">
-                          <ArrowUpRight size={9}/>查看
-                        </span>
+                        className="w-full text-left text-[10px] py-1.5 hover:bg-secondary rounded px-1 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1 truncate">
+                            <Target size={9} className="text-[color:var(--color-success)] shrink-0"/>
+                            <span className="truncate">{s.doc}</span>
+                          </span>
+                          <span className="shrink-0 text-primary flex items-center gap-0.5 ml-1">
+                            <ArrowUpRight size={9}/>查看
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 pl-4">
+                          {s.chunkType && (
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-primary-soft text-primary font-medium">{s.chunkType}</span>
+                          )}
+                          {s.snippet && (
+                            <span className="text-[9px] text-muted-foreground truncate">{s.snippet.slice(0, 80)}</span>
+                          )}
+                        </div>
                       </button>
                     ))}
+                  </div>
+                )}
+                {/* 反馈按钮 */}
+                {m.role === "agent" && i > 0 && !m.workflow && (
+                  <div className="flex items-center gap-1 mt-1 mr-4 justify-end">
+                    {feedback[i] === "up" ? (
+                      <span className="text-[10px] text-[color:var(--color-success)] flex items-center gap-0.5"><ThumbsUp size={10}/> 已反馈</span>
+                    ) : feedback[i] === "down" ? (
+                      <span className="text-[10px] text-muted-foreground">已反馈</span>
+                    ) : (
+                      <>
+                        <button onClick={() => {
+                          setFeedback({ ...feedback, [i]: "up" });
+                          const srcs = (m.sources ?? []).map(s => ({ doc: s.doc, page: s.chunkType ?? "实验卡片", confidence: s.conf, link: s.link, chunkType: s.chunkType, snippet: s.snippet }));
+                          submitFeedback({ question: chat[i - 1]?.text ?? "", answer: m.text, sources: srcs, rating: "up" });
+                        }} className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-[color:var(--color-success)]" title="有用">
+                          <ThumbsUp size={11}/>
+                        </button>
+                        <button onClick={() => {
+                          setFeedback({ ...feedback, [i]: "down" });
+                          const srcs = (m.sources ?? []).map(s => ({ doc: s.doc, page: s.chunkType ?? "实验卡片", confidence: s.conf, link: s.link, chunkType: s.chunkType, snippet: s.snippet }));
+                          submitFeedback({ question: chat[i - 1]?.text ?? "", answer: m.text, sources: srcs, rating: "down" });
+                        }} className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-destructive" title="无用">
+                          <ThumbsDown size={11}/>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
