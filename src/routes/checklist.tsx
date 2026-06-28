@@ -79,6 +79,50 @@ function ReproductionAuditPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // UI 状态
+  const [activeTab, setActiveTab] = useState<"params" | "gaps" | "protocol">("params");
+  const [filterCategory, setFilterCategory] = useState<ParameterCategory | "all">("all");
+  const [filterCertainty, setFilterCertainty] = useState<CertaintyLevel | "all">("all");
+  const [expandedParam, setExpandedParam] = useState<Set<string>>(new Set());
+  const [editingParam, setEditingParam] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [gapFillValues, setGapFillValues] = useState<Record<string, string>>({});
+
+  // ===== 加载历史审计记录 =====
+  const loadHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    const audits = await fetchAudits();
+    setAuditHistory(audits);
+    setLoadingHistory(false);
+  }, []);
+
+  // 页面加载时获取历史
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  // ===== 保存审计到云端 =====
+  const saveCurrentAudit = useCallback(async (a: ReproductionAudit) => {
+    const id = await saveAudit(a, discipline);
+    if (id) {
+      setSavedAuditId(id);
+      loadHistory();
+      return true;
+    }
+    return false;
+  }, [discipline, loadHistory]);
+
+  // ===== 删除历史审计 =====
+  const handleDeleteHistory = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = await deleteAudit(id);
+    if (ok) {
+      toast.success("已删除");
+      if (savedAuditId === id) setSavedAuditId(null);
+      loadHistory();
+    } else {
+      toast.error("删除失败");
+    }
+  }, [savedAuditId, loadHistory]);
+
   // ═══════════════════════════════════════════════════════
   // 后台任务轮询 — 组件卸载后任务继续跑
   // ═══════════════════════════════════════════════════════
@@ -116,51 +160,6 @@ function ReproductionAuditPage() {
 
     return () => clearInterval(interval);
   }, [activeTaskId, loadHistory]);
-
-  // UI 状态
-  const [activeTab, setActiveTab] = useState<"params" | "gaps" | "protocol">("params");
-  const [filterCategory, setFilterCategory] = useState<ParameterCategory | "all">("all");
-  const [filterCertainty, setFilterCertainty] = useState<CertaintyLevel | "all">("all");
-  const [expandedParam, setExpandedParam] = useState<Set<string>>(new Set());
-  const [editingParam, setEditingParam] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [gapFillValues, setGapFillValues] = useState<Record<string, string>>({});
-
-  // ===== 加载历史审计记录 =====
-  const loadHistory = useCallback(async () => {
-    setLoadingHistory(true);
-    const audits = await fetchAudits();
-    setAuditHistory(audits);
-    setLoadingHistory(false);
-  }, []);
-
-  // 页面加载时获取历史
-  useEffect(() => { loadHistory(); }, [loadHistory]);
-
-  // ===== 保存审计到云端 =====
-  const saveCurrentAudit = useCallback(async (a: ReproductionAudit) => {
-    const id = await saveAudit(a, discipline);
-    if (id) {
-      setSavedAuditId(id);
-      // 刷新历史列表
-      loadHistory();
-      return true;
-    }
-    return false;
-  }, [discipline, loadHistory]);
-
-  // ===== 删除历史审计 =====
-  const handleDeleteHistory = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const ok = await deleteAudit(id);
-    if (ok) {
-      toast.success("已删除");
-      if (savedAuditId === id) setSavedAuditId(null);
-      loadHistory();
-    } else {
-      toast.error("删除失败");
-    }
-  }, [savedAuditId, loadHistory]);
 
   // ===== 获取当前论文内容 =====
   const getCurrentPaperData = useCallback(() => {
