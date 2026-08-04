@@ -440,6 +440,36 @@ export async function fetchExperimentRelations(expId: string): Promise<Experimen
   return (data as ExperimentRelation[]) ?? [];
 }
 
+/** 获取当前用户所有实验的关系（图谱用） */
+export async function fetchAllRelations(): Promise<ExperimentRelation[]> {
+  if (!isSupabaseReady()) return [];
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return [];
+
+  // 获取用户所有实验 ID
+  const { data: exps } = await supabase
+    .from("experiments")
+    .select("id")
+    .eq("user_id", userId);
+  if (!exps || exps.length === 0) return [];
+
+  const expIds = (exps as Array<{ id: string }>).map((e) => e.id);
+
+  // 查询所有涉及这些实验的关系
+  const { data, error } = await supabase
+    .from("experiment_relations")
+    .select("*")
+    .in("source_exp_id", expIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[Supabase] fetchAllRelations error:", error);
+    return [];
+  }
+  return (data as ExperimentRelation[]) ?? [];
+}
+
 /** 添加关系 */
 export async function addExperimentRelation(
   sourceExpId: string,
@@ -513,7 +543,7 @@ ${JSON.stringify(ctx, null, 2)}
 [{"targetId":"...","type":"...","reason":"一句话解释为什么关联"}]`;
 
   try {
-    const { chat } = await import("./siliconflow");
+    const { chat } = await import("./deepseek");
     const raw = await chat("deepseek-ai/DeepSeek-V3", [
       { role: "system", content: "你是科研知识图谱构建助手。输出严格JSON数组。" },
       { role: "user", content: prompt },
@@ -763,4 +793,45 @@ export async function submitFeedback(params: {
     return false;
   }
   return true;
+}
+
+/** 通用用户反馈（Bug/功能建议/其他）
+ *  复用 rag_feedback 表（question=标题, answer=描述, sources=类型, rating=general） */
+export async function submitGeneralFeedback(params: {
+  type: "bug" | "feature" | "other";
+  title: string;
+  description: string;
+}): Promise<boolean> {
+  if (isSupabaseReady()) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (userId) {
+      const { error } = await supabase.from("rag_feedback").insert({
+        user_id: userId,
+        question: `[${params.type}] ${params.title}`,
+        answer: params.description,
+        sources: [{ type: params.type, submittedAt: new Date().toISOString() }],
+        rating: "general",
+      });
+      if (!error) return true;
+      console.warn("[Feedback] rag_feedback insert failed:", error.message);
+    }
+  }
+
+  // fallback：localStorage
+  try {
+    const raw = localStorage.getItem("labnote:general_feedback");
+    const list = raw ? JSON.parse(raw) : [];
+    list.push({
+      id: "fb_" + Math.random().toString(36).slice(2, 9),
+      type: params.type,
+      title: params.title,
+      description: params.description,
+      createdAt: new Date().toISOString(),
+    });
+    localStorage.setItem("labnote:general_feedback", JSON.stringify(list.slice(-100)));
+    return true;
+  } catch {
+    return false;
+  }
 }

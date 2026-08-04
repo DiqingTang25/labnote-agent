@@ -1,11 +1,8 @@
 /**
- * 多模态解析流水线 — v2 上下文感知版
+ * AI 解析流水线 — 文件 → 结构化实验卡片
  *
- * 核心改进：
- *   1. 分批处理（每批 5 个文件）
- *   2. 批内压缩为 markdown 摘要（~80%→10% 上下文压缩）
- *   3. 跨批合并只读摘要，不读原始数据
- *   4. 逐批进度上报
+ * 支持: TXT, CSV, MD, LOG, JSON, XML, PDF, DOCX, XLSX, PNG, JPG
+ * 图片: Qwen3-VL-8B 视觉识别
  */
 import type { AttachedFile, Experiment } from "./labStore";
 import {
@@ -13,11 +10,9 @@ import {
   parseImage,
   parseCSV,
   parseTranscript,
-  parseVideo,
-  parseAudio,
   mergeResults,
   fileToBase64,
-} from "./siliconflow";
+} from "./deepseek";
 import { parseAPIResponse, normalizeExperiment } from "./json-parser";
 
 // ═══════════════════════════════════════════════════════
@@ -38,14 +33,12 @@ export type PipelineStage =
   | "idle"
   | "reading"
   | "analyzing"
-  | "extracting"
   | "merging"
   | "complete";
 
 export const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
   { key: "reading", label: "读取文件内容" },
-  { key: "analyzing", label: "AI 多模态识别" },
-  { key: "extracting", label: "结构化信息抽取" },
+  { key: "analyzing", label: "AI 文本识别" },
   { key: "merging", label: "去重合并生成卡片" },
   { key: "complete", label: "完成" },
 ];
@@ -84,26 +77,20 @@ export function detectFileInfo(fileName: string): { type: string; icon: string }
     jpg: { type: "实验图像", icon: "🖼️" },
     jpeg: { type: "实验图像", icon: "🖼️" },
     png: { type: "显微图像", icon: "🔬" },
-    tif: { type: "显微图像", icon: "🔬" },
-    tiff: { type: "显微图像", icon: "🔬" },
     txt: { type: "文本笔记", icon: "📃" },
     md: { type: "实验方案", icon: "📋" },
     log: { type: "仪器日志", icon: "📜" },
-    mp4: { type: "视频记录", icon: "🎬" },
-    m4a: { type: "语音记录", icon: "🎙️" },
-    mp3: { type: "语音记录", icon: "🎙️" },
-    wav: { type: "语音记录", icon: "🎙️" },
+    json: { type: "JSON数据", icon: "📋" },
+    xml: { type: "XML数据", icon: "📋" },
   };
-  return map[ext] ?? { type: "其他格式", icon: "📎" };
+  return map[ext] ?? { type: "文本文件", icon: "📎" };
 }
 
 export function classifyFile(
   fileName: string,
-): "image" | "text" | "csv" | "audio" | "video" | "document" {
+): "image" | "text" | "csv" | "document" {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   if (["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(ext)) return "image";
-  if (["mp3", "wav", "m4a", "ogg", "flac"].includes(ext)) return "audio";
-  if (["mp4", "mov", "avi", "webm"].includes(ext)) return "video";
   if (ext === "csv") return "csv";
   if (["pdf", "docx", "xlsx"].includes(ext)) return "document";
   return "text";
@@ -140,7 +127,7 @@ async function readFiles(
     const category = classifyFile(file.name);
 
     try {
-      if (category === "image" || category === "audio" || category === "video") {
+      if (category === "image") {
         const { base64, mime } = await fileToBase64(file);
         fileContents.push({ textContent: "", base64, mime, isBinary: true });
       } else {
@@ -183,29 +170,19 @@ async function analyzeFile(
         case "image":
           rawOutput = await parseImage(content.base64!, content.mime!, file.name);
           break;
-        case "text":
-          rawOutput = await parseTextFile(content.textContent, file.name);
-          break;
         case "csv":
           rawOutput = await parseCSV(content.textContent, file.name);
           break;
-        case "audio":
-          rawOutput = await parseAudio(content.base64!, content.mime!);
-          break;
-        case "video":
-          rawOutput = await parseVideo(content.base64!, content.mime!, file.name);
-          break;
+        case "text":
         case "document":
+        default:
           rawOutput = await parseTextFile(content.textContent || file.name, file.name);
           break;
-        default:
-          rawOutput = await parseTextFile(content.textContent, file.name);
       }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Pipeline] API failed for ${file.name}:`, msg.slice(0, 120));
-    // 生成兜底卡片
     rawOutput = JSON.stringify({
       experiments: [{ name: file.name.replace(/\.[^.]+$/, ""), source: file.name }],
     });
@@ -272,14 +249,7 @@ async function processBatch(
     const file = batchFiles[i];
     const fc = batchContents[i];
 
-    if (fc.isBinary && !fc.base64) continue;
-
-    const modelHint =
-      classifyFile(file.name) === "image"
-        ? "Qwen3-VL-32B"
-        : classifyFile(file.name) === "audio" || classifyFile(file.name) === "video"
-          ? "Qwen3-Omni"
-          : "DeepSeek-V3";
+    const modelHint = classifyFile(file.name) === "image" ? "Qwen3-VL-8B" : "DeepSeek V4";
 
     onFileProgress(globalIdx, {
       name: file.name,
@@ -450,12 +420,12 @@ export async function runPipeline(
         }];
 
         // 直接调 chat 而非 mergeResults，因为 mergeResults 期望的是 rawOutput
-        const { chat } = await import("./siliconflow");
+        const { chat } = await import("./deepseek");
         const mergedRaw = await chat(
-          "deepseek-ai/DeepSeek-V3",
+          "d8j2d4r9dhtg6s3fevfg",
           [{
             role: "user",
-            content: `你是科研实验记录管理员。以下是 ${totalBatches} 个批次的实验摘要，请去重合并，输出最终的实验卡片列表。\n\n【重要】输出纯JSON（不要markdown代码块）：\n{"experiments":[{"name":"...","date":"...","operator":"...","purpose":"...","device":{"name":"...","model":"...","vendor":"..."},"sample":{"id":"...","batch":"...","source":"..."},"params":[{"name":"...","value":"...","unit":"..."}],"environment":{"temperature":"","humidity":"","other":""},"steps":["..."],"results":"...","notes":"...","source":"..."}]}\n\n${truncatedSummary}`,
+            content: `你是科研实验记录管理员。以下是 ${totalBatches} 个批次的实验摘要，请去重合并，输出最终的实验卡片列表。\n\n【重要】输出纯JSON（不要markdown代码块），字段尽可能完整：\n{"experiments":[{"name":"...","experimentType":"synthesis|characterization|measurement|simulation|other","date":"...","operator":"...","purpose":"...","hypothesis":"...","conclusion":"...","device":{"name":"...","model":"...","vendor":"..."},"instruments":[{"name":"...","model":"...","vendor":"..."}],"materials":[{"name":"...","casNumber":"...","purity":"...","role":"reactant|..."}],"sample":{"id":"...","batch":"...","source":"..."},"params":[{"name":"...","value":"...","unit":"..."}],"environment":{"temperature":"","humidity":"","other":""},"protocol":{"name":"...","version":"..."},"steps":["..."],"results":"...","notes":"...","controls":[{"type":"standard|...","name":"..."}],"replicates":1,"qcStatus":"na|...","source":"...","aiInsights":"..."}]}\n\n${truncatedSummary}`,
           }],
           4096,
         );
@@ -473,7 +443,7 @@ export async function runPipeline(
     }
   }
 
-  // ═══ 附加文件元数据 ═══
+  // ═══ 附加文件元数据（不含 textContent，文件内容在 Supabase Storage）═══
   const now = new Date().toISOString();
   for (const exp of finalExperiments) {
     exp.attachedFiles = files.map((f, i) => ({
@@ -483,8 +453,9 @@ export async function runPipeline(
       mimeType: f.type || "application/octet-stream",
       size: f.size,
       addedAt: now,
-      textContent: fileContents[i]?.textContent ?? "",
-      parsedRaw: allBatchPartials[i]?.experiment?.results ?? "", // 保留解析后的结果文本
+      file_url: "",  // 待 workbench 上传后填充
+      storage_path: "",
+      parsedRaw: allBatchPartials[i]?.experiment?.results ?? "",
     }));
     exp.lastParsedAt = now;
   }

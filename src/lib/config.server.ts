@@ -22,7 +22,10 @@ export function getServerConfig() {
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
-    sfApiKey: process.env.SF_API_KEY,
+    aiApiKey: process.env.AI_API_KEY,
+    aiEmbeddingKey: process.env.AI_EMBEDDING_KEY,
+    aiVisionKey: process.env.AI_VISION_KEY,
+    aiRerankKey: process.env.AI_RERANK_KEY,
     mpApiKey: process.env.MP_API_KEY,
     httpProxy: process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy,
   };

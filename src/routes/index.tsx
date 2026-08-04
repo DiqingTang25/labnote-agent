@@ -2,7 +2,7 @@
  * 首页：Hero + 快速上传 + AI 工作流动画 + Dashboard
  */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLab } from "../lib/labStore";
 import { setPendingUpload } from "../lib/upload-bridge";
 import {
@@ -23,13 +23,13 @@ export const Route = createFileRoute("/")({
 });
 
 const flowSteps = [
-  { icon: <Upload size={16}/>, label: "上传实验记录", hint: "PDF · 图片 · 语音" },
-  { icon: <Brain size={16}/>, label: "AI 解析中…", hint: "多模态抽取" },
-  { icon: <FileText size={16}/>, label: "生成结构化实验卡片", hint: "28 个字段" },
-  { icon: <AlertTriangle size={16}/>, label: "发现缺失字段", hint: "2 项待补全" },
-  { icon: <ListChecks size={16}/>, label: "生成 Checklist", hint: "复现清单" },
-  { icon: <Database size={16}/>, label: "写入知识库", hint: "向量化沉淀" },
-  { icon: <MessageSquare size={16}/>, label: "AI 科研问答", hint: "随时追溯" },
+  { icon: <Upload size={16} />, label: "上传实验记录", hint: "PDF · 图片 · 语音" },
+  { icon: <Brain size={16} />, label: "AI 解析中…", hint: "多模态抽取" },
+  { icon: <FileText size={16} />, label: "生成结构化实验卡片", hint: "28 个字段" },
+  { icon: <AlertTriangle size={16} />, label: "发现缺失字段", hint: "2 项待补全" },
+  { icon: <ListChecks size={16} />, label: "生成 Checklist", hint: "复现清单" },
+  { icon: <Database size={16} />, label: "写入知识库", hint: "向量化沉淀" },
+  { icon: <MessageSquare size={16} />, label: "AI 科研问答", hint: "随时追溯" },
 ];
 
 function Home() {
@@ -58,10 +58,10 @@ function Home() {
         <div className="mx-auto max-w-7xl px-4 pt-20 pb-12 md:pt-28 md:pb-16">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary-soft px-3 py-1 text-xs text-primary">
-              <Sparkles size={12}/> 科研数据治理 · 实验复现 AI Agent
+              <Sparkles size={12} /> 科研数据治理 · 实验复现 AI Agent
             </div>
             <h1 className="mt-5 text-4xl md:text-6xl font-bold leading-tight tracking-tight">
-              让每一次实验<br/>
+              让每一次实验<br />
               都成为<span className="brand-gradient-text">可复用的科研资产</span>
             </h1>
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl">
@@ -75,29 +75,28 @@ function Home() {
                 onDragLeave={() => setDragging(false)}
                 onDrop={(e) => { e.preventDefault(); setDragging(false); handleUpload(e.dataTransfer.files); }}
                 onClick={() => fileRef.current?.click()}
-                className={`cursor-pointer rounded-2xl border-2 border-dashed px-8 py-6 text-center transition-all ${
-                  dragging
-                    ? "border-primary bg-primary-soft/30 scale-[1.02]"
-                    : "border-primary/30 bg-primary-soft/10 hover:border-primary/50 hover:bg-primary-soft/20"
-                }`}
+                className={`cursor-pointer rounded-2xl border-2 border-dashed px-8 py-6 text-center transition-all ${dragging
+                  ? "border-primary bg-primary-soft/30 scale-[1.02]"
+                  : "border-primary/30 bg-primary-soft/10 hover:border-primary/50 hover:bg-primary-soft/20"
+                  }`}
               >
                 <Upload size={28} className="mx-auto text-primary" />
                 <p className="mt-3 text-sm font-semibold">拖拽实验文件到此处</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  支持 PDF · DOCX · XLSX · CSV · PNG · TXT · MD · MP4 · WAV
+                  支持 PDF · DOCX · XLSX · CSV · PNG · TXT · MD · LOG
                 </p>
                 <input
                   ref={fileRef} type="file" multiple hidden
-                  accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png,.tif,.tiff,.txt,.md,.log,.json,.xml,.mp4,.m4a,.mp3,.wav"
+                  accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png,.txt,.md,.log,.json,.xml"
                   onChange={(e) => handleUpload(e.target.files)}
                 />
               </div>
               <div className="flex flex-col gap-3 pt-2">
                 <Link to="/workbench" className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition">
-                  <Zap size={16}/> 进入工作台 <ArrowRight size={16}/>
+                  <Zap size={16} /> 进入工作台 <ArrowRight size={16} />
                 </Link>
                 <Link to="/assets" className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium hover:border-primary/40 transition">
-                  <Layers size={16}/> 实验资产包
+                  <Layers size={16} /> 实验资产包
                 </Link>
               </div>
             </div>
@@ -106,15 +105,15 @@ function Home() {
       </section>
 
       {/* AI 工作流动画 */}
-      <WorkflowAnimation/>
+      <WorkflowAnimation />
       {/* Dashboard */}
       <Dashboard experiments={experiments} totalCards={totalCards} totalChecklist={totalChecklist} totalRag={totalRag} completeness={completeness} />
       {/* 能力 */}
-      <Capabilities/>
+      <Capabilities />
       {/* Why */}
-      <WhyChoose/>
+      <WhyChoose />
       {/* Timeline */}
-      <InteractiveTimeline/>
+      <InteractiveTimeline />
     </div>
   );
 }
@@ -136,11 +135,10 @@ function WorkflowAnimation() {
       <div className="flex flex-wrap justify-center gap-3">
         {flowSteps.map((s, i) => (
           <div key={i}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs transition-all ${
-              i === active ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105"
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs transition-all ${i === active ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105"
               : i < active ? "bg-[color:var(--color-success)]/10 text-[color:var(--color-success)]"
-              : "bg-secondary text-muted-foreground"
-            }`}
+                : "bg-secondary text-muted-foreground"
+              }`}
           >
             {s.icon}
             <div className="text-left leading-tight">
@@ -166,30 +164,30 @@ function Dashboard({ experiments, totalCards, totalChecklist, totalRag, complete
           <p className="mt-1 text-sm text-muted-foreground">实时掌握知识库治理进展</p>
         </div>
         <Link to="/workbench" className="text-sm text-primary hover:underline flex items-center gap-1">
-          进入工作台 <ArrowRight size={14}/>
+          进入工作台 <ArrowRight size={14} />
         </Link>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard tone="blue" icon={<FileText size={18}/>} label="实验卡片数量" value={totalCards} delta="+12 本周"/>
-        <StatCard tone="green" icon={<ListChecks size={18}/>} label="Checklist 数量" value={totalChecklist} delta="+8 本周"/>
-        <StatCard tone="amber" icon={<Layers size={18}/>} label="参数完整率" value={`${completeness}%`} delta="+3% vs 上周"/>
-        <StatCard tone="violet" icon={<MessageSquare size={18}/>} label="AI 问答次数" value={totalRag} delta="+46 本周"/>
+        <StatCard tone="blue" icon={<FileText size={18} />} label="实验卡片数量" value={totalCards} delta="+12 本周" />
+        <StatCard tone="green" icon={<ListChecks size={18} />} label="Checklist 数量" value={totalChecklist} delta="+8 本周" />
+        <StatCard tone="amber" icon={<Layers size={18} />} label="参数完整率" value={`${completeness}%`} delta="+3% vs 上周" />
+        <StatCard tone="violet" icon={<MessageSquare size={18} />} label="AI 问答次数" value={totalRag} delta="+46 本周" />
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-4">
-        <RecentList title="最近实验" items={experiments.slice(0,4).map(e=>({title:e.name, sub:`${e.date} · ${e.operator||"—"}`, to:"/workbench", id:e.id}))} icon={<FileText size={14}/>}/>
+        <RecentList title="最近实验" items={experiments.slice(0, 4).map(e => ({ title: e.name, sub: `${e.date} · ${e.operator || "—"}`, to: "/workbench", id: e.id }))} icon={<FileText size={14} />} />
         <RecentList title="最近 AI 问答" items={[
-          {title:"上次使用 Fe-2309 的退火温度？", sub:"命中 1 条记录 · 5 分钟前"},
-          {title:"哪几次实验出现电流异常？", sub:"命中 2 条记录 · 22 分钟前"},
-          {title:"知识库涉及哪些设备？", sub:"6 类设备 · 1 小时前"},
-          {title:"建议补充哪些重复实验？", sub:"建议 3 项 · 2 小时前"},
-        ]} icon={<MessageSquare size={14}/>}/>
-        <RecentList title="待补全实验" items={experiments.slice(0,4).map(e=>({title:e.name, sub:`待补 ${e.params.length<3?2:1} 项关键字段`, to:"/workbench", id:e.id}))} icon={<AlertTriangle size={14}/>}/>
+          { title: "上次使用 Fe-2309 的退火温度？", sub: "命中 1 条记录 · 5 分钟前" },
+          { title: "哪几次实验出现电流异常？", sub: "命中 2 条记录 · 22 分钟前" },
+          { title: "知识库涉及哪些设备？", sub: "6 类设备 · 1 小时前" },
+          { title: "建议补充哪些重复实验？", sub: "建议 3 项 · 2 小时前" },
+        ]} icon={<MessageSquare size={14} />} />
+        <RecentList title="待补全实验" items={experiments.slice(0, 4).map(e => ({ title: e.name, sub: `待补 ${e.params.length < 3 ? 2 : 1} 项关键字段`, to: "/workbench", id: e.id }))} icon={<AlertTriangle size={14} />} />
         <RecentList title="最新知识沉淀" items={[
-          {title:"管式炉退火 SOP v2", sub:"3 条实验佐证 · 今日"},
-          {title:"CV 测试异常归因报告", sub:"2 条异常关联 · 昨日"},
-          {title:"水热合成参数对照表", sub:"5 次实验 · 3 天前"},
-          {title:"Pt/C 电极复现包", sub:"含 Methods · 一周前"},
-        ]} icon={<BookOpen size={14}/>}/>
+          { title: "管式炉退火 SOP v2", sub: "3 条实验佐证 · 今日" },
+          { title: "CV 测试异常归因报告", sub: "2 条异常关联 · 昨日" },
+          { title: "水热合成参数对照表", sub: "5 次实验 · 3 天前" },
+          { title: "Pt/C 电极复现包", sub: "含 Methods · 一周前" },
+        ]} icon={<BookOpen size={14} />} />
       </div>
     </section>
   );
@@ -203,15 +201,15 @@ function Capabilities() {
         <p className="mt-3 text-muted-foreground">从原始记录到可复现的科研资产，全流程 AI 赋能</p>
       </div>
       <div className="mt-10 grid gap-6 md:grid-cols-3">
-        <FeatureCard icon={<FileSearch size={22}/>} title="多源数据采集与解析"
+        <FeatureCard icon={<FileSearch size={22} />} title="多源数据采集与解析"
           desc="一键导入 PDF / Word / Excel / 图片 / 仪器日志 / 语音，多模态大模型自动抽取实验信息。"
-          tags={["PDF/DOCX", "Excel/CSV", "仪器截图", "语音 ASR"]}/>
-        <FeatureCard icon={<Sparkles size={22}/>} title="智能清洗与完整性检查"
+          tags={["PDF/DOCX", "Excel/CSV", "仪器截图", "语音 ASR"]} />
+        <FeatureCard icon={<Sparkles size={22} />} title="智能清洗与完整性检查"
           desc="自动补全缺失字段、统一术语与单位、识别异常参数，输出可信可复核的结构化卡片。"
-          tags={["术语对齐", "单位规整", "完整性检查", "异常识别"]}/>
-        <FeatureCard icon={<GitBranch size={22}/>} title="复现实验与知识库问答"
+          tags={["术语对齐", "单位规整", "完整性检查", "异常识别"]} />
+        <FeatureCard icon={<GitBranch size={22} />} title="复现实验与知识库问答"
           desc="自动生成复现清单与论文 Methods 草稿，基于 RAG 知识库支持自然语言追溯。"
-          tags={["复现清单", "Methods 草稿", "RAG 检索", "实验追溯"]}/>
+          tags={["复现清单", "Methods 草稿", "RAG 检索", "实验追溯"]} />
       </div>
     </section>
   );
@@ -230,19 +228,86 @@ function FeatureCard({ icon, title, desc, tags }: { icon: React.ReactNode; title
   );
 }
 
-function StatCard({ icon, label, value, delta, tone }: { icon: React.ReactNode; label: string; value: number | string; delta: string; tone: "blue"|"green"|"amber"|"violet" }) {
+function useCountUp(targetValue: number | string, duration: number = 1500) {
+  const [displayValue, setDisplayValue] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (hasAnimated.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          hasAnimated.current = true;
+          observer.disconnect();
+
+          const target = typeof targetValue === "string"
+            ? parseFloat(targetValue.replace(/[^0-9.]/g, ""))
+            : targetValue;
+
+          const startTime = performance.now();
+
+          const animate = (currentTime: number) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            const currentValue = target * easeOut;
+
+            setDisplayValue(currentValue);
+
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            }
+          };
+
+          requestAnimationFrame(animate);
+        }
+      },
+      { threshold: 0.3 }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [targetValue, duration]);
+
+  const formatValue = useCallback(() => {
+    const rawValue = typeof targetValue === "string"
+      ? parseFloat(targetValue.replace(/[^0-9.]/g, ""))
+      : targetValue;
+
+    if (Number.isInteger(rawValue)) {
+      return Math.round(displayValue).toString();
+    }
+
+    if (targetValue.toString().includes("%")) {
+      return `${Math.round(displayValue)}%`;
+    }
+
+    return Math.round(displayValue).toString();
+  }, [displayValue, targetValue]);
+
+  return { ref, displayValue, formatValue };
+}
+
+function StatCard({ icon, label, value, delta, tone }: { icon: React.ReactNode; label: string; value: number | string; delta: string; tone: "blue" | "green" | "amber" | "violet" }) {
+  const { ref, formatValue } = useCountUp(value, 1500);
   const colors = { blue: "border-blue-200 bg-blue-50", green: "border-green-200 bg-green-50", amber: "border-amber-200 bg-amber-50", violet: "border-violet-200 bg-violet-50" };
   return (
     <div className={`card-soft p-4 border-l-4 ${colors[tone]}`}>
       <div className="flex items-center gap-2 text-muted-foreground text-xs">{icon}{label}</div>
-      <div className="mt-1 text-2xl font-bold tabular-nums">{value}</div>
+      <div ref={ref} className="mt-1 text-2xl font-bold tabular-nums">{formatValue()}</div>
       <div className="mt-0.5 text-[11px] text-muted-foreground">{delta}</div>
     </div>
   );
 }
 
 function RecentList({ title, items, icon, tone }: {
-  title: string; items: Array<{title:string; sub:string; to?:string; id?:string}>;
+  title: string; items: Array<{ title: string; sub: string; to?: string; id?: string }>;
   icon: React.ReactNode; tone?: string;
 }) {
   return (

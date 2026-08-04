@@ -248,7 +248,7 @@ function ReproductionAuditPage() {
       setDecomposeError(msg);
       setDecomposing(false);
       setActiveTaskId(null);
-      toast.error(`❌ AI 拆解失败：${msg.slice(0, 120)}。请检查 SF_API_KEY 环境和网络连接。`);
+      toast.error(`❌ AI 拆解失败：${msg.slice(0, 120)}。请检查 AI_API_KEY 环境和网络连接。`);
     });
 
     // 启动轮询检测结果

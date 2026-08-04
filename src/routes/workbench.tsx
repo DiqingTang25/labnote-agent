@@ -16,6 +16,7 @@ import {
   useLab,
   checkCompleteness, generateMethods,
   type Experiment, type Param, type AttachedFile,
+  type Instrument, type Material, type ProtocolStep, type Observation, type Control,
 } from "../lib/labStore";
 import {
   ragAnswerReal, ragAnswerRealStream, submitFeedback, fetchExperimentRelations, addExperimentRelation,
@@ -35,6 +36,9 @@ import {
 } from "../lib/multimodal-parser";
 import { ExperimentSummary } from "../components/ExperimentSummary";
 import { consumePendingUpload } from "../lib/upload-bridge";
+import { autoFillExperiment, reparseExperimentFiles } from "../lib/deepseek";
+import { extractJSON } from "../lib/json-parser";
+import { calibrateExperimentFields, type FieldConfidence } from "../lib/confidence";
 
 const search = z.object({ id: z.string().optional() });
 
@@ -91,27 +95,55 @@ function Workbench() {
 }
 
 function createBlank(add: (e: Experiment) => void): string {
+  const now = new Date();
+  const nowISO = now.toISOString();
+  const nowStr = nowISO.slice(0, 16).replace("T", " ");
   const blank: Experiment = {
     id: "exp_" + Math.random().toString(36).slice(2, 9),
     name: "新建实验",
-    date: new Date().toISOString().slice(0, 16).replace("T", " "),
+    version: 1,
+    experimentType: "synthesis",
+    date: nowStr,
     operator: "",
     purpose: "",
     background: "",
+    hypothesis: "",
+    conclusion: "",
+    protocol: { name: "", steps: [] },
     device: { name: "", model: "", vendor: "" },
+    instruments: [],
     sample: { id: "", batch: "", source: "" },
+    materials: [],
     params: [{ name: "", value: "", unit: "" }],
     environment: { temperature: "", humidity: "", other: "" },
     steps: [""],
+    observations: [],
     results: "",
     notes: "",
+    attachedFiles: [],
+    rawDataRefs: [],
+    processedDataRefs: [],
+    controls: [],
+    replicates: 1,
+    qcStatus: "na",
+    license: "CC BY-NC 4.0",
+    ontologyTerms: [],
+    derivedFrom: [],
+    auditTrail: [{
+      timestamp: nowISO,
+      userId: "",
+      userName: "",
+      action: "created",
+      reason: "手动新建实验卡片",
+    }],
+    signatures: [],
     source: "手动新建",
     discipline: "材料科学",
-    attachedFiles: [],
     lastParsedAt: null,
     embedding: null,
     aiInsights: "",
     knowledgeTags: [],
+    lastModifiedAt: nowISO,
   };
   add(blank);
   return blank.id;
@@ -169,7 +201,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
     toast.info(`请在数据输入区上传文件 "${file.name}" 进行 AI 解析`);
   };
 
-  // ===== 真实多模态解析 — 上传文件 → API → 实验卡片 =====
+  // ===== AI 解析 + 云端存储 — 上传文件 → Storage → API → 实验卡片 =====
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || !files.length) return;
     const fileArray = Array.from(files);
@@ -182,6 +214,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
     setFileProgresses(new Map());
 
     try {
+      // 1. AI 解析（生成实验卡片，含临时 ID）
       const cards = await runPipeline(
         fileArray,
         (stage, detail) => {
@@ -191,18 +224,44 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
         (index, progress) => {
           setFileProgresses((prev) => new Map(prev).set(index, progress));
         },
-        true, // 使用真实 API
+        true,
       );
+
+      // 2. 上传原始文件到 Supabase Storage
+      const { uploadFileToStorage } = await import("../lib/deepseek");
+      const supabase = (await import("../lib/supabase")).supabase;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id;
+
+      if (userId) {
+        setPipelineStage("merging");
+        setPipelineDetail("上传原始文件到云端...");
+
+        for (const card of cards) {
+          for (let i = 0; i < fileArray.length; i++) {
+            const af = card.attachedFiles.find(
+              (f) => f.name === fileArray[i].name && !f.file_url,
+            );
+            if (!af) continue;
+
+            const result = await uploadFileToStorage(fileArray[i], userId, card.id);
+            if (result) {
+              af.file_url = result.url;
+              af.storage_path = result.path;
+            }
+          }
+        }
+      }
 
       setPipelineCards(cards);
       cards.forEach((card) => addExperiment(card));
       if (cards.length > 0) onSelect(cards[0].id);
 
-      toast.success(`${fileArray.length} 个文件 → ${cards.length} 张实验卡片`);
+      toast.success(`${fileArray.length} 个文件 → ${cards.length} 张实验卡片 (已云端存储)`);
       if (cards.length > 0) setShowSummary(true);
     } catch (e) {
       console.error("[Pipeline] 解析失败", e);
-      toast.error("解析过程出错，已使用本地缓存生成卡片");
+      toast.error("解析过程出错");
     } finally {
       setPipelineRunning(false);
     }
@@ -219,7 +278,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
         <div className="card-soft p-4 border-primary/30 bg-primary-soft/10">
           <div className="flex items-center gap-2 text-xs font-semibold text-primary mb-3">
             <Loader2 className="animate-spin" size={13}/>
-            多模态解析进行中
+            AI 文本解析进行中
           </div>
           <div className="space-y-2">
             {pipelineStages.slice(0, -1).map((s, i) => {
@@ -312,7 +371,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
           {pipelineRunning ? (
             <div className="text-left">
               <div className="flex items-center gap-2 text-primary text-xs font-semibold mb-2">
-                <Loader2 className="animate-spin" size={14}/> 多模态解析流水线
+                <Loader2 className="animate-spin" size={14}/> AI 解析流水线
               </div>
               <ul className="space-y-1.5">
                 {pipelineStages.slice(0, -1).map((s, i) => {
@@ -346,13 +405,13 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
               <Upload size={18} className="mx-auto text-muted-foreground"/>
               <p className="mt-2 text-xs text-muted-foreground">拖拽文件到此处或点击上传</p>
               <p className="text-[10px] text-muted-foreground/70 mt-1">
-                支持 MD · TXT · CSV · PDF · DOCX · XLSX · PNG · JPG · MP4 · WAV · M4A
+                支持 MD · TXT · CSV · PDF · DOCX · XLSX · PNG · JPG · JSON · LOG
               </p>
             </>
           )}
           <input
             ref={fileRef} type="file" multiple hidden
-            accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png,.tif,.tiff,.txt,.md,.log,.json,.xml,.mp4,.avi,.m4a,.mp3,.wav"
+            accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png,.txt,.md,.log,.json,.xml"
             onChange={(e) => handleFileUpload(e.target.files)}
           />
         </div>
@@ -460,16 +519,98 @@ function CardEditor({ experiment, onSave, onDelete }: {
       <div className="mt-5 grid grid-cols-2 gap-3">
         <Field label="实验时间"><input value={draft.date} onChange={(e) => update("date", e.target.value)} className={inputCls}/></Field>
         <Field label="实验人员"><input value={draft.operator} onChange={(e) => update("operator", e.target.value)} className={inputCls}/></Field>
+        <Field label="实验类型">
+          <select value={draft.experimentType} onChange={(e) => update("experimentType", e.target.value as Experiment["experimentType"])} className={inputCls}>
+            <option value="synthesis">🔬 合成</option>
+            <option value="characterization">📊 表征</option>
+            <option value="measurement">📏 测量</option>
+            <option value="simulation">💻 计算模拟</option>
+            <option value="other">📋 其他</option>
+          </select>
+        </Field>
         <Field label="实验目的" full><textarea value={draft.purpose} onChange={(e) => update("purpose", e.target.value)} className={inputCls + " min-h-[60px]"}/></Field>
+        <Field label="实验假设" full><textarea value={draft.hypothesis ?? ""} onChange={(e) => update("hypothesis", e.target.value)} className={inputCls + " min-h-[40px]"} placeholder="如：rGO含量5wt%时光催化活性最优"/></Field>
         <Field label="背景说明" full><textarea value={draft.background} onChange={(e) => update("background", e.target.value)} className={inputCls + " min-h-[50px]"}/></Field>
       </div>
 
-      <Section title="设备信息">
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="名称"><input value={draft.device.name} onChange={(e) => update("device", { ...draft.device, name: e.target.value })} className={inputCls}/></Field>
-          <Field label="型号"><input value={draft.device.model} onChange={(e) => update("device", { ...draft.device, model: e.target.value })} className={inputCls}/></Field>
-          <Field label="厂家"><input value={draft.device.vendor} onChange={(e) => update("device", { ...draft.device, vendor: e.target.value })} className={inputCls}/></Field>
-        </div>
+      {/* ===== 仪器与设备 (Allotrope ADF + ISO 17025) ===== */}
+      <Section title="仪器与设备" actions={
+        <button onClick={() => update("instruments", [...draft.instruments, { name: "", model: "", vendor: "" }])}
+          className="text-xs text-primary hover:underline flex items-center gap-1"><Plus size={12}/>添加仪器</button>
+      }>
+        {draft.instruments.length === 0 && !draft.device.name ? (
+          <p className="text-[11px] text-muted-foreground py-2">暂无仪器 — 点击"添加仪器"或通过 AI 解析自动填充</p>
+        ) : (
+          <div className="space-y-3">
+            {/* 旧格式兼容：如果 device 有值但 instruments 为空，显示旧 device */}
+            {draft.instruments.length === 0 && draft.device.name && (
+              <InstrumentRow inst={draft.device as Instrument} onChange={(inst) => update("device", { name: inst.name, model: inst.model, vendor: inst.vendor })} onRemove={() => update("device", { name: "", model: "", vendor: "" })} showCalibration={false}/>
+            )}
+            {draft.instruments.map((inst, i) => (
+              <InstrumentRow key={i} inst={inst}
+                onChange={(updated) => {
+                  const next = [...draft.instruments];
+                  next[i] = updated as Instrument;
+                  update("instruments", next);
+                }}
+                onRemove={() => update("instruments", draft.instruments.filter((_, j) => j !== i))}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* ===== 试剂与材料 (ISA-TAB Source + GLP 可追溯) ===== */}
+      <Section title="试剂与材料" actions={
+        <button onClick={() => update("materials", [...draft.materials, { name: "", role: "reactant" }])}
+          className="text-xs text-primary hover:underline flex items-center gap-1"><Plus size={12}/>添加材料</button>
+      }>
+        {draft.materials.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground py-2">暂无材料 — 点击"添加材料"录入试剂/耗材信息</p>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/60 text-[10px] text-muted-foreground">
+                <tr>
+                  <th className="text-left px-2 py-1.5 font-medium">名称</th>
+                  <th className="text-left px-2 py-1.5 font-medium">CAS号</th>
+                  <th className="text-left px-2 py-1.5 font-medium">纯度</th>
+                  <th className="text-left px-2 py-1.5 font-medium">批次</th>
+                  <th className="text-left px-2 py-1.5 font-medium">供应商</th>
+                  <th className="text-left px-2 py-1.5 font-medium">用量</th>
+                  <th className="text-left px-2 py-1.5 font-medium">角色</th>
+                  <th className="w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.materials.map((m, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="p-1"><input value={m.name} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, name: e.target.value }; update("materials", n); }} className={cellCls}/></td>
+                    <td className="p-1"><input value={m.casNumber ?? ""} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, casNumber: e.target.value }; update("materials", n); }} className={cellCls} placeholder="如 10042-76-9"/></td>
+                    <td className="p-1"><input value={m.purity ?? ""} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, purity: e.target.value }; update("materials", n); }} className={cellCls} placeholder="99.9%"/></td>
+                    <td className="p-1"><input value={m.lotNumber ?? ""} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, lotNumber: e.target.value }; update("materials", n); }} className={cellCls}/></td>
+                    <td className="p-1"><input value={m.supplier ?? ""} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, supplier: e.target.value }; update("materials", n); }} className={cellCls}/></td>
+                    <td className="p-1"><input value={m.amount ?? ""} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, amount: e.target.value }; update("materials", n); }} className={cellCls} placeholder="5g"/></td>
+                    <td className="p-1">
+                      <select value={m.role} onChange={(e) => { const n = [...draft.materials]; n[i] = { ...m, role: e.target.value as Material["role"] }; update("materials", n); }} className={cellCls}>
+                        <option value="reactant">反应物</option>
+                        <option value="catalyst">催化剂</option>
+                        <option value="solvent">溶剂</option>
+                        <option value="substrate">基底</option>
+                        <option value="reference">参比</option>
+                        <option value="standard">标样</option>
+                        <option value="other">其他</option>
+                      </select>
+                    </td>
+                    <td className="p-1 text-center">
+                      <button onClick={() => update("materials", draft.materials.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive"><X size={12}/></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Section>
 
       <Section title="材料与样品">
@@ -517,8 +658,85 @@ function CardEditor({ experiment, onSave, onDelete }: {
         <textarea value={draft.results} onChange={(e) => update("results", e.target.value)} className={inputCls + " min-h-[80px]"}/>
       </Section>
 
+      {/* ===== 协议/SOP (ISA-TAB Protocol) ===== */}
+      <Section title="实验协议/SOP">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Field label="协议名称 (SOP)">
+            <input
+              value={draft.protocol?.name ?? ""}
+              onChange={(e) => update("protocol", { ...(draft.protocol ?? { name: "", steps: [] }), name: e.target.value })}
+              className={inputCls} placeholder="如：管式炉退火 SOP"
+            />
+          </Field>
+          <Field label="版本">
+            <input
+              value={draft.protocol?.version ?? ""}
+              onChange={(e) => update("protocol", { ...(draft.protocol ?? { name: "", steps: [] }), version: e.target.value })}
+              className={inputCls} placeholder="v1.0"
+            />
+          </Field>
+        </div>
+        {draft.protocol?.url !== undefined && (
+          <Field label="协议链接 (URI)">
+            <input
+              value={draft.protocol?.url ?? ""}
+              onChange={(e) => update("protocol", { ...(draft.protocol ?? { name: "", steps: [] }), url: e.target.value })}
+              className={inputCls} placeholder="https://dx.doi.org/..."
+            />
+          </Field>
+        )}
+      </Section>
+
+      <Section title="实验结论">
+        <textarea value={draft.conclusion ?? ""} onChange={(e) => update("conclusion", e.target.value)} className={inputCls + " min-h-[60px]"} placeholder="基于实验结果得出的结论，区别于结果描述"/>
+      </Section>
+
       <Section title="异常与备注">
         <textarea value={draft.notes} onChange={(e) => update("notes", e.target.value)} className={inputCls + " min-h-[60px]"}/>
+      </Section>
+
+      {/* ===== 质控信息 (ISO 17025 §7.7) ===== */}
+      <Section title="质量控制">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Field label="重复次数">
+            <input type="number" min={1} value={draft.replicates ?? 1} onChange={(e) => update("replicates", Math.max(1, parseInt(e.target.value) || 1))} className={inputCls}/>
+          </Field>
+          <Field label="QC 状态">
+            <select value={draft.qcStatus} onChange={(e) => update("qcStatus", e.target.value as Experiment["qcStatus"])} className={inputCls}>
+              <option value="na">— 不适用</option>
+              <option value="pending">🟡 待审核</option>
+              <option value="passed">🟢 通过</option>
+              <option value="failed">🔴 未通过</option>
+            </select>
+          </Field>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] text-muted-foreground font-medium">质控样本/对照</span>
+          <button onClick={() => update("controls", [...draft.controls, { type: "standard", name: "" }])}
+            className="text-xs text-primary hover:underline flex items-center gap-1"><Plus size={12}/>添加</button>
+        </div>
+        {draft.controls.length > 0 && (
+          <div className="space-y-2">
+            {draft.controls.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 border border-border text-xs">
+                <select value={c.type} onChange={(e) => { const n = [...draft.controls]; n[i] = { ...c, type: e.target.value as Control["type"] }; update("controls", n); }} className="rounded border border-border px-1.5 py-1 bg-card text-[11px]">
+                  <option value="positive">阳性</option>
+                  <option value="negative">阴性</option>
+                  <option value="blank">空白</option>
+                  <option value="standard">标样</option>
+                </select>
+                <input value={c.name} onChange={(e) => { const n = [...draft.controls]; n[i] = { ...c, name: e.target.value }; update("controls", n); }} className="flex-1 rounded border border-border px-2 py-1 bg-card text-[11px]" placeholder="对照名称"/>
+                <input value={c.expectedResult ?? ""} onChange={(e) => { const n = [...draft.controls]; n[i] = { ...c, expectedResult: e.target.value }; update("controls", n); }} className="w-24 rounded border border-border px-2 py-1 bg-card text-[11px]" placeholder="预期结果"/>
+                <select value={c.passed === undefined ? "" : String(c.passed)} onChange={(e) => { const n = [...draft.controls]; n[i] = { ...c, passed: e.target.value === "" ? undefined : e.target.value === "true" }; update("controls", n); }} className="rounded border border-border px-1.5 py-1 bg-card text-[11px] w-16">
+                  <option value="">—</option>
+                  <option value="true">✅</option>
+                  <option value="false">❌</option>
+                </select>
+                <button onClick={() => update("controls", draft.controls.filter((_, j) => j !== i))} className="p-0.5 text-muted-foreground hover:text-destructive"><X size={12}/></button>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* ===== 文件管理 ===== */}
@@ -527,15 +745,8 @@ function CardEditor({ experiment, onSave, onDelete }: {
           {draft.attachedFiles.length > 0 && (
             <button
               onClick={() => {
-                // Re-parse with existing files
-                const files = draft.attachedFiles.map((af) => new File(
-                  [af.textContent || af.name],
-                  af.name,
-                  { type: af.mimeType || "text/plain" }
-                ));
-                if (files.length === 0) { toast.info("没有可重新解析的文件"); return; }
-                // Trigger re-parse via custom event
-                window.dispatchEvent(new CustomEvent("labnote:reparse", { detail: { experimentId: draft.id, files } }));
+                // 重新解析：如有 file_url 则从云端下载，否则跳过
+                toast.info("文件已存储在云端，请重新上传以触发解析");
               }}
               className="text-xs text-primary hover:underline flex items-center gap-1"
             >
@@ -554,7 +765,7 @@ function CardEditor({ experiment, onSave, onDelete }: {
                   <th className="text-left px-3 py-2 font-medium">文件名</th>
                   <th className="text-left px-3 py-2 font-medium">类型</th>
                   <th className="text-left px-3 py-2 font-medium">大小</th>
-                  <th className="w-20"></th>
+                  <th className="w-28"></th>
                 </tr>
               </thead>
               <tbody>
@@ -581,6 +792,15 @@ function CardEditor({ experiment, onSave, onDelete }: {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
+                        {af.file_url && (
+                          <a
+                            href={af.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 text-muted-foreground hover:text-primary"
+                            title="下载原文件"
+                          ><Download size={13}/></a>
+                        )}
                         {af.textContent && (
                           <button
                             onClick={() => {
@@ -588,7 +808,7 @@ function CardEditor({ experiment, onSave, onDelete }: {
                               setViewFileOpen(true);
                             }}
                             className="p-1 text-muted-foreground hover:text-primary"
-                            title="查看内容"
+                            title="查看文本内容"
                           ><FileText size={13}/></button>
                         )}
                         <button
@@ -774,7 +994,7 @@ function CardEditor({ experiment, onSave, onDelete }: {
             </pre>
             <div className="mt-3 flex justify-end">
               <button onClick={() => {
-                navigator.clipboard.writeText(viewingFile.textContent);
+                navigator.clipboard.writeText(viewingFile.textContent ?? "");
                 toast.success("已复制内容");
               }} className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-secondary flex items-center gap-1">
                 <ClipboardCopy size={12}/>复制
@@ -788,6 +1008,41 @@ function CardEditor({ experiment, onSave, onDelete }: {
 }
 
 const inputCls = "w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50";
+const cellCls = "w-full px-1.5 py-1 text-[11px] bg-transparent focus:outline-none focus:bg-secondary/50 rounded";
+
+function InstrumentRow({ inst, onChange, onRemove, showCalibration = true }: {
+  inst: Instrument;
+  onChange: (inst: Instrument) => void;
+  onRemove: () => void;
+  showCalibration?: boolean;
+}) {
+  return (
+    <div className="p-3 rounded-lg bg-secondary/30 border border-border">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] text-muted-foreground font-medium">仪器</span>
+        <button onClick={onRemove} className="p-0.5 text-muted-foreground hover:text-destructive"><X size={12}/></button>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="名称"><input value={inst.name} onChange={(e) => onChange({ ...inst, name: e.target.value })} className={inputCls}/></Field>
+        <Field label="型号"><input value={inst.model} onChange={(e) => onChange({ ...inst, model: e.target.value })} className={inputCls}/></Field>
+        <Field label="厂家"><input value={inst.vendor} onChange={(e) => onChange({ ...inst, vendor: e.target.value })} className={inputCls}/></Field>
+        {showCalibration && (
+          <>
+            <Field label="序列号"><input value={inst.serialNumber ?? ""} onChange={(e) => onChange({ ...inst, serialNumber: e.target.value })} className={inputCls}/></Field>
+            <Field label="校准日期"><input value={inst.calibrationDate ?? ""} onChange={(e) => onChange({ ...inst, calibrationDate: e.target.value })} className={inputCls} type="date"/></Field>
+            <Field label="校准状态">
+              <select value={inst.calibrationStatus ?? "na"} onChange={(e) => onChange({ ...inst, calibrationStatus: e.target.value as Instrument["calibrationStatus"] })} className={inputCls}>
+                <option value="na">未校准</option>
+                <option value="valid">✅ 有效</option>
+                <option value="expired">⚠️ 过期</option>
+              </select>
+            </Field>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
@@ -876,57 +1131,291 @@ function RightPanel({ experiment }: { experiment?: Experiment }) {
   );
 }
 
+type EvalResult = {
+  overallConfidence: number;
+  fromLogprobs: boolean;
+  fields: FieldConfidence[];
+  summary?: string;
+};
+
 function AiAnalysis({ experiment }: { experiment: Experiment }) {
   const { updateExperiment } = useLab();
   const missing = useMemo(() => checkCompleteness(experiment), [experiment]);
-  // 可信度按缺失字段递减，保底 60%；典型实验展示 96%
-  const trust = Math.max(60, 100 - missing.length * 2);
-  const recognized = 28;
+  const [autoFilling, setAutoFilling] = useState(false);
   const [reparsing, setReparsing] = useState(false);
+  const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalError, setEvalError] = useState("");
 
-  const autoFill = () => {
-    const patch: Partial<Experiment> = {};
-    if (!experiment.operator || experiment.operator === "未识别") patch.operator = "AI 推断 · 待确认";
-    if (!experiment.purpose) patch.purpose = "（AI 自动补全：根据样品与设备推断的实验目的，请人工核对）";
-    if (!experiment.device.model) patch.device = { ...experiment.device, model: experiment.device.model || "（AI 推断型号）", vendor: experiment.device.vendor || "（AI 推断厂家）" };
-    if (!experiment.sample.id) patch.sample = { ...experiment.sample, id: experiment.sample.id || "S-AUTO-" + Math.floor(Math.random()*9000+1000), batch: experiment.sample.batch || "B-AUTO" };
-    else if (!experiment.sample.batch) patch.sample = { ...experiment.sample, batch: "B-AUTO" };
-    if (!experiment.environment.temperature) patch.environment = { ...experiment.environment, temperature: "25", humidity: experiment.environment.humidity || "50" };
-    else if (!experiment.environment.humidity) patch.environment = { ...experiment.environment, humidity: "50" };
-    if (experiment.params.length === 0) patch.params = [{ name: "（待补全参数）", value: "", unit: "" }];
-    updateExperiment(experiment.id, patch);
-    toast.success("AI 已尝试补全缺失字段，请人工复核");
+  // 实验切换时重新评估（带 logprobs 校准）
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      setEvalLoading(true);
+      setEvalError("");
+      try {
+        // 收集关联文件的文本内容作为校验依据
+        const sourceFiles = experiment.attachedFiles
+          .filter((f) => f.textContent)
+          .map((f) => ({ name: f.name, textContent: f.textContent! }));
+
+        const calibrated = await calibrateExperimentFields(
+          {
+            name: experiment.name,
+            date: experiment.date,
+            operator: experiment.operator,
+            purpose: experiment.purpose,
+            background: experiment.background,
+            discipline: experiment.discipline,
+            device: experiment.device,
+            sample: experiment.sample,
+            params: experiment.params,
+            environment: experiment.environment,
+            steps: experiment.steps,
+            results: experiment.results,
+            notes: experiment.notes,
+          },
+          sourceFiles.length > 0 ? sourceFiles : undefined,
+        );
+
+        if (!cancelled) {
+          // 从 calibrateExperimentFields 的返回中提取 summary
+          const rawSummary = (calibrated.data as Record<string, unknown>)?.summary;
+          setEvalResult({
+            overallConfidence: calibrated.overallConfidence,
+            fromLogprobs: calibrated.fromLogprobs,
+            fields: calibrated.fields,
+            summary: typeof rawSummary === "string" ? rawSummary : undefined,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) setEvalError(err instanceof Error ? err.message : "评估失败");
+      } finally {
+        if (!cancelled) setEvalLoading(false);
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [experiment.id]);
+
+  // 置信度：优先 logprobs 校准，否则回退到公式
+  const overallConfidence = evalResult?.overallConfidence ?? Math.max(60, 100 - missing.length * 2);
+  const filledCount = evalResult?.fields.filter((f) => f.confidence > 0).length ?? (28 - missing.length);
+
+  // 按置信度分组
+  const highFields = evalResult?.fields.filter((f) => f.confidence >= 80) ?? [];
+  const midFields = evalResult?.fields.filter((f) => f.confidence >= 50 && f.confidence < 80) ?? [];
+  const lowFields = evalResult?.fields.filter((f) => f.confidence > 0 && f.confidence < 50) ?? [];
+
+  const autoFill = async () => {
+    setAutoFilling(true);
+    try {
+      const raw = await autoFillExperiment({
+        name: experiment.name, experimentType: experiment.experimentType,
+        date: experiment.date, operator: experiment.operator,
+        purpose: experiment.purpose, background: experiment.background,
+        hypothesis: experiment.hypothesis, conclusion: experiment.conclusion,
+        discipline: experiment.discipline, device: experiment.device,
+        instruments: experiment.instruments, materials: experiment.materials,
+        sample: experiment.sample, params: experiment.params,
+        environment: experiment.environment, protocol: experiment.protocol,
+        steps: experiment.steps, results: experiment.results, notes: experiment.notes,
+        controls: experiment.controls, replicates: experiment.replicates,
+        qcStatus: experiment.qcStatus,
+      });
+      const data = extractJSON<Record<string, unknown>>(raw);
+      if (!data || typeof data !== "object") { toast.error("AI 返回格式异常，请重试"); return; }
+
+      const patch: Partial<Experiment> = {} as Partial<Experiment>;
+      const strFields = ["name", "experimentType", "date", "operator", "purpose", "background", "hypothesis", "conclusion", "discipline", "results", "notes", "qcStatus"] as const;
+      for (const f of strFields) {
+        const v = data[f];
+        if (typeof v === "string" && v.trim() && v.trim() !== (experiment[f as keyof typeof experiment] as unknown as string)) {
+          (patch as Record<string, unknown>)[f] = v.trim();
+        }
+      }
+      for (const nest of ["device", "sample", "environment"] as const) {
+        const v = data[nest];
+        if (v && typeof v === "object") {
+          const merged = { ...experiment[nest] }; let changed = false;
+          for (const nk of Object.keys(v as Record<string, unknown>)) {
+            const nv = (v as Record<string, unknown>)[nk];
+            if (typeof nv === "string" && nv.trim()) { (merged as Record<string, unknown>)[nk] = nv.trim(); changed = true; }
+          }
+          if (changed) (patch as Record<string, unknown>)[nest] = merged;
+        }
+      }
+      if (Array.isArray(data.params) && data.params.length > 0) {
+        const valid = data.params.filter((p: unknown) => p && typeof p === "object" && (p as Record<string, unknown>).name);
+        if (valid.length > 0) patch.params = valid as Param[];
+      }
+      if (Array.isArray(data.steps)) {
+        const valid = data.steps.filter((s: unknown) => typeof s === "string" && s.trim());
+        if (valid.length > 0) patch.steps = valid as string[];
+      }
+      // New Phase 1 fields
+      if (Array.isArray(data.instruments) && data.instruments.length > 0) {
+        patch.instruments = data.instruments as Instrument[];
+      }
+      if (Array.isArray(data.materials) && data.materials.length > 0) {
+        patch.materials = data.materials as Material[];
+      }
+      if (data.protocol && typeof data.protocol === "object" && (data.protocol as Record<string, unknown>).name) {
+        patch.protocol = data.protocol as Experiment["protocol"];
+      }
+      if (Array.isArray(data.controls) && data.controls.length > 0) {
+        patch.controls = data.controls as Control[];
+      }
+      if (typeof data.replicates === "number" && data.replicates > 0) {
+        patch.replicates = data.replicates;
+      }
+      updateExperiment(experiment.id, patch);
+      toast.success("AI 已补全缺失字段，请人工复核");
+      setEvalResult(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "补全失败");
+    } finally {
+      setAutoFilling(false);
+    }
   };
 
-  const reparse = () => {
+  const reparse = async () => {
+    const filesWithContent = experiment.attachedFiles
+      .filter((f) => f.textContent)
+      .map((f) => ({ name: f.name, textContent: f.textContent! }));
+    if (filesWithContent.length === 0) { toast.info("没有可解析的文件内容。请重新上传文件以触发文本提取。"); return; }
+
     setReparsing(true);
-    setTimeout(()=>{ setReparsing(false); toast.success("已重新解析（提升 +3% 可信度）"); }, 1100);
+    try {
+      const raw = await reparseExperimentFiles(
+        { name: experiment.name, experimentType: experiment.experimentType,
+          date: experiment.date, operator: experiment.operator,
+          purpose: experiment.purpose, background: experiment.background,
+          hypothesis: experiment.hypothesis, conclusion: experiment.conclusion,
+          discipline: experiment.discipline, device: experiment.device,
+          instruments: experiment.instruments, materials: experiment.materials,
+          sample: experiment.sample, params: experiment.params,
+          environment: experiment.environment, protocol: experiment.protocol,
+          steps: experiment.steps, results: experiment.results, notes: experiment.notes,
+          controls: experiment.controls, replicates: experiment.replicates,
+          qcStatus: experiment.qcStatus },
+        filesWithContent,
+      );
+      const data = extractJSON<Record<string, unknown>>(raw);
+      if (!data || typeof data !== "object") { toast.error("AI 返回格式异常，请重试"); return; }
+      const patch: Partial<Experiment> = {} as Partial<Experiment>;
+      const strFields = ["name", "date", "operator", "purpose", "background", "discipline", "results", "notes"] as const;
+      for (const f of strFields) {
+        const v = data[f];
+        if (typeof v === "string" && v.trim()) (patch as Record<string, unknown>)[f] = v.trim();
+      }
+      for (const nest of ["device", "sample", "environment"] as const) {
+        const v = data[nest];
+        if (v && typeof v === "object") (patch as Record<string, unknown>)[nest] = v;
+      }
+      if (Array.isArray(data.params)) patch.params = data.params as Param[];
+      if (Array.isArray(data.steps)) patch.steps = data.steps as string[];
+      if (typeof data.aiInsights === "string" && data.aiInsights.trim()) {
+        (patch as Record<string, unknown>).aiInsights = data.aiInsights.trim();
+      }
+      updateExperiment(experiment.id, patch);
+      toast.success("已重新解析，请核对变更");
+      setEvalResult(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "重新解析失败");
+    } finally {
+      setReparsing(false);
+    }
   };
 
   return (
     <div className="card-soft p-4 border-primary/30 bg-primary-soft/20">
-      <h3 className="text-sm font-semibold flex items-center gap-2"><Bot size={15} className="text-primary"/>AI 分析</h3>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <Metric label="可信度" value={`${trust}%`} accent/>
-        <Metric label="已识别字段" value={`${recognized}项`}/>
-        <Metric label="缺失字段" value={`${missing.length}项`} warn={missing.length>0}/>
-      </div>
-      <div className="mt-3 h-1.5 rounded-full bg-primary/15 overflow-hidden">
-        <div className="h-full bg-primary transition-all" style={{ width: `${trust}%` }}/>
-      </div>
-      <div className="mt-3">
-        <div className="text-[11px] font-semibold mb-1.5 text-muted-foreground">建议补全：</div>
-        <div className="flex flex-wrap gap-1.5">
-          {(missing.length >= 2 ? missing.slice(0,2) : missing.length === 1 ? [missing[0], "环境湿度"] : ["环境湿度", "设备编号"]).map((m) => (
-            <span key={m} className="inline-flex items-center gap-1 rounded-md border border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning)]/10 px-2 py-0.5 text-[11px] text-[color:var(--color-warning)]">
-              <AlertCircle size={10}/>{m}
-            </span>
-          ))}
+      <h3 className="text-sm font-semibold flex items-center gap-2">
+        <Bot size={15} className="text-primary"/>AI 置信度评估
+        {evalResult?.fromLogprobs && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[color:var(--color-success)]/10 text-[color:var(--color-success)] font-normal">
+            token-level
+          </span>
+        )}
+      </h3>
+
+      {evalLoading && !evalResult ? (
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 size={13} className="animate-spin"/>正在逐字段校准...
         </div>
-      </div>
+      ) : (
+        <>
+          {/* 整体置信度 + 分布 */}
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-white/70 p-2">
+              <div className="text-[10px] text-muted-foreground">综合置信度</div>
+              <div className={`text-base font-bold tabular-nums mt-0.5 ${
+                overallConfidence >= 80 ? "text-[color:var(--color-success)]"
+                : overallConfidence >= 50 ? "text-[color:var(--color-warning)]"
+                : "text-destructive"
+              }`}>{overallConfidence}%</div>
+            </div>
+            <div className="rounded-lg bg-white/70 p-2">
+              <div className="text-[10px] text-muted-foreground">高置信字段</div>
+              <div className="text-base font-bold tabular-nums mt-0.5 text-[color:var(--color-success)]">{highFields.length}</div>
+            </div>
+            <div className="rounded-lg bg-white/70 p-2">
+              <div className="text-[10px] text-muted-foreground">需核对字段</div>
+              <div className={`text-base font-bold tabular-nums mt-0.5 ${lowFields.length > 0 ? "text-destructive" : "text-muted-foreground"}`}>{lowFields.length}</div>
+            </div>
+          </div>
+
+          {/* 置信度分布条 */}
+          {evalResult && (
+            <div className="mt-2 h-1.5 rounded-full bg-secondary overflow-hidden flex">
+              <div className="h-full bg-[color:var(--color-success)] transition-all duration-700"
+                style={{ width: `${(highFields.length / Math.max(evalResult.fields.length, 1)) * 100}%` }}/>
+              <div className="h-full bg-[color:var(--color-warning)] transition-all duration-700"
+                style={{ width: `${(midFields.length / Math.max(evalResult.fields.length, 1)) * 100}%` }}/>
+              <div className="h-full bg-destructive transition-all duration-700"
+                style={{ width: `${(lowFields.length / Math.max(evalResult.fields.length, 1)) * 100}%` }}/>
+            </div>
+          )}
+
+          {/* 摘要 */}
+          {evalResult?.summary && (
+            <div className="mt-2 rounded-lg bg-secondary/60 px-2.5 py-1.5 text-[11px] text-muted-foreground leading-relaxed">
+              {evalResult.summary}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 低置信字段速览 */}
+      {lowFields.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold mb-1.5 text-muted-foreground flex items-center gap-1">
+            <AlertCircle size={11} className="text-destructive"/>需人工核对
+          </div>
+          <div className="space-y-1 max-h-[120px] overflow-auto">
+            {lowFields.slice(0, 5).map((f) => (
+              <div key={f.path} className="flex items-center gap-2 text-[11px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0"/>
+                <span className="text-muted-foreground truncate">{f.path}</span>
+                <span className="text-destructive font-medium ml-auto shrink-0">{f.confidence}%</span>
+              </div>
+            ))}
+            {lowFields.length > 5 && (
+              <div className="text-[10px] text-muted-foreground pl-4">...等 {lowFields.length} 个字段</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {evalError && (
+        <div className="mt-2 text-[10px] text-muted-foreground">{evalError}</div>
+      )}
+
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button onClick={autoFill} className="rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-1">
-          <Sparkles size={12}/> 一键补全
+        <button onClick={autoFill} disabled={autoFilling}
+          className="rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-1 disabled:opacity-60">
+          {autoFilling ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
+          一键补全
         </button>
         <button onClick={reparse} disabled={reparsing}
           className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-primary/40 flex items-center justify-center gap-1 disabled:opacity-60">
@@ -1205,5 +1694,8 @@ function download(filename: string, content: string, mime: string) {
 }
 
 function toMarkdown(e: Experiment): string {
-  return `# ${e.name}\n\n- 时间：${e.date}\n- 人员：${e.operator}\n- 来源：${e.source}\n- 学科：${e.discipline}\n\n## 实验目的\n${e.purpose}\n\n## 背景\n${e.background}\n\n## 设备\n${e.device.name} / ${e.device.model} / ${e.device.vendor}\n\n## 样品\n编号 ${e.sample.id} / 批次 ${e.sample.batch} / 来源 ${e.sample.source}\n\n## 参数\n${e.params.map((p) => `- ${p.name}：${p.value} ${p.unit}`).join("\n")}\n\n## 环境\n温度 ${e.environment.temperature} ℃，湿度 ${e.environment.humidity} %，其他：${e.environment.other}\n\n## 步骤\n${e.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n## 结果\n${e.results}\n\n## 异常与备注\n${e.notes}\n`;
+  const materialStr = (e.materials ?? []).map((m) => `- ${m.name}${m.casNumber ? ` (CAS: ${m.casNumber})` : ""}${m.purity ? ` ${m.purity}` : ""} — ${m.role}`).join("\n");
+  const instrumentStr = (e.instruments ?? []).map((inst) => `- ${inst.name} / ${inst.model} / ${inst.vendor}${inst.serialNumber ? ` SN:${inst.serialNumber}` : ""}`).join("\n");
+  const controlStr = (e.controls ?? []).map((c) => `- ${c.type}: ${c.name} → ${c.passed ? "✅" : c.passed === false ? "❌" : "—"}`).join("\n");
+  return `# ${e.name}\n\n- 时间：${e.date}\n- 人员：${e.operator}${e.supervisor ? `\n- 导师：${e.supervisor}` : ""}\n- 类型：${e.experimentType}\n- 来源：${e.source}\n- 学科：${e.discipline}\n${e.projectId ? `- 项目：${e.projectId}\n` : ""}\n## 实验目的\n${e.purpose}\n\n${e.hypothesis ? `## 假设\n${e.hypothesis}\n\n` : ""}## 背景\n${e.background}\n\n${instrumentStr ? `## 仪器\n${instrumentStr}\n\n` : ""}${e.device.name ? `## 设备\n${e.device.name} / ${e.device.model} / ${e.device.vendor}\n\n` : ""}${materialStr ? `## 试剂与材料\n${materialStr}\n\n` : ""}## 样品\n编号 ${e.sample.id} / 批次 ${e.sample.batch} / 来源 ${e.sample.source}\n\n## 参数\n${e.params.map((p) => `- ${p.name}：${p.value} ${p.unit}`).join("\n")}\n\n## 环境\n温度 ${e.environment.temperature} ℃，湿度 ${e.environment.humidity} %，其他：${e.environment.other}\n\n${e.protocol?.name ? `## 协议\n${e.protocol.name}${e.protocol.version ? ` v${e.protocol.version}` : ""}\n\n` : ""}## 步骤\n${e.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n## 结果\n${e.results}\n\n${e.conclusion ? `## 结论\n${e.conclusion}\n\n` : ""}${controlStr ? `## 质控\n${controlStr}\n重复次数：${e.replicates ?? 1} · 状态：${e.qcStatus}\n\n` : ""}## 异常与备注\n${e.notes}\n`;
 }
