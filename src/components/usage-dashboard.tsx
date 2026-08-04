@@ -1,5 +1,5 @@
 /**
- * API 用量仪表盘 — 展示 SiliconFlow API 调用统计和费用估算
+ * API 用量仪表盘 — 展示 AI API 调用统计和费用估算
  *
  * 数据来源：sanitizer audit log (localStorage + Supabase)
  */
@@ -8,13 +8,13 @@ import { BarChart3, TrendingUp, Zap, Clock, DollarSign, Activity, FileText, Imag
 import { loadAuditFromLocal, queryAuditLogs } from "../lib/sanitizer/audit-log";
 import type { AuditLogEntry } from "../lib/sanitizer";
 
-/** SiliconFlow 模型定价 (USD/1M tokens) */
+/** AI 模型定价 (USD/1M tokens) — 通过 XJTLU AI Gateway */
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "deepseek-ai/DeepSeek-V3": { input: 0.55, output: 1.65 },
-  "Qwen/Qwen3-VL-32B-Instruct": { input: 0.20, output: 0.60 },
-  "Qwen/Qwen3-Omni-30B-A3B-Instruct": { input: 0.10, output: 0.40 },
-  "BAAI/bge-large-zh-v1.5": { input: 0.10, output: 0 },
-  "default": { input: 0.30, output: 0.80 },
+  "d8j2d4r9dhtg6s3fevfg": { input: 0.55, output: 2.19 },
+  "d95koqj7u3anoctav5sg": { input: 0.40, output: 1.20 },
+  "d8efv05lt96sitl7kjcg": { input: 0.20, output: 0 },
+  "d8egv6v9ohgtar18hvrg": { input: 0.10, output: 0 },
+  "default": { input: 0.55, output: 2.19 },
 };
 
 /** 数据类型图标映射 */

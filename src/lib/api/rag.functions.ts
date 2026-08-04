@@ -37,75 +37,101 @@ export const ragSearch = createServerFn({ method: "POST" })
       data: { question: data.question, history: data.history },
     });
 
-    // 2. 生成改写后问题的 embedding
+    // 2. 生成改写后问题的 embedding（不可用时降级关键词搜索）
     const qVec = await generateEmbedding({ data: { text: searchQuery } });
-    if (!Array.isArray(qVec) || qVec.length === 0) return [];
+    const hasEmbedding = Array.isArray(qVec) && qVec.length > 0;
 
-    // 2. 优先用 chunk 级搜索（精确匹配字段），失败 fallback 到整卡搜索
     let simMap = new Map<string, { name: string; similarity: number; bestChunk: string; chunkType: string }>();
 
-    // 2a. 尝试 chunk 级向量搜索
-    const { data: chunkSimilar, error: chunkErr } = await supabase.rpc(
-      "match_experiment_chunks",
-      {
-        query_embedding: qVec,
-        match_threshold: 0.55, // 稍低阈值，chunk 粒度更细
-        match_count: 20, // 多召回一些，后续按实验去重
-        filter_user_id: data.userId ?? null,
-        filter_ids: data.selectedIds ?? null,
-      },
-    );
+    if (hasEmbedding) {
+      // 2a. 尝试 chunk 级向量搜索
+      const { data: chunkSimilar, error: chunkErr } = await supabase.rpc(
+        "match_experiment_chunks",
+        {
+          query_embedding: qVec,
+          match_threshold: 0.55,
+          match_count: 20,
+          filter_user_id: data.userId ?? null,
+          filter_ids: data.selectedIds ?? null,
+        },
+      );
 
-    if (!chunkErr && Array.isArray(chunkSimilar) && chunkSimilar.length > 0) {
-      const chunkList = chunkSimilar as Array<{
-        experiment_id: string;
-        experiment_name: string;
-        chunk_type: string;
-        chunk_content: string;
-        similarity: number;
-      }>;
-      // 按 experiment_id 去重，取最佳匹配 chunk
-      for (const c of chunkList) {
-        const existing = simMap.get(c.experiment_id);
-        if (!existing || c.similarity > existing.similarity) {
-          simMap.set(c.experiment_id, {
-            name: c.experiment_name,
-            similarity: c.similarity,
-            bestChunk: c.chunk_content,
-            chunkType: c.chunk_type,
-          });
+      if (!chunkErr && Array.isArray(chunkSimilar) && chunkSimilar.length > 0) {
+        const chunkList = chunkSimilar as Array<{
+          experiment_id: string;
+          experiment_name: string;
+          chunk_type: string;
+          chunk_content: string;
+          similarity: number;
+        }>;
+        for (const c of chunkList) {
+          const existing = simMap.get(c.experiment_id);
+          if (!existing || c.similarity > existing.similarity) {
+            simMap.set(c.experiment_id, {
+              name: c.experiment_name,
+              similarity: c.similarity,
+              bestChunk: c.chunk_content,
+              chunkType: c.chunk_type,
+            });
+          }
         }
       }
-    }
 
-    // 2b. Fallback: 混合搜索（语义 + 关键词 BM25）
-    if (simMap.size === 0) {
-      const { data: hybrid } = await supabase.rpc("hybrid_search_experiments", {
-        query_text: searchQuery,
-        query_embedding: qVec,
-        match_threshold: 0.5,
-        match_count: data.limit * 4,
-        semantic_weight: 0.7,
-        keyword_weight: 0.3,
-        filter_user_id: data.userId ?? null,
-        filter_ids: data.selectedIds ?? null,
-      });
+      // 2b. Fallback: 混合搜索（语义 + 关键词 BM25）
+      if (simMap.size === 0) {
+        const { data: hybrid } = await supabase.rpc("hybrid_search_experiments", {
+          query_text: searchQuery,
+          query_embedding: qVec,
+          match_threshold: 0.5,
+          match_count: data.limit * 4,
+          semantic_weight: 0.7,
+          keyword_weight: 0.3,
+          filter_user_id: data.userId ?? null,
+          filter_ids: data.selectedIds ?? null,
+        });
 
-      if (Array.isArray(hybrid)) {
-        const hList = hybrid as Array<{
-          id: string;
-          name: string;
-          similarity: number;
-          keyword_score: number;
-          hybrid_score: number;
-        }>;
-        for (const h of hList) {
-          simMap.set(h.id, {
-            name: h.name,
-            similarity: h.hybrid_score,
-            bestChunk: h.keyword_score > 0 ? `关键词匹配: ${searchQuery}` : "",
-            chunkType: h.keyword_score > 0 ? "keyword" : "",
-          });
+        if (Array.isArray(hybrid)) {
+          const hList = hybrid as Array<{
+            id: string;
+            name: string;
+            similarity: number;
+            keyword_score: number;
+            hybrid_score: number;
+          }>;
+          for (const h of hList) {
+            simMap.set(h.id, {
+              name: h.name,
+              similarity: h.hybrid_score,
+              bestChunk: h.keyword_score > 0 ? `关键词匹配: ${searchQuery}` : "",
+              chunkType: h.keyword_score > 0 ? "keyword" : "",
+            });
+          }
+        }
+      }
+    } else {
+      // 无 Embedding — 纯关键词 ILIKE 搜索
+      console.warn("[RAG] Embedding unavailable, using keyword-only search");
+      const terms = searchQuery.split(/\s+/).filter((t) => t.length > 0);
+      if (terms.length > 0) {
+        const ilikePattern = terms.map((t) => `%${t}%`).join("|");
+        const { data: keywordResults } = await supabase
+          .from("experiments")
+          .select("id, name, purpose, results")
+          .or(
+            terms.map((_, i) => `name.ilike.%${terms[i]}%,purpose.ilike.%${terms[i]}%,results.ilike.%${terms[i]}%`).join(",")
+          )
+          .limit(data.limit * 3);
+
+        if (Array.isArray(keywordResults)) {
+          for (const r of keywordResults as Array<{ id: string; name: string; purpose?: string; results?: string }>) {
+            const snippet = [r.purpose, r.results].filter(Boolean).join(" | ").slice(0, 200);
+            simMap.set(r.id, {
+              name: r.name,
+              similarity: 0.5,
+              bestChunk: snippet,
+              chunkType: "keyword",
+            });
+          }
         }
       }
     }
@@ -284,7 +310,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
       } else {
         answer = await chatCompletion({
           data: {
-            model: "deepseek-ai/DeepSeek-V3",
+            model: MODEL_ID,
             messages: [
               { role: "system", content: RAG_SYSTEM_PROMPT },
               ...historyMessages,
@@ -329,7 +355,8 @@ export const ragAnswer = createServerFn({ method: "POST" })
 // RAG 流式问答（SSE）
 // ═══════════════════════════════════════════════════════
 
-const SF_BASE = "https://api.siliconflow.cn/v1";
+const AI_BASE = "https://aiagent.xjtlu.edu.cn/api/aigw/v1";
+const MODEL_ID = "d8j2d4r9dhtg6s3fevfg";
 
 function apiFetch(url: string, init: RequestInit): Promise<Response> {
   return getProxiedFetch()(url, init);
@@ -388,8 +415,8 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
     }));
 
     const config = getServerConfig();
-    const apiKey = config.sfApiKey;
-    if (!apiKey) throw new Error("SF_API_KEY not configured");
+    const apiKey = config.aiApiKey;
+    if (!apiKey) throw new Error("AI_API_KEY not configured");
 
     const encoder = new TextEncoder();
 
@@ -412,17 +439,17 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       );
     }
 
-    // 4. 调用 SiliconFlow 流式 API
+    // 4. 调用 AI API 流式接口
     let sfRes: Response;
     try {
-      sfRes = await apiFetch(`${SF_BASE}/chat/completions`, {
+      sfRes = await apiFetch(`${AI_BASE}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-ai/DeepSeek-V3",
+          model: MODEL_ID,
           messages: [
             { role: "system", content: RAG_SYSTEM_PROMPT },
             ...historyMessages,
@@ -466,7 +493,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       );
     }
 
-    // 5. 构建 SSE 流：先发 sources，再 pipe SiliconFlow token 流
+    // 5. 构建 SSE 流：先发 sources，再 pipe AI token 流
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
 
@@ -477,7 +504,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       )
     );
 
-    // 异步 pipe SiliconFlow SSE stream
+    // 异步 pipe AI API SSE stream
     const sfReader = sfRes.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = "";

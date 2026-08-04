@@ -4,7 +4,7 @@
  * - 鲁棒的多种回退策略
  * - 归一化实验卡片数据
  */
-import type { AttachedFile, Experiment } from "./labStore";
+import type { AttachedFile, Experiment, Material, Observation, Control } from "./labStore";
 
 // ═══════════════════════════════════════════════════════
 // JSON 提取
@@ -123,16 +123,38 @@ function asPartialExperiment(item: unknown): Partial<Experiment> {
 
   return {
     name: asString(obj.name),
+    experimentType: (asString(obj.experimentType) || "synthesis") as Experiment["experimentType"],
     date: asString(obj.date),
     operator: asString(obj.operator),
     purpose: asString(obj.purpose),
     background: asString(obj.background),
+    hypothesis: asString(obj.hypothesis) || undefined,
+    conclusion: asString(obj.conclusion) || undefined,
     discipline: asString(obj.discipline),
     device: {
       name: asString((obj.device as Record<string, unknown>)?.name),
       model: asString((obj.device as Record<string, unknown>)?.model),
       vendor: asString((obj.device as Record<string, unknown>)?.vendor),
     },
+    instruments: Array.isArray(obj.instruments)
+      ? (obj.instruments as Array<Record<string, unknown>>).map((i) => ({
+          name: asString(i.name),
+          model: asString(i.model),
+          vendor: asString(i.vendor),
+          serialNumber: asString(i.serialNumber) || undefined,
+        }))
+      : [],
+    materials: Array.isArray(obj.materials)
+      ? (obj.materials as Array<Record<string, unknown>>).map((m) => ({
+          name: asString(m.name),
+          casNumber: asString(m.casNumber) || undefined,
+          purity: asString(m.purity) || undefined,
+          lotNumber: asString(m.lotNumber) || undefined,
+          supplier: asString(m.supplier) || undefined,
+          amount: asString(m.amount) || undefined,
+          role: (asString(m.role) || "reactant") as Material["role"],
+        }))
+      : [],
     sample: {
       id: asString((obj.sample as Record<string, unknown>)?.id),
       batch: asString((obj.sample as Record<string, unknown>)?.batch),
@@ -145,14 +167,37 @@ function asPartialExperiment(item: unknown): Partial<Experiment> {
           unit: asString((p as Record<string, unknown>)?.unit),
         }))
       : [],
+    protocol: obj.protocol && typeof obj.protocol === "object"
+      ? {
+          name: asString((obj.protocol as Record<string, unknown>).name),
+          version: asString((obj.protocol as Record<string, unknown>).version) || undefined,
+        }
+      : undefined,
     environment: {
       temperature: asString((obj.environment as Record<string, unknown>)?.temperature),
       humidity: asString((obj.environment as Record<string, unknown>)?.humidity),
       other: asString((obj.environment as Record<string, unknown>)?.other),
     },
     steps: Array.isArray(obj.steps) ? obj.steps.map((s) => asString(s)).filter(Boolean) : [],
+    observations: Array.isArray(obj.observations)
+      ? (obj.observations as Array<Record<string, unknown>>).map((o) => ({
+          timestamp: asString(o.timestamp) || new Date().toISOString(),
+          type: (asString(o.type) || "note") as Observation["type"],
+          content: asString(o.content),
+        }))
+      : [],
     results: asString(obj.results),
     notes: asString(obj.notes),
+    controls: Array.isArray(obj.controls)
+      ? (obj.controls as Array<Record<string, unknown>>).map((c) => ({
+          type: (asString(c.type) || "standard") as Control["type"],
+          name: asString(c.name),
+          expectedResult: asString(c.expectedResult) || undefined,
+          passed: c.passed !== undefined ? Boolean(c.passed) : undefined,
+        }))
+      : [],
+    replicates: typeof obj.replicates === "number" ? obj.replicates : 1,
+    qcStatus: (asString(obj.qcStatus) || "na") as Experiment["qcStatus"],
     source: asString(obj.source),
     attachedFiles: [],
     lastParsedAt: null,
@@ -221,5 +266,31 @@ export function normalizeExperiment(
     embedding: (raw as Experiment).embedding ?? defaults?.embedding ?? null,
     aiInsights: (raw as Experiment).aiInsights || defaults?.aiInsights || "",
     knowledgeTags: (raw as Experiment).knowledgeTags || defaults?.knowledgeTags || [],
+    // Phase 1 new fields
+    version: (raw as Experiment).version ?? defaults?.version ?? 1,
+    projectId: (raw as Experiment).projectId ?? defaults?.projectId,
+    studyId: (raw as Experiment).studyId ?? defaults?.studyId,
+    experimentType: (raw as Experiment).experimentType ?? defaults?.experimentType ?? "synthesis",
+    lastModifiedAt: (raw as Experiment).lastModifiedAt ?? defaults?.lastModifiedAt,
+    lastModifiedBy: (raw as Experiment).lastModifiedBy ?? defaults?.lastModifiedBy,
+    reviewer: (raw as Experiment).reviewer ?? defaults?.reviewer,
+    approver: (raw as Experiment).approver ?? defaults?.approver,
+    supervisor: (raw as Experiment).supervisor ?? defaults?.supervisor,
+    hypothesis: (raw as Experiment).hypothesis ?? defaults?.hypothesis,
+    conclusion: (raw as Experiment).conclusion ?? defaults?.conclusion,
+    protocol: (raw as Experiment).protocol ?? defaults?.protocol,
+    instruments: (raw as Experiment).instruments ?? defaults?.instruments ?? [],
+    materials: (raw as Experiment).materials ?? defaults?.materials ?? [],
+    observations: (raw as Experiment).observations ?? defaults?.observations ?? [],
+    rawDataRefs: (raw as Experiment).rawDataRefs ?? defaults?.rawDataRefs ?? [],
+    processedDataRefs: (raw as Experiment).processedDataRefs ?? defaults?.processedDataRefs ?? [],
+    controls: (raw as Experiment).controls ?? defaults?.controls ?? [],
+    replicates: (raw as Experiment).replicates ?? defaults?.replicates ?? 1,
+    qcStatus: (raw as Experiment).qcStatus ?? defaults?.qcStatus ?? "na",
+    license: (raw as Experiment).license ?? defaults?.license ?? "CC BY-NC 4.0",
+    ontologyTerms: (raw as Experiment).ontologyTerms ?? defaults?.ontologyTerms ?? [],
+    derivedFrom: (raw as Experiment).derivedFrom ?? defaults?.derivedFrom ?? [],
+    auditTrail: (raw as Experiment).auditTrail ?? defaults?.auditTrail ?? [],
+    signatures: (raw as Experiment).signatures ?? defaults?.signatures ?? [],
   };
 }

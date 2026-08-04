@@ -11,7 +11,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, UserCheck, BookOpen, Layers, FileText, Book, Code, ClipboardList, Mail, MessageSquare, Users, Package, User, LogOut, LogIn } from "lucide-react";
+import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, UserCheck, BookOpen, Layers, FileText, Book, Mail, MessageSquare, Users, Package, User, LogOut, LogIn, Cpu } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -19,6 +19,7 @@ import { LabProvider, useLab } from "../lib/labStore";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 import { Toaster } from "sonner";
 import { AIAgent } from "../components/AIAgent";
+import { FeedbackDialog } from "../components/FeedbackDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -132,22 +133,23 @@ function TopNav() {
           </div>
         </Link>
         <nav className="hidden md:flex items-center gap-0.5 text-sm">
-          <NavItem to="/" icon={<Home size={14}/>}>首页</NavItem>
-          <NavItem to="/workbench" icon={<Beaker size={14}/>}>工作台</NavItem>
-          <NavItem to="/compare" icon={<Layers size={14}/>}>治理对比</NavItem>
-          <NavItem to="/checklist" icon={<ListChecks size={14}/>}>Checklist</NavItem>
-          <NavItem to="/graph" icon={<Network size={14}/>}>知识图谱</NavItem>
-          <NavItem to="/assets" icon={<Package size={14}/>}>资产包</NavItem>
-          <NavItem to="/paper" icon={<BookOpen size={14}/>}>论文辅助</NavItem>
-          <NavItem to="/handoff" icon={<UserCheck size={14}/>}>项目交接</NavItem>
-          <NavItem to="/help" icon={<HelpCircle size={14}/>}>帮助</NavItem>
+          <NavItem to="/" icon={<Home size={14} />}>首页</NavItem>
+          <NavItem to="/workbench" icon={<Beaker size={14} />}>工作台</NavItem>
+          <NavItem to="/compare" icon={<Layers size={14} />}>治理对比</NavItem>
+          <NavItem to="/checklist" icon={<ListChecks size={14} />}>Checklist</NavItem>
+          <NavItem to="/graph" icon={<Network size={14} />}>知识图谱</NavItem>
+          <NavItem to="/assets" icon={<Package size={14} />}>资产包</NavItem>
+          <NavItem to="/paper" icon={<BookOpen size={14} />}>论文辅助</NavItem>
+          <NavItem to="/handoff" icon={<UserCheck size={14} />}>项目交接</NavItem>
+          <NavItem to="/agent" icon={<Cpu size={14} />}>Agent</NavItem>
+          <NavItem to="/help" icon={<HelpCircle size={14} />}>帮助</NavItem>
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setSearchOpen(true)}
             className="flex items-center gap-2 rounded-lg border border-border bg-secondary/60 px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/40 transition"
           >
-            <Search size={14}/> 全局搜索…
+            <Search size={14} /> 全局搜索…
           </button>
 
           {/* 用户区域 */}
@@ -190,7 +192,7 @@ function TopNav() {
           )}
 
           <Link to="/settings" className="rounded-lg p-2 hover:bg-secondary transition" aria-label="设置">
-            <Settings size={16}/>
+            <Settings size={16} />
           </Link>
         </div>
       </div>
@@ -224,7 +226,7 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-start justify-center pt-24 px-4" onClick={onClose}>
       <div className="card-soft w-full max-w-xl p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-border pb-2">
-          <Search size={16} className="text-muted-foreground"/>
+          <Search size={16} className="text-muted-foreground" />
           <input
             autoFocus
             value={q}
@@ -258,8 +260,10 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
 }
 
 function Footer() {
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
     <footer className="no-print border-t border-border mt-12">
+      <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <div className="mx-auto max-w-7xl px-4 py-10">
         {/* 合作邀请语 */}
         <div className="text-center mb-8">
@@ -299,24 +303,9 @@ function Footer() {
                 </Link>
               </li>
               <li>
-                <a href="#" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
+                <a href="https://estrella-0903.github.io/labnote-agent/" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
                   <FileText size={12} /> 📄 产品白皮书（White Paper）
                 </a>
-              </li>
-              <li>
-                <a href="#" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <Code size={12} /> 🔗 API Documentation（预留）
-                </a>
-              </li>
-              <li>
-                <div className="text-xs text-muted-foreground flex items-center gap-2">
-                  <ClipboardList size={12} /> 📝 更新日志（Changelog）
-                </div>
-                <ul className="mt-1.5 ml-5 space-y-1">
-                  <li className="text-[10px] text-muted-foreground/70">v1.0 实验记录管理</li>
-                  <li className="text-[10px] text-muted-foreground/70">v1.1 AI科研问答</li>
-                  <li className="text-[10px] text-muted-foreground/70">v1.2 Checklist生成</li>
-                </ul>
               </li>
             </ul>
           </div>
@@ -329,15 +318,18 @@ function Footer() {
             </h4>
             <ul className="space-y-2.5">
               <li className="text-xs text-muted-foreground flex items-center gap-2">
-                <Mail size={12} /> 📧 官方邮箱：contact@labnote-agent.com
+                <Mail size={12} /> 📧 负责人邮箱：2662001087@qq.com
               </li>
               <li>
-                <a href="#" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
+                <button onClick={() => setFeedbackOpen(true)} className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
                   <MessageSquare size={12} /> 💬 Feedback（Bug反馈/功能建议）
-                </a>
+                </button>
               </li>
               <li className="text-xs text-muted-foreground flex items-center gap-2">
-                <Users size={12} /> 👥 用户交流群（二维码预留）
+                <Users size={12} /> 👥 用户交流群
+              </li>
+              <li>
+                <img src="/qr-group.jpg" alt="用户交流群二维码" className="w-32 h-32 rounded-lg border border-border mt-1" />
               </li>
             </ul>
           </div>

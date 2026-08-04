@@ -1,15 +1,28 @@
 /**
- * AI Server Functions — 代理所有 SiliconFlow API 调用
+ * AI Server Functions — 代理所有 AI API 调用
  *
  * 这些 createServerFn 的 .handler 代码仅在服务端运行
- * SF_API_KEY 永远不会暴露给浏览器
+ * AI_API_KEY 永远不会暴露给浏览器
+ *
+ * 当前后端: XJTLU AI Gateway → DeepSeek V4 Pro
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getServerConfig } from "../config.server";
 import { getProxiedFetch } from "../proxy-fetch.server";
 
-const SF_BASE = "https://api.siliconflow.cn/v1";
+const AI_BASE = "https://aiagent.xjtlu.edu.cn/api/aigw/v1";
+const MODEL_CHAT = "d8j2d4r9dhtg6s3fevfg";
+const MODEL_VISION = "d95koqj7u3anoctav5sg";
+const MODEL_RERANK = "d8efv05lt96sitl7kjcg";
+const EMBEDDING_MODEL_ID = "d8egv6v9ohgtar18hvrg";
+
+/** 根据模型自动选择 API Key */
+function selectApiKey(model: string): string | undefined {
+  const config = getServerConfig();
+  if (model === MODEL_VISION) return config.aiVisionKey || config.aiApiKey;
+  return config.aiApiKey;
+}
 
 /** Fetch with optional HTTP proxy support */
 function apiFetch(url: string, init: RequestInit): Promise<Response> {
@@ -34,9 +47,8 @@ export const chatCompletion = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const config = getServerConfig();
-    const apiKey = config.sfApiKey;
-    if (!apiKey) throw new Error("SF_API_KEY not configured");
+    const apiKey = selectApiKey(data.model);
+    if (!apiKey) throw new Error("AI_API_KEY not configured");
 
     // ── 服务端脱敏二次校验 ──
     if (!data.sanitized) {
@@ -66,7 +78,7 @@ export const chatCompletion = createServerFn({ method: "POST" })
       }
     }
 
-    const res = await apiFetch(`${SF_BASE}/chat/completions`, {
+    const res = await apiFetch(`${AI_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
@@ -83,7 +95,7 @@ export const chatCompletion = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`SiliconFlow API ${res.status}: ${errText.slice(0, 300)}`);
+      throw new Error(`AI API ${res.status}: ${errText.slice(0, 300)}`);
     }
 
     const json = (await res.json()) as {
@@ -93,78 +105,155 @@ export const chatCompletion = createServerFn({ method: "POST" })
   });
 
 // ═══════════════════════════════════════════════════════
-// Embedding 生成（BAAI/bge-large-zh-v1.5, 1024-dim）
+// Chat Completion with logprobs — Token-level confidence
 // ═══════════════════════════════════════════════════════
 
-const EMBEDDING_MODEL = "BAAI/bge-large-zh-v1.5";
+export type TokenLogprob = {
+  token: string;
+  logprob: number;
+  top_logprobs?: Array<{ token: string; logprob: number }>;
+};
+
+export type LogprobsResult = {
+  content: string;
+  logprobs: TokenLogprob[] | null;
+};
+
+export const chatCompletionWithLogprobs = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      model: z.string(),
+      messages: z.array(z.object({
+        role: z.string(),
+        content: z.unknown(),
+      })),
+      maxTokens: z.number().optional().default(4096),
+      temperature: z.number().optional().default(0.3),
+      topLogprobs: z.number().optional().default(3),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const apiKey = selectApiKey(data.model);
+    if (!apiKey) throw new Error("AI_API_KEY not configured");
+
+    const res = await apiFetch(`${AI_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: data.model,
+        messages: data.messages,
+        max_tokens: data.maxTokens,
+        temperature: data.temperature,
+        stream: false,
+        logprobs: true,
+        top_logprobs: data.topLogprobs,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`AI API ${res.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const json = (await res.json()) as {
+      choices?: Array<{
+        message?: { content?: string };
+        logprobs?: { content?: TokenLogprob[] };
+      }>;
+    };
+
+    return {
+      content: json.choices?.[0]?.message?.content ?? "",
+      logprobs: json.choices?.[0]?.logprobs?.content ?? null,
+    } satisfies LogprobsResult;
+  });
+
+// ═══════════════════════════════════════════════════════
+// Embedding 生成 — 当前后端不支持，返回空，RAG 降级关键词搜索
+// ═══════════════════════════════════════════════════════
 
 export const generateEmbedding = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      text: z.string().min(1),
-    }),
-  )
+  .inputValidator(z.object({ text: z.string().min(1) }))
   .handler(async ({ data }) => {
     const config = getServerConfig();
-    const apiKey = config.sfApiKey;
-    if (!apiKey) return [] as number[];
+    const apiKey = config.aiEmbeddingKey || config.aiApiKey;
+    if (!apiKey) {
+      console.warn("[Embedding] No embedding key configured");
+      return [] as number[];
+    }
 
-    const res = await apiFetch(`${SF_BASE}/embeddings`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        input: [data.text.slice(0, 1500)],
-      }),
-    });
+    try {
+      const res = await apiFetch(`${AI_BASE}/embeddings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: EMBEDDING_MODEL_ID,
+          input: [data.text.slice(0, 1500)],
+        }),
+      });
 
-    const json = (await res.json()) as {
-      data?: Array<{ embedding: number[] }>;
-    };
-    return json.data?.[0]?.embedding ?? [];
+      if (!res.ok) {
+        console.error(`[Embedding] API error ${res.status}`);
+        return [] as number[];
+      }
+
+      const json = (await res.json()) as {
+        data?: Array<{ embedding: number[] }>;
+      };
+      return json.data?.[0]?.embedding ?? [];
+    } catch (err) {
+      console.error("[Embedding] call failed:", err);
+      return [] as number[];
+    }
   });
-
-// ═══════════════════════════════════════════════════════
-// 批量 Embedding 生成（多 chunk 一次调用）
-// ═══════════════════════════════════════════════════════
 
 export const generateEmbeddings = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      texts: z.array(z.string().min(1)).max(16),
-    }),
-  )
+  .inputValidator(z.object({ texts: z.array(z.string().min(1)).max(16) }))
   .handler(async ({ data }) => {
     const config = getServerConfig();
-    const apiKey = config.sfApiKey;
-    if (!apiKey) return [] as number[][];
+    const apiKey = config.aiEmbeddingKey || config.aiApiKey;
+    if (!apiKey) {
+      console.warn("[Embedding] No embedding key configured");
+      return [] as number[][];
+    }
 
-    const res = await apiFetch(`${SF_BASE}/embeddings`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        input: data.texts.map((t) => t.slice(0, 1500)),
-      }),
-    });
+    try {
+      const res = await apiFetch(`${AI_BASE}/embeddings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: EMBEDDING_MODEL_ID,
+          input: data.texts.map((t) => t.slice(0, 1500)),
+        }),
+      });
 
-    const json = (await res.json()) as {
-      data?: Array<{ embedding: number[] }>;
-    };
-    return (json.data ?? []).map((d) => d.embedding);
+      if (!res.ok) {
+        console.error(`[Embedding] API error ${res.status}`);
+        return [] as number[][];
+      }
+
+      const json = (await res.json()) as {
+        data?: Array<{ embedding: number[] }>;
+      };
+      return (json.data ?? []).map((d) => d.embedding);
+    } catch (err) {
+      console.error("[Embedding] call failed:", err);
+      return [] as number[][];
+    }
   });
 
 // ═══════════════════════════════════════════════════════
-// Reranker — 交叉编码器精排
+// Reranker — Qwen3-Reranker-8B 交叉编码器精排
 // ═══════════════════════════════════════════════════════
-
-const RERANK_MODEL = "BAAI/bge-reranker-v2-m3";
 
 export const rerank = createServerFn({ method: "POST" })
   .inputValidator(
@@ -176,18 +265,21 @@ export const rerank = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const config = getServerConfig();
-    const apiKey = config.sfApiKey;
-    if (!apiKey) return [] as Array<{ index: number; score: number }>;
+    const apiKey = config.aiRerankKey || config.aiApiKey;
+    if (!apiKey) {
+      console.warn("[Rerank] No rerank key configured");
+      return [] as Array<{ index: number; score: number }>;
+    }
 
     try {
-      const res = await apiFetch(`${SF_BASE}/rerank`, {
+      const res = await apiFetch(`${AI_BASE}/rerank`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: RERANK_MODEL,
+          model: MODEL_RERANK,
           query: data.query,
           documents: data.documents,
           top_n: data.topN,
@@ -245,7 +337,7 @@ export const rewriteQuery = createServerFn({ method: "POST" })
     }
 
     const config = getServerConfig();
-    const apiKey = config.sfApiKey;
+    const apiKey = config.aiApiKey;
     if (!apiKey) return data.question;
 
     // 构建上下文：最近历史
@@ -257,14 +349,14 @@ export const rewriteQuery = createServerFn({ method: "POST" })
     }
 
     try {
-      const res = await apiFetch(`${SF_BASE}/chat/completions`, {
+      const res = await apiFetch(`${AI_BASE}/chat/completions`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "deepseek-ai/DeepSeek-V3",
+          model: MODEL_CHAT,
           messages: [
             { role: "system", content: QUERY_REWRITE_PROMPT },
             { role: "user", content: `用户问题：${data.question}${context}` },

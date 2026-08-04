@@ -1,9 +1,7 @@
 /**
- * SiliconFlow 多模态 API — 自动按文件类型选择最优模型
- * 不向 UI 暴露模型名称，仅返回解析结果
+ * DeepSeek V4 Pro API — 文本解析与对话
  *
  * AI 调用通过 server functions 代理 — API key 仅在服务端
- * 文件处理辅助函数（fileToBase64 等）保留在客户端
  *
  * 数据脱敏集成：
  *   chat() 和 chatWithSanitizer() 支持在发送前扫描敏感信息
@@ -12,11 +10,9 @@
 import type { ScanResult, AuditLogEntry } from "./sanitizer";
 import { scanSensitivity, applySanitization, createAuditEntry, persistAuditEntry } from "./sanitizer";
 
-// ===== 模型选择（不暴露给 UI） =====
-export const MODEL_TEXT = "deepseek-ai/DeepSeek-V3";
-export const MODEL_VL = "Qwen/Qwen3-VL-32B-Instruct";
-export const MODEL_OMNI = "Qwen/Qwen3-Omni-30B-A3B-Instruct";
-export const MODEL_OCR = "deepseek-ai/DeepSeek-OCR";
+// ===== 模型 ID =====
+export const MODEL_TEXT = "d8j2d4r9dhtg6s3fevfg";
+export const MODEL_VISION = "d95koqj7u3anoctav5sg";
 
 /** 脱敏回调 — UI 层实现，返回脱敏后的文本或 null 表示取消 */
 export type SanitizeHook = (
@@ -51,7 +47,6 @@ export async function chat(
       let sendText = textContent;
 
       if (sanitize.onSensitive) {
-        // 有 UI 回调 → 让用户决定
         const decision = await sanitize.onSensitive(scan, textContent);
         if (decision.action === "cancel") {
           throw new SanitizeBlockedError(scan);
@@ -59,26 +54,21 @@ export async function chat(
         if (decision.action === "sanitize" && decision.sanitizedText) {
           sendText = decision.sanitizedText;
         }
-        // action === "send_raw" → 使用原始文本
       } else {
-        // 无回调 → 默认策略：高风险自动报错
         if (scan.highRiskCount > 0) {
           throw new SanitizeBlockedError(scan);
         }
-        // 中低风险 → 自动脱敏
         const result = applySanitization(textContent, scan.matches);
         sendText = result.sanitized;
       }
 
-      // 如果文本被修改了，需要重建 messages
       if (sendText !== textContent) {
         messages = rebuildMessagesWithText(messages, sendText);
       }
 
-      // 记录审计日志
       const audit = await createAuditEntry({
         dataType: sanitize.dataType ?? "paper",
-        targetApi: "SiliconFlow",
+        targetApi: "DeepSeek",
         model,
         content: sendText,
         sanitized: sendText !== textContent,
@@ -89,10 +79,9 @@ export async function chat(
       });
       persistAuditEntry(audit).catch(() => {});
     } else {
-      // 无敏感信息
       const audit = await createAuditEntry({
         dataType: sanitize.dataType ?? "paper",
-        targetApi: "SiliconFlow",
+        targetApi: "DeepSeek",
         model,
         content: textContent,
         sanitized: false,
@@ -168,6 +157,44 @@ function rebuildMessagesWithText(
   });
 }
 
+// ===== 文件直传 Supabase Storage（客户端，无大小限制）=====
+
+const STORAGE_BUCKET = "experiment-files";
+
+export async function uploadFileToStorage(
+  file: File,
+  userId: string,
+  expId: string,
+): Promise<{ url: string; path: string } | null> {
+  try {
+    const { supabase } = await import("./supabase");
+    const timestamp = Date.now();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._\-一-鿿]/g, "_");
+    const path = `${userId}/${expId}/${timestamp}-${safeName}`;
+
+    const { error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("[Storage] Upload failed:", error);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(path);
+
+    return { url: urlData.publicUrl, path };
+  } catch (err) {
+    console.error("[Storage] Upload failed:", err);
+    return null;
+  }
+}
+
 // ===== 文件 → base64 =====
 export async function fileToBase64(file: File): Promise<{ base64: string; mime: string }> {
   return new Promise((resolve, reject) => {
@@ -185,7 +212,7 @@ export async function fileToBase64(file: File): Promise<{ base64: string; mime: 
 
 // ===== 图片解析 =====
 export async function parseImage(imageBase64: string, mime: string, fileName: string): Promise<string> {
-  return chat(MODEL_VL, [
+  return chat(MODEL_VISION, [
     {
       role: "user",
       content: [
@@ -205,9 +232,39 @@ export async function parseImage(imageBase64: string, mime: string, fileName: st
 // ===== 文本文件 → 结构化实验数据 =====
 const EXTRACT_PROMPT = `你是科研数据治理专家。从以下文件内容中提取实验信息。
 
-【重要】输出纯JSON（不要markdown代码块），包含以下字段。aiInsights 字段用于记录AI分析中发现的非结构化洞察（关联、建议、风险、后续步骤等），请认真填写，不要留空。
-{"experiments":[{"name":"简洁实验名称","date":"YYYY-MM-DD HH:mm","operator":"操作人","purpose":"实验目的","background":"背景说明","discipline":"学科","device":{"name":"设备名","model":"型号","vendor":"厂家"},"sample":{"id":"样品编号","batch":"批次","source":"来源"},"params":[{"name":"参数名","value":"值","unit":"单位"}],"environment":{"temperature":"","humidity":"","other":""},"steps":["步骤1"],"results":"结果摘要","notes":"异常备注","source":"文件名","aiInsights":"数据质量评估、实验间关联、改进建议、潜在风险等AI观察"}]}
-无法推断的字段填空字符串""。`;
+【重要】输出纯JSON（不要markdown代码块），包含以下字段。全面提取：实验类型、材料试剂（含CAS号/纯度/批次/供应商）、仪器设备（含型号/序列号）、协议SOP名称、质控信息等。无法推断的字段填空字符串""或空数组[]。
+
+输出格式：
+{
+  "experiments": [{
+    "name": "简洁实验名称",
+    "experimentType": "synthesis|characterization|measurement|simulation|other",
+    "date": "YYYY-MM-DD HH:mm",
+    "operator": "操作人",
+    "purpose": "实验目的",
+    "background": "背景说明",
+    "hypothesis": "实验假设（如有）",
+    "conclusion": "实验结论（如有）",
+    "discipline": "学科",
+    "device": {"name": "主要设备名", "model": "型号", "vendor": "厂家"},
+    "instruments": [{"name": "仪器名", "model": "型号", "vendor": "厂家", "serialNumber": "序列号（如有）"}],
+    "materials": [{"name": "材料名", "casNumber": "CAS号（如有）", "purity": "纯度", "lotNumber": "批次号", "supplier": "供应商", "amount": "用量", "role": "reactant|catalyst|solvent|substrate|reference|standard|other"}],
+    "sample": {"id": "样品编号", "batch": "批次", "source": "来源"},
+    "params": [{"name": "参数名", "value": "值", "unit": "单位"}],
+    "environment": {"temperature": "温度", "humidity": "湿度", "other": "其他条件"},
+    "protocol": {"name": "SOP/协议名称（如有）", "version": "版本（如有）"},
+    "steps": ["步骤1"],
+    "observations": [{"timestamp": "时间", "type": "visual|measurement|anomaly|note", "content": "观察内容"}],
+    "results": "结果摘要",
+    "notes": "异常备注",
+    "controls": [{"type": "positive|negative|blank|standard", "name": "对照名称", "expectedResult": "预期结果（如有）"}],
+    "replicates": 1,
+    "qcStatus": "na|pending|passed|failed",
+    "source": "文件名",
+    "aiInsights": "数据质量评估、实验间关联、改进建议、潜在风险等AI观察",
+    "knowledgeTags": ["标签1", "标签2"]
+  }]
+}`;
 
 export async function parseTextFile(text: string, fileName: string): Promise<string> {
   const content = text.slice(0, 12000);
@@ -219,21 +276,46 @@ export async function parseTextFile(text: string, fileName: string): Promise<str
   ], 8192);
 }
 
+// ===== 带 Token-level 置信度校准的提取 =====
+
+import type { CalibratedResult } from "./confidence";
+
+export async function parseTextFileWithConfidence(
+  text: string,
+  fileName: string,
+): Promise<{ raw: string; calibrated: CalibratedResult | null }> {
+  const content = text.slice(0, 12000);
+  const { calibratedExtract } = await import("./confidence");
+
+  try {
+    const calibrated = await calibratedExtract(MODEL_TEXT, [
+      {
+        role: "user",
+        content: `${EXTRACT_PROMPT}\n\n文件名：${fileName}\n内容：\n${content}`,
+      },
+    ], 8192);
+
+    return { raw: JSON.stringify(calibrated.data), calibrated };
+  } catch (err) {
+    console.warn("[parseTextFileWithConfidence] logprobs calibration failed, falling back:", String(err).slice(0, 80));
+    // 降级到普通提取
+    const raw = await parseTextFile(text, fileName);
+    return { raw, calibrated: null };
+  }
+}
+
 // ===== CSV 预分析引擎 =====
 
 type ColumnAnalysis = {
   name: string;
   type: "number" | "datetime" | "text";
   count: number;
-  // numeric stats
   min?: number;
   max?: number;
   mean?: number;
   trend?: "上升" | "下降" | "稳定" | "波动";
-  // text stats
   uniqueCount?: number;
   samples?: string[];
-  // anomalies
   anomalies?: string[];
 };
 
@@ -248,24 +330,21 @@ function analyzeCSV(csvContent: string): {
     return { headers: [], rowCount: 0, columns: [], summary: "CSV 文件为空或只有一行" };
   }
 
-  // 检测分隔符
-  const firstLine = lines[0];
   let sep = ",";
-  const sepCounts = { ",": 0, "\t": 0, ";": 0 };
+  const firstLine = lines[0];
+  const sepCounts: Record<string, number> = { ",": 0, "\t": 0, ";": 0 };
   for (const s of [",", "\t", ";"]) {
-    sepCounts[s as keyof typeof sepCounts] = firstLine.split(s).length;
+    sepCounts[s] = firstLine.split(s).length;
   }
   const bestSep = Object.entries(sepCounts).sort((a, b) => b[1] - a[1])[0];
   if (bestSep[1] > 1) sep = bestSep[0];
 
-  // 解析
   const headers = lines[0].split(sep).map((h) => h.trim().replace(/^"|"$/g, ""));
   const rows: string[][] = [];
   for (let i = 1; i < lines.length; i++) {
     const cells = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
     if (cells.length >= headers.length) rows.push(cells);
     else if (cells.length > 1) {
-      // 补齐缺失列
       while (cells.length < headers.length) cells.push("");
       rows.push(cells);
     }
@@ -273,16 +352,10 @@ function analyzeCSV(csvContent: string): {
 
   const rowCount = rows.length;
 
-  // 逐列分析
   const columns: ColumnAnalysis[] = headers.map((name, ci) => {
     const values = rows.map((r) => r[ci] ?? "");
     const nonEmpty = values.filter((v) => v !== "" && v !== "-" && v !== "NA");
-
-    // 类型检测
-    const numValues = nonEmpty
-      .map((v) => parseFloat(v))
-      .filter((n) => !isNaN(n));
-
+    const numValues = nonEmpty.map((v) => parseFloat(v)).filter((n) => !isNaN(n));
     const isNumeric = numValues.length > nonEmpty.length * 0.7;
 
     if (isNumeric) {
@@ -290,7 +363,6 @@ function analyzeCSV(csvContent: string): {
       const max = Math.max(...numValues);
       const mean = numValues.reduce((a, b) => a + b, 0) / numValues.length;
 
-      // 趋势检测
       let trend: ColumnAnalysis["trend"] = "稳定";
       const firstHalf = numValues.slice(0, Math.floor(numValues.length / 2));
       const secondHalf = numValues.slice(Math.floor(numValues.length / 2));
@@ -304,26 +376,9 @@ function analyzeCSV(csvContent: string): {
         else if (pctChange > 0.1) trend = "波动";
       }
 
-      // 异常检测
-      const anomalies: string[] = [];
-      const stdDev = Math.sqrt(
-        numValues.reduce((s, n) => s + (n - mean) ** 2, 0) / numValues.length,
-      );
-      for (let i = 0; i < numValues.length; i++) {
-        if (Math.abs(numValues[i] - mean) > 2 * stdDev && stdDev > 0) {
-          anomalies.push(`第${i + 1}行 值=${numValues[i]} (偏离均值 ${Math.abs(numValues[i] - mean).toFixed(1)})`);
-        }
-      }
-      if (anomalies.length > 0 && anomalies.length <= 5) {
-        // only report if few anomalies
-      } else if (anomalies.length > 5) {
-        anomalies.length = 0; // too many to be useful
-      }
-
-      return { name, type: "number" as const, count: numValues.length, min, max, mean, trend, anomalies };
+      return { name, type: "number" as const, count: numValues.length, min, max, mean, trend };
     }
 
-    // 文本列
     const unique = [...new Set(nonEmpty)];
     return {
       name,
@@ -334,16 +389,12 @@ function analyzeCSV(csvContent: string): {
     };
   });
 
-  // 生成人类可读的分析摘要
   const parts: string[] = [];
   parts.push(`CSV 文件分析：${rowCount} 行数据，${headers.length} 列\n`);
 
   for (const col of columns) {
     if (col.type === "number") {
       parts.push(`列 [${col.name}]: 数值型, 范围 ${col.min} ~ ${col.max}, 均值 ${col.mean?.toFixed(2)}, 趋势: ${col.trend}`);
-      if (col.anomalies && col.anomalies.length > 0) {
-        parts.push(`  ⚠️ 异常点: ${col.anomalies.join("; ")}`);
-      }
     } else {
       parts.push(`列 [${col.name}]: 文本型, ${col.uniqueCount} 种不同值, 示例: ${col.samples?.join(", ")}`);
     }
@@ -385,42 +436,113 @@ export async function parseTranscript(text: string, fileName: string): Promise<s
   ], 8192);
 }
 
-// ===== 视频解析 =====
-export async function parseVideo(videoBase64: string, mime: string, fileName: string): Promise<string> {
-  return chat(MODEL_OMNI, [
+// ===== AI 补全缺失字段 =====
+
+const AUTOFILL_PROMPT = `你是科研实验专家。根据已有字段，推断并补全以下实验卡片中缺失或明显为占位值的信息。
+
+【规则】
+- 已有有效值的字段保持原样，不要改动
+- 空字符串、"(AI 推断 · 待确认)"、"(AI 推断型号)" 这类占位符表示缺失，需要推断
+- 基于实验名称、目的、设备、样品等已有信息进行合理推断
+- 推断结果后面标注 "🤖推断" 以便人工复核
+- 无法推断的字段保持空字符串
+- 注意补充：experimentType、materials（含CAS号/纯度）、instruments（含校准状态）、protocol、hypothesis、conclusion、controls、replicates
+
+【输出格式】纯JSON（不要markdown代码块）：
+{"name":"","experimentType":"synthesis|...","date":"","operator":"","purpose":"","background":"","hypothesis":"","conclusion":"","discipline":"","device":{"name":"","model":"","vendor":""},"instruments":[{"name":"","model":"","vendor":""}],"materials":[{"name":"","role":"reactant|..."}],"sample":{"id":"","batch":"","source":""},"params":[{"name":"","value":"","unit":""}],"environment":{"temperature":"","humidity":"","other":""},"protocol":{"name":"","version":""},"steps":[""],"results":"","notes":"","controls":[{"type":"standard|...","name":""}],"replicates":1,"qcStatus":"na|pending|passed|failed","aiInsights":""}`;
+
+export async function autoFillExperiment(experiment: {
+  name: string; experimentType?: string; date: string; operator: string;
+  purpose: string; background: string; hypothesis?: string; conclusion?: string;
+  discipline: string;
+  device: { name: string; model: string; vendor: string };
+  instruments?: Array<{ name: string; model: string; vendor: string; serialNumber?: string }>;
+  materials?: Array<{ name: string; casNumber?: string; purity?: string; lotNumber?: string; supplier?: string; amount?: string; role: string }>;
+  sample: { id: string; batch: string; source: string };
+  params: Array<{ name: string; value: string; unit: string }>;
+  environment: { temperature: string; humidity: string; other: string };
+  protocol?: { name: string; version?: string };
+  steps: string[];
+  results: string; notes: string;
+  controls?: Array<{ type: string; name: string; expectedResult?: string }>;
+  replicates?: number; qcStatus?: string;
+}): Promise<string> {
+  const input = JSON.stringify(experiment, null, 2);
+  return chat(MODEL_TEXT, [
     {
       role: "user",
-      content: [
-        {
-          type: "video_url",
-          video_url: { url: `data:${mime};base64,${videoBase64}` },
-        },
-        {
-          type: "text",
-          text: `分析这个实验视频（${fileName}）：实验操作步骤、使用的设备、关键实验条件、异常操作。用中文JSON输出。`,
-        },
-      ],
+      content: `${AUTOFILL_PROMPT}\n\n当前实验卡片：\n${input}`,
     },
   ], 4096);
 }
 
-// ===== 音频解析 =====
-export async function parseAudio(audioBase64: string, mime: string): Promise<string> {
-  return chat(MODEL_OMNI, [
+// ===== AI 评估可信度与建议 =====
+
+const EVALUATE_PROMPT = `你是科研实验质量审核专家。评估以下实验卡片的完整性与可信度。
+
+【输出格式】纯JSON（不要markdown代码块）：
+{"trustScore":85,"completeness":{"total":24,"filled":20},"issues":[{"field":"字段路径","severity":"high|medium|low","suggestion":"具体建议"}],"strengths":["优点1"],"riskSummary":"一句话风险总结"}`;
+
+export async function evaluateExperimentTrust(experiment: {
+  name: string; date: string; operator: string; purpose: string; background: string;
+  discipline: string; device: { name: string; model: string; vendor: string };
+  sample: { id: string; batch: string; source: string };
+  params: Array<{ name: string; value: string; unit: string }>;
+  environment: { temperature: string; humidity: string; other: string };
+  steps: string[]; results: string; notes: string;
+  aiInsights?: string;
+}): Promise<string> {
+  const input = JSON.stringify(experiment, null, 2);
+  return chat(MODEL_TEXT, [
     {
       role: "user",
-      content: [
-        {
-          type: "audio_url",
-          audio_url: { url: `data:${mime};base64,${audioBase64}` },
-        },
-        {
-          type: "text",
-          text: "将这段语音转写为中文文字，然后从中提取实验相关信息（日期、样品、操作、结果、问题）。输出JSON。",
-        },
-      ],
+      content: `${EVALUATE_PROMPT}\n\n实验卡片：\n${input}`,
     },
-  ], 4096);
+  ], 2048);
+}
+
+// ===== AI 重新解析实验文件 =====
+
+const REPARSE_PROMPT = `你是科研数据治理专家。以下是之前已解析的实验卡片和关联文件的文本内容。请重新分析文件内容，更新实验卡片中可能遗漏或错误的信息。
+
+【规则】
+- 保留原有正确的字段值
+- 如果文件内容揭示了新信息，补充到对应字段
+- 如果发现原有字段与文件内容矛盾，以文件内容为准并标注"🔧修正"
+- 特别注意提取：experimentType、materials（CAS号/纯度/批次号）、instruments（序列号/校准日期）、protocol名称、hypothesis、conclusion、质控信息
+- aiInsights 中总结本次重新解析的发现
+
+【输出格式】纯JSON，与输入结构一致（不要markdown代码块）。`;
+
+export async function reparseExperimentFiles(
+  experiment: {
+    name: string; experimentType?: string; date: string; operator: string;
+    purpose: string; background: string; hypothesis?: string; conclusion?: string;
+    discipline: string;
+    device: { name: string; model: string; vendor: string };
+    instruments?: Array<{ name: string; model: string; vendor: string; serialNumber?: string }>;
+    materials?: Array<{ name: string; casNumber?: string; purity?: string; lotNumber?: string; supplier?: string; amount?: string; role: string }>;
+    sample: { id: string; batch: string; source: string };
+    params: Array<{ name: string; value: string; unit: string }>;
+    environment: { temperature: string; humidity: string; other: string };
+    protocol?: { name: string; version?: string };
+    steps: string[]; results: string; notes: string;
+    controls?: Array<{ type: string; name: string; expectedResult?: string }>;
+    replicates?: number; qcStatus?: string;
+  },
+  fileContents: Array<{ name: string; textContent: string }>,
+): Promise<string> {
+  const expJson = JSON.stringify(experiment, null, 2);
+  const filesText = fileContents
+    .map((f) => `=== 文件: ${f.name} ===\n${f.textContent.slice(0, 6000)}`)
+    .join("\n\n");
+
+  return chat(MODEL_TEXT, [
+    {
+      role: "user",
+      content: `${REPARSE_PROMPT}\n\n当前实验卡片：\n${expJson}\n\n关联文件内容：\n${filesText}`,
+    },
+  ], 8192);
 }
 
 // ===== 综合解析结果，去重合并为最终实验卡片 =====

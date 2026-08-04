@@ -11,7 +11,7 @@
  *   - 完全无法确定的 → 标记为 gap
  */
 
-import { chat } from "./siliconflow";
+import { chat } from "./deepseek";
 import { extractJSON } from "./json-parser";
 import type {
   ReproductionParameter,

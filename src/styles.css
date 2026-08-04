@@ -94,3 +94,31 @@
 @media print {
   .no-print { display: none !important; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   知识图谱动画
+   ═══════════════════════════════════════════════════════ */
+
+@keyframes graph-node-enter {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes graph-pulse-glow {
+  0%, 100% { opacity: 0.3; r: var(--glow-r, 24); }
+  50%      { opacity: 0.6; r: calc(var(--glow-r, 24) + 4); }
+}
+
+@keyframes graph-edge-draw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes graph-skeleton-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.6; }
+}
+
+.graph-skeleton {
+  animation: graph-skeleton-pulse 2s ease-in-out infinite;
+}
