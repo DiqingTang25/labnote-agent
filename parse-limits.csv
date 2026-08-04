@@ -1,9 +1,0 @@
-文件类型,格式,内容截断,模型max_tokens,备注
-文本,txt/md/log,text.slice(0\, 8000) 字符,4096,约2000个中文字
-CSV,csv,csvContent.slice(0\, 4000) 字符,4096,约1000个中文字
-语音转录,-,text.slice(0\, 6000) 字符,4096,
-图片,png/jpg/jpeg/tif,无截断(base64全量),2048,默认值
-视频,mp4/mov/avi/webm,无截断,4096,
-音频,mp3/wav/m4a/ogg/flac,无截断,4096,
-多文件合并,-,每文件rawOutput.slice(0\,1500)+总slice(0\,8000),4096,mergeResults函数
-文件大小上限,-,跳过>10MB的文件,-,
