@@ -38,11 +38,9 @@ function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const totalRecords = experiments.length + 128;
-  const totalCards = experiments.length + 96;
-  const totalChecklist = experiments.length + 84;
-  const totalRag = 312;
-  const completeness = 87;
+  const totalCards = experiments.length;
+  const completeCards = experiments.filter(e => e.results && e.purpose).length;
+  const completeness = experiments.length > 0 ? Math.round((completeCards / experiments.length) * 100) : 0;
 
   const handleUpload = (files: FileList | null) => {
     if (!files || !files.length) return;
@@ -107,7 +105,7 @@ function Home() {
       {/* AI 工作流动画 */}
       <WorkflowAnimation />
       {/* Dashboard */}
-      <Dashboard experiments={experiments} totalCards={totalCards} totalChecklist={totalChecklist} totalRag={totalRag} completeness={completeness} />
+      <Dashboard experiments={experiments} totalCards={totalCards} completeness={completeness} />
       {/* 能力 */}
       <Capabilities />
       {/* Why */}
@@ -152,42 +150,30 @@ function WorkflowAnimation() {
   );
 }
 
-function Dashboard({ experiments, totalCards, totalChecklist, totalRag, completeness }: {
+function Dashboard({ experiments, totalCards, completeness }: {
   experiments: ReturnType<typeof useLab>["experiments"];
-  totalCards: number; totalChecklist: number; totalRag: number; completeness: number;
+  totalCards: number; completeness: number;
 }) {
+  const completeCards = experiments.filter(e => e.results && e.purpose).length;
   return (
     <section className="mx-auto max-w-7xl px-4 py-12">
       <div className="flex items-end justify-between flex-wrap gap-2 mb-6">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold">数据中心</h2>
-          <p className="mt-1 text-sm text-muted-foreground">实时掌握知识库治理进展</p>
+          <p className="mt-1 text-sm text-muted-foreground">实时数据，来自 Supabase</p>
         </div>
         <Link to="/workbench" className="text-sm text-primary hover:underline flex items-center gap-1">
           进入工作台 <ArrowRight size={14} />
         </Link>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard tone="blue" icon={<FileText size={18} />} label="实验卡片数量" value={totalCards} delta="+12 本周" />
-        <StatCard tone="green" icon={<ListChecks size={18} />} label="Checklist 数量" value={totalChecklist} delta="+8 本周" />
-        <StatCard tone="amber" icon={<Layers size={18} />} label="参数完整率" value={`${completeness}%`} delta="+3% vs 上周" />
-        <StatCard tone="violet" icon={<MessageSquare size={18} />} label="AI 问答次数" value={totalRag} delta="+46 本周" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard tone="blue" icon={<FileText size={18} />} label="实验卡片总数" value={totalCards} />
+        <StatCard tone="green" icon={<CheckCircle2 size={18} />} label="完整卡片数" value={completeCards} />
+        <StatCard tone="amber" icon={<Layers size={18} />} label="参数完整率" value={`${completeness}%`} />
       </div>
-      <div className="mt-6 grid gap-4 lg:grid-cols-4">
-        <RecentList title="最近实验" items={experiments.slice(0, 4).map(e => ({ title: e.name, sub: `${e.date} · ${e.operator || "—"}`, to: "/workbench", id: e.id }))} icon={<FileText size={14} />} />
-        <RecentList title="最近 AI 问答" items={[
-          { title: "上次使用 Fe-2309 的退火温度？", sub: "命中 1 条记录 · 5 分钟前" },
-          { title: "哪几次实验出现电流异常？", sub: "命中 2 条记录 · 22 分钟前" },
-          { title: "知识库涉及哪些设备？", sub: "6 类设备 · 1 小时前" },
-          { title: "建议补充哪些重复实验？", sub: "建议 3 项 · 2 小时前" },
-        ]} icon={<MessageSquare size={14} />} />
-        <RecentList title="待补全实验" items={experiments.slice(0, 4).map(e => ({ title: e.name, sub: `待补 ${e.params.length < 3 ? 2 : 1} 项关键字段`, to: "/workbench", id: e.id }))} icon={<AlertTriangle size={14} />} />
-        <RecentList title="最新知识沉淀" items={[
-          { title: "管式炉退火 SOP v2", sub: "3 条实验佐证 · 今日" },
-          { title: "CV 测试异常归因报告", sub: "2 条异常关联 · 昨日" },
-          { title: "水热合成参数对照表", sub: "5 次实验 · 3 天前" },
-          { title: "Pt/C 电极复现包", sub: "含 Methods · 一周前" },
-        ]} icon={<BookOpen size={14} />} />
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <RecentList title="最近实验" items={experiments.slice(0, 5).map(e => ({ title: e.name, sub: `${e.date} · ${e.operator || "—"}`, to: "/workbench", id: e.id }))} icon={<FileText size={14} />} />
+        <RecentList title="待补全实验" items={experiments.filter(e => !e.results || !e.purpose).slice(0, 5).map(e => ({ title: e.name, sub: `待补关键字段`, to: "/workbench", id: e.id }))} icon={<AlertTriangle size={14} />} />
       </div>
     </section>
   );
@@ -294,14 +280,13 @@ function useCountUp(targetValue: number | string, duration: number = 1500) {
   return { ref, displayValue, formatValue };
 }
 
-function StatCard({ icon, label, value, delta, tone }: { icon: React.ReactNode; label: string; value: number | string; delta: string; tone: "blue" | "green" | "amber" | "violet" }) {
+function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number | string; tone: "blue" | "green" | "amber" | "violet" }) {
   const { ref, formatValue } = useCountUp(value, 1500);
   const colors = { blue: "border-blue-200 bg-blue-50", green: "border-green-200 bg-green-50", amber: "border-amber-200 bg-amber-50", violet: "border-violet-200 bg-violet-50" };
   return (
     <div className={`card-soft p-4 border-l-4 ${colors[tone]}`}>
       <div className="flex items-center gap-2 text-muted-foreground text-xs">{icon}{label}</div>
       <div ref={ref} className="mt-1 text-2xl font-bold tabular-nums">{formatValue()}</div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">{delta}</div>
     </div>
   );
 }

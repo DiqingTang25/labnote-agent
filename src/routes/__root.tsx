@@ -11,7 +11,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, UserCheck, BookOpen, Layers, FileText, Book, Mail, MessageSquare, Users, Package, User, LogOut, LogIn, Cpu } from "lucide-react";
+import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, BookOpen, Layers, FileText, Book, Mail, MessageSquare, Users, Package, User, LogOut, LogIn } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -140,8 +140,6 @@ function TopNav() {
           <NavItem to="/graph" icon={<Network size={14} />}>知识图谱</NavItem>
           <NavItem to="/assets" icon={<Package size={14} />}>资产包</NavItem>
           <NavItem to="/paper" icon={<BookOpen size={14} />}>论文辅助</NavItem>
-          <NavItem to="/handoff" icon={<UserCheck size={14} />}>项目交接</NavItem>
-          <NavItem to="/agent" icon={<Cpu size={14} />}>Agent</NavItem>
           <NavItem to="/help" icon={<HelpCircle size={14} />}>帮助</NavItem>
         </nav>
         <div className="ml-auto flex items-center gap-2">
