@@ -7,6 +7,31 @@ AI-driven experiment data governance platform for academic laboratories and rese
 
 ---
 
+## 🚧 Current Status (2026-08-04)
+
+### Phase 1 Completed — Data Model Expansion
+Experiment type expanded from 33 to 50+ fields referencing 4 international standards:
+- **ISA-TAB**: experimentType, instruments[], materials[], protocol, observations[], projectId
+- **FAIR**: license, ontologyTerms[], derivedFrom[], protocol.url
+- **Allotrope ADF**: instruments[], rawDataRefs[], processedDataRefs[], auditTrail[]
+- **ISO 17025 / GLP / 21 CFR Part 11**: controls[], replicates, qcStatus, reviewer, approver, signatures[]
+
+New UI sections in workbench CardEditor: experiment type selector, hypothesis field, multi-instrument cards (with serial number + calibration status), materials table (CAS/purity/lot/supplier), protocol/SOP editor, conclusion field, QC controls table.
+
+**⚠️ SQL migration NOT executed** — `supabase/migrations/20260731_phase1_enriched_experiment.sql` needs running on Supabase Dashboard.
+
+### ⚠️ Known Architectural Issue
+The Phase 1 approach (50 fixed fields) contradicts the core design goal: **"structure follows content, no fixed template"**. More fixed fields = larger fixed template, not dynamic behavior.
+
+### 🔄 Direction for Next Iteration
+See Section 11 — Next Development. Key decisions pending:
+- Domain selection (which experiment types to focus on first)
+- Transition from fixed-column schema to flexible observations (key-value) + auto-emerging field_patterns
+- Self-evolving experiment model: field schemas emerge from data statistics, not hand-written rules
+- Local small model for type classification & field standardization (deferred until sufficient data)
+
+---
+
 ## Table of Contents
 
 1. [Architecture Overview](#1-architecture-overview)
@@ -19,6 +44,7 @@ AI-driven experiment data governance platform for academic laboratories and rese
 8. [Project Structure](#8-project-structure)
 9. [Local Development](#9-local-development)
 10. [Deployment](#10-deployment)
+11. [Next Development](#11-next-development)
 
 ---
 
@@ -524,3 +550,51 @@ The Vercel build uses the Nitro Vercel preset. TanStack Start compiles server fu
 - **Branches**:
   - `master` — Production code, real features only
   - `demo` — Full project snapshot including demo/mock pages (`/agent`, `/handoff`)
+
+---
+
+## 11. Next Development
+
+### 11.1 Vision: Dynamic Structured Experiment Cards
+
+**"结构跟着内容走，无固定模板"** — Structure follows content, no fixed template.
+
+The current 50-field experiment schema is a stepping stone, not the destination. The end goal is a **self-evolving experiment model** where:
+
+1. **Field schemas emerge from data, not code** — `field_patterns` table auto-computes which fields appear in which experiment types, at what frequency, with what value distributions. No human writes field definitions.
+
+2. **Experiment types auto-cluster** — Embedding-based clustering discovers new types as data grows. From "合成" → "水热合成-氧化物" → "水热合成-氧化物-光催化"
+
+3. **AI completion becomes data-driven** — Instead of LLM guessing missing fields, the system queries `field_patterns` for "this experiment type's required fields" and guides the LLM with statistical ranges from similar experiments.
+
+4. **Multi-file alignment** — When uploading mixed-format files, the system identifies which files belong to the same experiment (shared sample ID, device, date, operator) using fingerprint extraction + embedding similarity + LLM adjudication.
+
+5. **Incremental matching** — New uploads are matched against ALL existing experiments to determine if they belong to an existing experiment (append) or form a new one.
+
+### 11.2 Proposed Next Architecture
+
+```
+experiments (id, name, experiment_type, date, operator, user_id)
+observations (id, experiment_id, key, value, unit, group, source, confidence)
+field_patterns (experiment_type, field_key, occurrence_count, rate, co_occurring, value_pattern)
+```
+
+Key properties:
+- **No fixed field columns** — all experiment data as flexible observations
+- **field_patterns auto-updates** — background job after every data change
+- **Experiment type auto-discovery** — embedding clustering, no manual taxonomy
+- **Local small model** (deferred): type classification, anomaly detection, field normalization
+
+### 11.3 Unresolved
+
+- **Domain not yet selected** — Need to decide which experiment domain to focus on first (candidate: materials science — inorganic functional materials synthesis & characterization)
+- **Seed data volume** — How many real experiments are available to bootstrap field_patterns?
+- **Phase 1 SQL migration** — Should it be run, or should the architecture pivot first?
+
+### 11.4 Memory Files
+
+Key design discussions and decisions are recorded in Claude memory:
+- `dynamic-experiment-card.md` — Self-evolving model architecture discussion
+- `phase1-caveats.md` — Known issues with Phase 1 approach
+- `实验复现工作台.md` — Reproduction audit entry point
+- `current-state.md` — Overall project status
