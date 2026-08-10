@@ -47,7 +47,7 @@ export const GENERIC_TEMPLATE: Template = {
 
 export const TPL_STRUCTURE_OPTIMIZATION: Template = {
   id: "tpl_structure_optimization", name: "DFT结构优化", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["dft", "vasp", "quantum espresso", "structure opt", "relax", "optimization", "geometry optimization", "encut", "kpoints", "isif"],,
+  keywords: ["dft", "vasp", "quantum espresso", "structure opt", "relax", "optimization", "geometry optimization", "encut", "kpoints", "isif"],
   fieldGroups: [
     { id: "input_structure", label: "输入结构", fields: [
       { path: "structure.cifFileRef", label: "CIF文件路径", type: "text", required: true, placeholder: "s3://dft-data/structures/init_POSCAR.cif" },
@@ -73,7 +73,7 @@ export const TPL_STRUCTURE_OPTIMIZATION: Template = {
 
 export const TPL_BAND_STRUCTURE: Template = {
   id: "tpl_band_structure", name: "能带结构计算", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["band structure", "band gap", "dos", "density of states", "fermi", "conduction", "valence", "k-path", "brillouin"],,
+  keywords: ["band structure", "band gap", "dos", "density of states", "fermi", "conduction", "valence", "k-path", "brillouin"],
   fieldGroups: [
     { id: "kpath_config", label: "K路径配置", fields: [
       { path: "kpath.highSymmetryPath", label: "高对称路径", type: "text", required: true, placeholder: "G-X-W-K-G-L-U-W-L-K" },
@@ -91,7 +91,7 @@ export const TPL_BAND_STRUCTURE: Template = {
 
 export const TPL_PHONON_SPECTRUM: Template = {
   id: "tpl_phonon_spectrum", name: "声子谱计算", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["phonon", "phonopy", "vibrational", "thermal", "heat capacity", "entropy", "born", "dynamical matrix"],,
+  keywords: ["phonon", "phonopy", "vibrational", "thermal", "heat capacity", "entropy", "born", "dynamical matrix"],
   fieldGroups: [
     { id: "supercell_params", label: "超胞参数", fields: [
       { path: "supercell.dimension", label: "超胞尺寸", type: "text", required: true, placeholder: "2x2x2" },
@@ -110,7 +110,7 @@ export const TPL_PHONON_SPECTRUM: Template = {
 
 export const TPL_NEB_SEARCH: Template = {
   id: "tpl_neb_search", name: "NEB过渡态搜索", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["neb", "nudged elastic band", "transition state", "saddle point", "barrier", "activation energy", "climbing image", "reaction path"],,
+  keywords: ["neb", "nudged elastic band", "transition state", "saddle point", "barrier", "activation energy", "climbing image", "reaction path"],
   fieldGroups: [
     { id: "images_setup", label: "构型插值设定", fields: [
       { path: "images.numImages", label: "中间构型数量", type: "number",
@@ -130,7 +130,7 @@ export const TPL_NEB_SEARCH: Template = {
 
 export const TPL_AIMD: Template = {
   id: "tpl_aimd", name: "从头算分子动力学 (AIMD)", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["aimd", "ab initio md", "molecular dynamics", "born oppenheimer", "cp2k", "car parrinello", "diffusion", "rdf", "vaf"],,
+  keywords: ["aimd", "ab initio md", "molecular dynamics", "born oppenheimer", "cp2k", "car parrinello", "diffusion", "rdf", "vaf"],
   fieldGroups: [
     { id: "ensemble_control", label: "系综控制", fields: [
       { path: "ensemble.type", label: "系综类型", type: "select", required: true, options: ["NVT", "NPT", "NVE"] },
@@ -151,7 +151,7 @@ export const TPL_AIMD: Template = {
 
 export const TPL_OPTICAL_PROPERTIES: Template = {
   id: "tpl_optical_properties", name: "光学性质计算", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["optical", "dielectric", "absorption", "bse", "bethe salpeter", "gw", "exciton", "reflectance", "refractive", "extinction"],,
+  keywords: ["optical", "dielectric", "absorption", "bse", "bethe salpeter", "gw", "exciton", "reflectance", "refractive", "extinction"],
   fieldGroups: [
     { id: "methodology", label: "方法配置", fields: [
       { path: "method.type", label: "理论方法", type: "select", required: true, options: ["BSE", "RPA", "TD-DFT"] },
@@ -169,7 +169,7 @@ export const TPL_OPTICAL_PROPERTIES: Template = {
 
 export const TPL_ELASTIC_CONSTANTS: Template = {
   id: "tpl_elastic_constants", name: "弹性常数计算", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["elastic", "stiffness", "bulk modulus", "shear modulus", "young modulus", "poisson", "voigt", "reuss", "hill", "stress strain"],,
+  keywords: ["elastic", "stiffness", "bulk modulus", "shear modulus", "young modulus", "poisson", "voigt", "reuss", "hill", "stress strain"],
   fieldGroups: [
     { id: "strain_setup", label: "应变设定", fields: [
       { path: "strain.maxStrain", label: "最大微应变幅度", type: "number",
@@ -192,7 +192,7 @@ export const TPL_ELASTIC_CONSTANTS: Template = {
 
 export const TPL_PROTEIN_SOLVATION_MD: Template = {
   id: "tpl_protein_solvation_md", name: "蛋白质水中平衡模拟", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["protein", "solvation", "gromacs", "amber", "rmsd", "rmsf", "water model", "tip3p", "spce", "equilibration", "nvt", "npt"],,
+  keywords: ["protein", "solvation", "gromacs", "amber", "rmsd", "rmsf", "water model", "tip3p", "spce", "equilibration", "nvt", "npt"],
   fieldGroups: [
     { id: "system_prep", label: "体系构建", fields: [
       { path: "system.pdbId", label: "PDB ID", type: "text", required: true, placeholder: "1AKI" },
@@ -212,7 +212,7 @@ export const TPL_PROTEIN_SOLVATION_MD: Template = {
 
 export const TPL_BINDING_FREE_ENERGY: Template = {
   id: "tpl_binding_free_energy", name: "配体-蛋白结合自由能", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["binding", "free energy", "mmpbsa", "mmgbsa", "delta g", "umbrella sampling", "ligand", "receptor", "affinity", "docking"],,
+  keywords: ["binding", "free energy", "mmpbsa", "mmgbsa", "delta g", "umbrella sampling", "ligand", "receptor", "affinity", "docking"],
   fieldGroups: [
     { id: "method_config", label: "计算方法配置", fields: [
       { path: "method.type", label: "计算方法", type: "select", required: true, options: ["MM/PBSA", "MM/GBSA", "Umbrella Sampling"] },
@@ -230,7 +230,7 @@ export const TPL_BINDING_FREE_ENERGY: Template = {
 
 export const TPL_LAMMPS_TENSILE: Template = {
   id: "tpl_lammps_tensile", name: "材料拉伸力学模拟", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["lammps", "tensile", "strain rate", "yield", "deformation", "eam", "meam", "reaxff", "stress strain", "mechanical"],,
+  keywords: ["lammps", "tensile", "strain rate", "yield", "deformation", "eam", "meam", "reaxff", "stress strain", "mechanical"],
   fieldGroups: [
     { id: "deform_params", label: "加载参数", fields: [
       { path: "deform.strainRate", label: "应变速率", type: "number",
@@ -247,7 +247,7 @@ export const TPL_LAMMPS_TENSILE: Template = {
 
 export const TPL_COARSE_GRAINED_MARTINI: Template = {
   id: "tpl_coarse_grained_martini", name: "Martini 粗粒化膜蛋白模拟", experimentType: "simulation", domain: "computational_chemistry", version: 1, isPreset: true,
-  keywords: ["martini", "coarse grained", "cg", "membrane", "lipid", "bilayer", "area per lipid", "cholesterol", "popc"],,
+  keywords: ["martini", "coarse grained", "cg", "membrane", "lipid", "bilayer", "area per lipid", "cholesterol", "popc"],
   fieldGroups: [
     { id: "cg_config", label: "粗粒化配置", fields: [
       { path: "cg.martiniVersion", label: "Martini 版本", type: "select", required: true, options: ["v3.0.0", "v2.2"] },
@@ -269,7 +269,7 @@ export const TPL_COARSE_GRAINED_MARTINI: Template = {
 
 export const TPL_IMAGE_CLASSIFICATION: Template = {
   id: "tpl_image_classification", name: "图像分类模型训练", experimentType: "other", domain: "machine_learning", version: 1, isPreset: true,
-  keywords: ["image", "classification", "resnet", "vit", "cnn", "vision transformer", "efficientnet", "top1", "accuracy", "augmentation", "imagenet"],,
+  keywords: ["image", "classification", "resnet", "vit", "cnn", "vision transformer", "efficientnet", "top1", "accuracy", "augmentation", "imagenet"],
   fieldGroups: [
     { id: "architecture", label: "模型架构", fields: [
       { path: "model.backbone", label: "骨干网络", type: "text", required: true, placeholder: "ResNet-50 / ViT-B/16" },
@@ -291,7 +291,7 @@ export const TPL_IMAGE_CLASSIFICATION: Template = {
 
 export const TPL_NLP_FINETUNING: Template = {
   id: "tpl_nlp_finetuning", name: "NLP 文本模型微调", experimentType: "other", domain: "machine_learning", version: 1, isPreset: true,
-  keywords: ["nlp", "bert", "gpt", "llm", "finetune", "bleu", "rouge", "transformer", "language model", "token", "prompt", "lora"],,
+  keywords: ["nlp", "bert", "gpt", "llm", "finetune", "bleu", "rouge", "transformer", "language model", "token", "prompt", "lora"],
   fieldGroups: [
     { id: "model_config", label: "模型与微调配置", fields: [
       { path: "model.baseModel", label: "基座模型", type: "text", required: true, placeholder: "chembert-base-uncased" },
@@ -308,7 +308,7 @@ export const TPL_NLP_FINETUNING: Template = {
 
 export const TPL_GNN_MOLECULE_PREDICTION: Template = {
   id: "tpl_gnn_molecule_prediction", name: "GNN 分子性质预测", experimentType: "other", domain: "machine_learning", version: 1, isPreset: true,
-  keywords: ["gnn", "graph neural", "schnet", "dimenet", "qm9", "molecule", "homo", "lumo", "mae", "rmse", "atomic", "bond"],,
+  keywords: ["gnn", "graph neural", "schnet", "dimenet", "qm9", "molecule", "homo", "lumo", "mae", "rmse", "atomic", "bond"],
   fieldGroups: [
     { id: "dataset", label: "数据集设定", fields: [
       { path: "dataset.name", label: "数据集名称", type: "text", required: true, placeholder: "QM9" },
@@ -324,7 +324,7 @@ export const TPL_GNN_MOLECULE_PREDICTION: Template = {
 
 export const TPL_REINFORCEMENT_LEARNING: Template = {
   id: "tpl_reinforcement_learning", name: "强化学习分子设计", experimentType: "other", domain: "machine_learning", version: 1, isPreset: true,
-  keywords: ["reinforcement", "rl", "ppo", "sac", "dqn", "agent", "reward", "policy", "environment", "action", "state", "q learning"],,
+  keywords: ["reinforcement", "rl", "ppo", "sac", "dqn", "agent", "reward", "policy", "environment", "action", "state", "q learning"],
   fieldGroups: [
     { id: "rl_environment", label: "强化学习环境", fields: [
       { path: "env.envId", label: "环境标识符", type: "text", required: true, placeholder: "MolecularDesign-v0" },
@@ -339,7 +339,7 @@ export const TPL_REINFORCEMENT_LEARNING: Template = {
 
 export const TPL_TIME_SERIES_FORECASTING: Template = {
   id: "tpl_time_series_forecasting", name: "时间序列预测", experimentType: "other", domain: "machine_learning", version: 1, isPreset: true,
-  keywords: ["time series", "forecast", "mape", "sliding window", "temporal", "lstm", "arima", "prophet", "tft", "seasonal", "trend"],,
+  keywords: ["time series", "forecast", "mape", "sliding window", "temporal", "lstm", "arima", "prophet", "tft", "seasonal", "trend"],
   fieldGroups: [
     { id: "window_config", label: "窗口设定", fields: [
       { path: "window.inputChunkLength", label: "历史观察窗口", type: "number",
@@ -360,7 +360,7 @@ export const TPL_TIME_SERIES_FORECASTING: Template = {
 
 export const TPL_CLINICAL_TRIAL: Template = {
   id: "tpl_clinical_trial", name: "临床试验统计模型", experimentType: "measurement", domain: "statistics", version: 1, isPreset: true,
-  keywords: ["clinical", "trial", "non inferiority", "itt", "per protocol", "randomization", "blinding", "placebo", "margin", "alpha", "临床"],,
+  keywords: ["clinical", "trial", "non inferiority", "itt", "per protocol", "randomization", "blinding", "placebo", "margin", "alpha", "临床"],
   fieldGroups: [
     { id: "trial_design", label: "试验设计规范", fields: [
       { path: "design.randomization", label: "随机化与盲法设置", type: "text", required: true, placeholder: "1:1 Double-Blind" },
@@ -377,7 +377,7 @@ export const TPL_CLINICAL_TRIAL: Template = {
 
 export const TPL_EPIDEMIOLOGY_STUDY: Template = {
   id: "tpl_epidemiology_study", name: "流行病学调查统计", experimentType: "measurement", domain: "statistics", version: 1, isPreset: true,
-  keywords: ["epidemiology", "case control", "cohort", "cross sectional", "odds ratio", "relative risk", "confounding", "exposure", "流行病"],,
+  keywords: ["epidemiology", "case control", "cohort", "cross sectional", "odds ratio", "relative risk", "confounding", "exposure", "流行病"],
   fieldGroups: [
     { id: "study_design", label: "研究类型", fields: [
       { path: "design.studyType", label: "调查方法", type: "select", required: true, options: ["Case-Control", "Cohort", "Cross-Sectional"] },
@@ -392,7 +392,7 @@ export const TPL_EPIDEMIOLOGY_STUDY: Template = {
 
 export const TPL_SURVIVAL_ANALYSIS: Template = {
   id: "tpl_survival_analysis", name: "生存分析", experimentType: "measurement", domain: "statistics", version: 1, isPreset: true,
-  keywords: ["survival", "kaplan meier", "cox", "log rank", "censoring", "hazard ratio", "median survival", "time to event"],,
+  keywords: ["survival", "kaplan meier", "cox", "log rank", "censoring", "hazard ratio", "median survival", "time to event"],
   fieldGroups: [
     { id: "method_summary", label: "方法与删失", fields: [
       { path: "method.type", label: "分析模型", type: "select", required: true, options: ["Kaplan-Meier", "Cox PH"] },
@@ -414,7 +414,7 @@ export const TPL_SURVIVAL_ANALYSIS: Template = {
 
 export const TPL_ETL_PIPELINE_DQ: Template = {
   id: "tpl_etl_pipeline_dq", name: "ETL流水线与数据质量评估", experimentType: "other", domain: "data_engineering", version: 1, isPreset: true,
-  keywords: ["etl", "pipeline", "data quality", "great expectations", "bronze", "silver", "gold", "dq", "schema", "validation", "row count", "null"],,
+  keywords: ["etl", "pipeline", "data quality", "great expectations", "bronze", "silver", "gold", "dq", "schema", "validation", "row count", "null"],
   fieldGroups: [
     { id: "pipeline_metadata", label: "流水线基本信息", fields: [
       { path: "pipeline.name", label: "Pipeline 标识", type: "text", required: true, placeholder: "raw_lab_sensor_etl" },
@@ -434,7 +434,7 @@ export const TPL_ETL_PIPELINE_DQ: Template = {
 
 export const TPL_HYDROTHERMAL_SYNTHESIS: Template = {
   id: "tpl_hydrothermal_synthesis", name: "水热/溶剂热合成", experimentType: "synthesis", domain: "wet_lab", version: 1, isPreset: true,
-  keywords: ["hydrothermal", "solvothermal", "autoclave", "precursor", "yield", "水热", "溶剂热", "反应釜", "产率", "保温"],,
+  keywords: ["hydrothermal", "solvothermal", "autoclave", "precursor", "yield", "水热", "溶剂热", "反应釜", "产率", "保温"],
   fieldGroups: [
     { id: "precursors", label: "前驱体与溶剂", fields: [
       { path: "materials.precursorsText", label: "前驱体及用量清单", type: "textarea", required: true, placeholder: "Cobalt Nitrate Hexahydrate (2.91g); 2-Methylimidazole (3.28g)" },
@@ -455,7 +455,7 @@ export const TPL_HYDROTHERMAL_SYNTHESIS: Template = {
 
 export const TPL_SOL_GEL_PROCESS: Template = {
   id: "tpl_sol_gel_process", name: "溶胶-凝胶法", experimentType: "synthesis", domain: "wet_lab", version: 1, isPreset: true,
-  keywords: ["sol gel", "teos", "hydrolysis", "aging", "drying", "supercritical", "aerogel", "xerogel", "溶胶", "凝胶", "水解", "陈化"],,
+  keywords: ["sol gel", "teos", "hydrolysis", "aging", "drying", "supercritical", "aerogel", "xerogel", "溶胶", "凝胶", "水解", "陈化"],
   fieldGroups: [
     { id: "sol_chemistry", label: "水解反应控制", fields: [
       { path: "chemistry.precursor", label: "前驱体", type: "text", required: true, placeholder: "TEOS (Tetraethyl orthosilicate)" },
@@ -472,7 +472,7 @@ export const TPL_SOL_GEL_PROCESS: Template = {
 
 export const TPL_XRD_CHARACTERIZATION: Template = {
   id: "tpl_xrd_characterization", name: "XRD 表征测试", experimentType: "characterization", domain: "wet_lab", version: 1, isPreset: true,
-  keywords: ["xrd", "x ray diffraction", "rietveld", "2theta", "crystallite", "phase", "lattice", "powder", "衍射", "精修"],,
+  keywords: ["xrd", "x ray diffraction", "rietveld", "2theta", "crystallite", "phase", "lattice", "powder", "衍射", "精修"],
   fieldGroups: [
     { id: "instrument_params", label: "扫描参数", fields: [
       { path: "instrument.targetRadiation", label: "靶材/辐射波长", type: "select", required: true, options: ["Cu K-alpha", "Co K-alpha", "Mo K-alpha"] },
@@ -493,7 +493,7 @@ export const TPL_XRD_CHARACTERIZATION: Template = {
 
 export const TPL_ELECTRON_MICROSCOPY: Template = {
   id: "tpl_electron_microscopy", name: "SEM/TEM 电子显微表征", experimentType: "characterization", domain: "wet_lab", version: 1, isPreset: true,
-  keywords: ["sem", "tem", "microscopy", "hrtem", "haadf", "eds", "particle size", "morphology", "accelerating voltage", "扫描", "透射"],,
+  keywords: ["sem", "tem", "microscopy", "hrtem", "haadf", "eds", "particle size", "morphology", "accelerating voltage", "扫描", "透射"],
   fieldGroups: [
     { id: "microscope_setup", label: "显微镜工作条件", fields: [
       { path: "instrument.mode", label: "测试模式", type: "select", required: true, options: ["SEM-SE", "SEM-BSE", "TEM-BF", "HRTEM", "HAADF-STEM"] },
@@ -510,7 +510,7 @@ export const TPL_ELECTRON_MICROSCOPY: Template = {
 
 export const TPL_ELECTROCHEMICAL_TEST: Template = {
   id: "tpl_electrochemical_test", name: "电化学测试 (CV/EIS)", experimentType: "measurement", domain: "wet_lab", version: 1, isPreset: true,
-  keywords: ["cv", "eis", "electrochemical", "impedance", "voltammetry", "battery", "rct", "charge transfer", "nyquist", "电化学", "阻抗"],,
+  keywords: ["cv", "eis", "electrochemical", "impedance", "voltammetry", "battery", "rct", "charge transfer", "nyquist", "电化学", "阻抗"],
   fieldGroups: [
     { id: "cell_configuration", label: "电解池构型", fields: [
       { path: "cell.technique", label: "测试技术", type: "select", required: true, options: ["CV", "EIS", "GCD"] },
