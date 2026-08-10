@@ -20,18 +20,23 @@ import { getServerConfig } from "./config.server";
 /** 使用 service_role key 的 Supabase 客户端（完整数据库权限） */
 export function getServiceSupabase() {
   const config = getServerConfig();
-  return createServerClient(
-    config.supabaseUrl!,
-    config.supabaseServiceRoleKey!,
-    {
-      cookies: {
-        getAll() {
-          return [];
-        },
-        setAll() {},
+  return createServerClient(config.supabaseUrl!, config.supabaseServiceRoleKey!, {
+    cookies: {
+      getAll() {
+        return [];
       },
+      setAll() {},
     },
-  );
+  });
+}
+
+/** 验证浏览器传入的 access token，并返回可信的 Supabase user id。 */
+export async function requireAuthenticatedUser(accessToken: string): Promise<string> {
+  const { data, error } = await getServiceSupabase().auth.getUser(accessToken);
+  if (error || !data.user) {
+    throw new Error("未登录或登录已过期");
+  }
+  return data.user.id;
 }
 
 /** 从 cookie 解析用户会话的 Supabase 客户端 */
@@ -41,24 +46,18 @@ export function getAuthSupabase(cookieHeader?: string) {
   // 从 cookie header 字符串解析 Supabase auth token
   const cookies = parseCookiesFromHeader(cookieHeader);
 
-  return createServerClient(
-    config.supabaseUrl!,
-    config.supabaseAnonKey!,
-    {
-      cookies: {
-        getAll() {
-          return cookies;
-        },
-        setAll() {},
+  return createServerClient(config.supabaseUrl!, config.supabaseAnonKey!, {
+    cookies: {
+      getAll() {
+        return cookies;
       },
+      setAll() {},
     },
-  );
+  });
 }
 
 /** 从请求 cookie header 提取 Supabase auth token cookies */
-function parseCookiesFromHeader(
-  cookieHeader?: string,
-): Array<{ name: string; value: string }> {
+function parseCookiesFromHeader(cookieHeader?: string): Array<{ name: string; value: string }> {
   if (!cookieHeader) return [];
   const result: Array<{ name: string; value: string }> = [];
   const pairs = cookieHeader.split(";").map((p) => p.trim());

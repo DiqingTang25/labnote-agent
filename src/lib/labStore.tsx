@@ -92,17 +92,12 @@ export function LabProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateExperiment = useCallback(
-    (id: string, patch: Partial<ExperimentDoc>) => {
-      setExperiments((arr) =>
-        arr.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-      );
-      if (isSupabaseReady()) {
-        updateExperimentDB(id, patch).then(() => embedExperiment(id));
-      }
-    },
-    [],
-  );
+  const updateExperiment = useCallback((id: string, patch: Partial<ExperimentDoc>) => {
+    setExperiments((arr) => arr.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    if (isSupabaseReady()) {
+      updateExperimentDB(id, patch).then(() => embedExperiment(id));
+    }
+  }, []);
 
   const deleteExperiment = useCallback((id: string) => {
     setExperiments((arr) => arr.filter((x) => x.id !== id));
@@ -112,13 +107,9 @@ export function LabProvider({ children }: { children: ReactNode }) {
           supabase.auth
             .getSession()
             .then(
-              ({
-                data: { session },
-              }: {
-                data: { session: { user: { id: string } } | null };
-              }) => {
-                const uid = session?.user?.id;
-                if (uid) deleteExperimentFiles({ data: { userId: uid, expId: id } });
+              ({ data: { session } }: { data: { session: { access_token: string } | null } }) => {
+                const accessToken = session?.access_token;
+                if (accessToken) deleteExperimentFiles({ data: { accessToken, expId: id } });
               },
             );
         });
@@ -127,16 +118,17 @@ export function LabProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const getById = useCallback(
-    (id: string) => experiments.find((x) => x.id === id),
-    [experiments],
-  );
+  const getById = useCallback((id: string) => experiments.find((x) => x.id === id), [experiments]);
 
   const addFileToExperiment = useCallback((expId: string, file: AttachedFile) => {
     setExperiments((arr) =>
       arr.map((x) =>
         x.id === expId
-          ? { ...x, attachedFiles: [...x.attachedFiles, file], lastParsedAt: new Date().toISOString() }
+          ? {
+              ...x,
+              attachedFiles: [...x.attachedFiles, file],
+              lastParsedAt: new Date().toISOString(),
+            }
           : x,
       ),
     );
@@ -189,10 +181,7 @@ export function useLab() {
 
 import { getProperty } from "./property-utils";
 
-export function checkCompleteness(
-  doc: ExperimentDoc,
-  template?: Template,
-): string[] {
+export function checkCompleteness(doc: ExperimentDoc, template?: Template): string[] {
   const miss: string[] = [];
 
   // Core fields
@@ -206,7 +195,12 @@ export function checkCompleteness(
       for (const field of group.fields) {
         if (field.required) {
           const val = getProperty(doc.properties, field.path);
-          if (val === undefined || val === null || val === "" || (typeof val === "number" && val === 0)) {
+          if (
+            val === undefined ||
+            val === null ||
+            val === "" ||
+            (typeof val === "number" && val === 0)
+          ) {
             miss.push(field.label);
           }
         }
@@ -238,9 +232,7 @@ export function generateMethods(doc: ExperimentDoc): string {
 
   for (const entry of flat) {
     if (entry.path.startsWith("extra.") || entry.path.startsWith("_meta.")) continue;
-    const groupName = entry.path.includes(".")
-      ? entry.path.split(".")[0]
-      : "通用";
+    const groupName = entry.path.includes(".") ? entry.path.split(".")[0] : "通用";
     if (!byGroup.has(groupName)) byGroup.set(groupName, []);
     const label = entry.path.includes(".") ? entry.path.split(".").slice(1).join(".") : entry.path;
     byGroup.get(groupName)!.push(`  - ${label}: ${entry.value}`);

@@ -3,7 +3,8 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { getServiceSupabase } from "../supabase-server.server";
+import { z } from "zod";
+import { getServiceSupabase, requireAuthenticatedUser } from "../supabase-server.server";
 import type { Template } from "../exp-core";
 
 // ═══════════════════════════════════════════════════════
@@ -23,18 +24,20 @@ export const fetchTemplates = createServerFn({ method: "GET" }).handler(async ()
     return [];
   }
 
-  return (data as Array<{
-    id: string;
-    name: string;
-    experiment_type: string;
-    domain: string;
-    version: number;
-    field_groups: unknown;
-    is_preset: boolean;
-    created_by: string | null;
-    created_at: string;
-    updated_at: string;
-  }>).map((r) => ({
+  return (
+    data as Array<{
+      id: string;
+      name: string;
+      experiment_type: string;
+      domain: string;
+      version: number;
+      field_groups: unknown;
+      is_preset: boolean;
+      created_by: string | null;
+      created_at: string;
+      updated_at: string;
+    }>
+  ).map((r) => ({
     id: r.id,
     name: r.name,
     experimentType: r.experiment_type,
@@ -56,11 +59,7 @@ export const fetchTemplate = createServerFn({ method: "GET" })
   .inputValidator((id: string) => id)
   .handler(async ({ data: id }) => {
     const supabase = getServiceSupabase();
-    const { data, error } = await supabase
-      .from("templates")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+    const { data, error } = await supabase.from("templates").select("*").eq("id", id).maybeSingle();
 
     if (error || !data) {
       console.error("[Templates] fetchTemplate error:", error?.message);
@@ -87,16 +86,35 @@ export const fetchTemplate = createServerFn({ method: "GET" })
 // ═══════════════════════════════════════════════════════
 
 export const saveUserTemplate = createServerFn({ method: "POST" })
-  .inputValidator((tpl: {
-    id: string;
-    name: string;
-    experimentType: string;
-    domain: string;
-    fieldGroups: Template["fieldGroups"];
-    createdBy: string;
-  }) => tpl)
-  .handler(async ({ data: tpl }) => {
+  .inputValidator(
+    z.object({
+      accessToken: z.string().min(1),
+      template: z.object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        experimentType: z.string(),
+        domain: z.string(),
+        fieldGroups: z.custom<Template["fieldGroups"]>(),
+      }),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const userId = await requireAuthenticatedUser(data.accessToken);
     const supabase = getServiceSupabase();
+    const tpl = data.template;
+    const { data: existing, error: existingError } = await supabase
+      .from("templates")
+      .select("created_by, is_preset")
+      .eq("id", tpl.id)
+      .maybeSingle();
+
+    if (existingError) {
+      return { success: false, error: existingError.message };
+    }
+    if (existing && (existing.is_preset || existing.created_by !== userId)) {
+      return { success: false, error: "无权修改该模板" };
+    }
+
     const { error } = await supabase.from("templates").upsert({
       id: tpl.id,
       name: tpl.name,
@@ -105,7 +123,7 @@ export const saveUserTemplate = createServerFn({ method: "POST" })
       version: 1,
       field_groups: tpl.fieldGroups,
       is_preset: false,
-      created_by: tpl.createdBy,
+      created_by: userId,
       updated_at: new Date().toISOString(),
     });
 
@@ -121,17 +139,12 @@ export const saveUserTemplate = createServerFn({ method: "POST" })
 // ═══════════════════════════════════════════════════════
 
 export const seedPresetTemplates = createServerFn({ method: "POST" })
-  .inputValidator((templates: Array<{
-    id: string;
-    name: string;
-    experimentType: string;
-    domain: string;
-    version: number;
-    fieldGroups: Template["fieldGroups"];
-  }>) => templates)
-  .handler(async ({ data: templates }) => {
+  .inputValidator(z.object({ accessToken: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    await requireAuthenticatedUser(data.accessToken);
     const supabase = getServiceSupabase();
-    const rows = templates.map((t) => ({
+    const { ALL_PRESET_TEMPLATES } = await import("../templates/presets");
+    const rows = ALL_PRESET_TEMPLATES.map((t) => ({
       id: t.id,
       name: t.name,
       experiment_type: t.experimentType,

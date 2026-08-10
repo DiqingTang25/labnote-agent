@@ -10,7 +10,11 @@
  */
 import { createBrowserClient } from "@supabase/ssr";
 import type { ExperimentDoc } from "./labStore";
-import type { ReproductionAudit, ReproductionParameter, ReproductionGap } from "./reproduction-audit";
+import type {
+  ReproductionAudit,
+  ReproductionParameter,
+  ReproductionGap,
+} from "./reproduction-audit";
 import { toRow, fromRow, buildDbPatch } from "./experiment-utils";
 import type { ExperimentRow } from "./experiment-utils";
 import { getString, flattenProperties } from "./property-utils";
@@ -46,7 +50,9 @@ function getSupabase() {
 }
 
 export const supabase = new Proxy({} as ReturnType<typeof createBrowserClient>, {
-  get(_, prop) { return (getSupabase() as any)[prop]; },
+  get(_, prop) {
+    return (getSupabase() as any)[prop];
+  },
 });
 
 export function isSupabaseReady(): boolean {
@@ -76,10 +82,7 @@ export async function fetchExperiments(): Promise<ExperimentDoc[]> {
   return (data as Record<string, unknown>[]).map(fromRow);
 }
 
-export async function insertExperiment(
-  exp: ExperimentDoc,
-  userId?: string,
-): Promise<boolean> {
+export async function insertExperiment(exp: ExperimentDoc, userId?: string): Promise<boolean> {
   if (!isSupabaseReady()) return false;
   // 如果没有提供 userId，尝试从 session 获取
   let uid = userId;
@@ -185,13 +188,16 @@ export async function upsertProfile(p: {
   const userId = sessionData.session?.user?.id;
   if (!userId) return false;
 
-  const { error } = await supabase.from("profiles").upsert({
-    user_id: userId,
-    name: p.name,
-    org: p.org,
-    discipline: p.discipline,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "user_id" });
+  const { error } = await supabase.from("profiles").upsert(
+    {
+      user_id: userId,
+      name: p.name,
+      org: p.org,
+      discipline: p.discipline,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
   if (error) {
     console.error("[Supabase] upsertProfile error:", error);
     return false;
@@ -210,11 +216,7 @@ export async function upsertProfile(p: {
 export async function embedExperiment(expId: string): Promise<void> {
   if (!isSupabaseReady()) return;
 
-  const { data } = await supabase
-    .from("experiments")
-    .select("*")
-    .eq("id", expId)
-    .maybeSingle();
+  const { data } = await supabase.from("experiments").select("*").eq("id", expId).maybeSingle();
 
   if (!data) return;
 
@@ -270,11 +272,7 @@ async function embedExperimentChunks(expId: string): Promise<void> {
   if (!isSupabaseReady()) return;
 
   // 获取完整实验数据用于分块
-  const { data } = await supabase
-    .from("experiments")
-    .select("*")
-    .eq("id", expId)
-    .maybeSingle();
+  const { data } = await supabase.from("experiments").select("*").eq("id", expId).maybeSingle();
 
   if (!data) return;
 
@@ -298,10 +296,7 @@ async function embedExperimentChunks(expId: string): Promise<void> {
   if (!userId) return;
 
   // 删除旧 chunks
-  await supabase
-    .from("experiment_chunks")
-    .delete()
-    .eq("experiment_id", expId);
+  await supabase.from("experiment_chunks").delete().eq("experiment_id", expId);
 
   // 插入新 chunks
   const rows = chunks.map((c, i) => ({
@@ -328,10 +323,12 @@ export async function fetchExperimentChunks(
     .select("chunk_type, content")
     .eq("experiment_id", expId)
     .order("chunk_type");
-  return (data as Array<{ chunk_type: string; content: string }>)?.map((r) => ({
-    chunkType: r.chunk_type,
-    content: r.content,
-  })) ?? [];
+  return (
+    (data as Array<{ chunk_type: string; content: string }>)?.map((r) => ({
+      chunkType: r.chunk_type,
+      content: r.content,
+    })) ?? []
+  );
 }
 
 // ═══════════════════════════════════════════════════════
@@ -379,7 +376,13 @@ export type ExperimentRelation = {
   id: string;
   source_exp_id: string;
   target_exp_id: string;
-  relation_type: "sample_shared" | "device_shared" | "semantic_similar" | "temporal" | "operator_shared" | "custom";
+  relation_type:
+    | "sample_shared"
+    | "device_shared"
+    | "semantic_similar"
+    | "temporal"
+    | "operator_shared"
+    | "custom";
   metadata: Record<string, unknown>;
   similarity: number | null;
   created_at: string;
@@ -418,22 +421,32 @@ export async function autoGenerateRelations(exp: ExperimentDoc): Promise<number>
   for (const other of others) {
     const op = other as Record<string, unknown>;
     const otherProps = (op.properties as Record<string, unknown>) ?? {};
-    const otherDevice = (otherProps["device"] as Record<string, unknown>)?.["name"] as string | undefined;
-    const otherSample = (otherProps["sample"] as Record<string, unknown>)?.["id"] as string | undefined;
+    const otherDevice = (otherProps["device"] as Record<string, unknown>)?.["name"] as
+      | string
+      | undefined;
+    const otherSample = (otherProps["sample"] as Record<string, unknown>)?.["id"] as
+      | string
+      | undefined;
 
     // 1. 共享设备
     if (expDevice && otherDevice && expDevice === otherDevice) {
-      const ok = await addExperimentRelation(exp.id, op.id as string, "device_shared", { device: expDevice });
+      const ok = await addExperimentRelation(exp.id, op.id as string, "device_shared", {
+        device: expDevice,
+      });
       if (ok) count++;
     }
     // 2. 共享样品
     if (expSample && otherSample && expSample === otherSample) {
-      const ok = await addExperimentRelation(exp.id, op.id as string, "sample_shared", { sample: expSample });
+      const ok = await addExperimentRelation(exp.id, op.id as string, "sample_shared", {
+        sample: expSample,
+      });
       if (ok) count++;
     }
     // 3. 相同操作人
     if (exp.operator && op.operator && exp.operator === op.operator) {
-      const ok = await addExperimentRelation(exp.id, op.id as string, "operator_shared", { operator: exp.operator });
+      const ok = await addExperimentRelation(exp.id, op.id as string, "operator_shared", {
+        operator: exp.operator,
+      });
       if (ok) count++;
     }
   }
@@ -463,10 +476,7 @@ export async function fetchAllRelations(): Promise<ExperimentRelation[]> {
   if (!userId) return [];
 
   // 获取用户所有实验 ID
-  const { data: exps } = await supabase
-    .from("experiments")
-    .select("id")
-    .eq("user_id", userId);
+  const { data: exps } = await supabase.from("experiments").select("id").eq("user_id", userId);
   if (!exps || exps.length === 0) return [];
 
   const expIds = (exps as Array<{ id: string }>).map((e) => e.id);
@@ -509,10 +519,7 @@ export async function addExperimentRelation(
 /** 删除关系 */
 export async function deleteExperimentRelation(relationId: string): Promise<boolean> {
   if (!isSupabaseReady()) return false;
-  const { error } = await supabase
-    .from("experiment_relations")
-    .delete()
-    .eq("id", relationId);
+  const { error } = await supabase.from("experiment_relations").delete().eq("id", relationId);
   if (error) {
     console.error("[Supabase] deleteRelation error:", error);
     return false;
@@ -524,7 +531,14 @@ export async function deleteExperimentRelation(relationId: string): Promise<bool
 export async function suggestRelations(
   sourceExp: ExperimentDoc,
   allExperiments: ExperimentDoc[],
-): Promise<Array<{ targetId: string; targetName: string; type: ExperimentRelation["relation_type"]; reason: string }>> {
+): Promise<
+  Array<{
+    targetId: string;
+    targetName: string;
+    type: ExperimentRelation["relation_type"];
+    reason: string;
+  }>
+> {
   const others = allExperiments.filter((e) => e.id !== sourceExp.id);
   if (others.length === 0) return [];
 
@@ -563,10 +577,14 @@ ${JSON.stringify(ctx, null, 2)}
 
   try {
     const { chat, MODEL_TEXT } = await import("./deepseek");
-    const raw = await chat(MODEL_TEXT, [
-      { role: "system", content: "你是科研知识图谱构建助手。输出严格JSON数组。" },
-      { role: "user", content: prompt },
-    ], 2048);
+    const raw = await chat(
+      MODEL_TEXT,
+      [
+        { role: "system", content: "你是科研知识图谱构建助手。输出严格JSON数组。" },
+        { role: "user", content: prompt },
+      ],
+      2048,
+    );
 
     // 提取 JSON
     const match = raw.match(/\[[\s\S]*\]/);
@@ -608,9 +626,10 @@ export async function ragAnswerReal(
 ): Promise<{ answer: string; sources: RagSource[] }> {
   // 获取当前用户 — RAG 只搜索该用户的实验
   const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user?.id;
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error("未登录或登录已过期");
   const { ragAnswer } = await import("./api/rag.functions");
-  return ragAnswer({ data: { question, userId, selectedIds, history } });
+  return ragAnswer({ data: { question, accessToken, selectedIds, history } });
 }
 
 /**
@@ -624,10 +643,13 @@ export async function ragAnswerRealStream(
   history?: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<Response> {
   const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user?.id;
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error("未登录或登录已过期");
   const { ragAnswerStream } = await import("./api/rag.functions");
   // TanStack createServerFn 类型推断不知道返回值是 Response（运行时通过 x-tss-raw header 透传）
-  return ragAnswerStream({ data: { question, userId, selectedIds, history } }) as unknown as Response;
+  return ragAnswerStream({
+    data: { question, accessToken, selectedIds, history },
+  }) as unknown as Response;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -714,9 +736,7 @@ export async function saveAudit(
     return audit.id;
   }
 
-  const { error } = await supabase
-    .from("reproduction_audits")
-    .insert(row);
+  const { error } = await supabase.from("reproduction_audits").insert(row);
   if (error) {
     console.error("[Audit] insert error:", error);
     return null;

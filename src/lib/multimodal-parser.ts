@@ -16,29 +16,26 @@ import {
 } from "./deepseek";
 import { parseAPIResponse, normalizeExperiment } from "./json-parser";
 import { classifyExperimentType } from "./prompt-builder";
-import { matchTemplate, GENERIC_TEMPLATE } from "./templates/presets";
-import { createBlankDoc } from "./exp-core";
+import { matchTemplate, DEFAULT_TEMPLATE } from "./templates/presets";
+import { mergeProperties } from "./property-utils";
+import { validateExperimentDoc } from "./validator-agent";
+import { correctExperimentDoc, markValidationFailed } from "./corrector-agent";
 
 // ═══════════════════════════════════════════════════════
 // 配置
 // ═══════════════════════════════════════════════════════
 
-const BATCH_SIZE = 5;                // 每批最多文件数
+const BATCH_SIZE = 5; // 每批最多文件数
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const API_DELAY_MS = 200;            // 文件间延迟避免限流
-const CONTEXT_LIMIT = 8000;          // merge 上下文上限 (字符)
-const CONTEXT_THRESHOLD = 6400;      // 80% 触发压缩
+const API_DELAY_MS = 200; // 文件间延迟避免限流
+const CONTEXT_LIMIT = 8000; // merge 上下文上限 (字符)
+const CONTEXT_THRESHOLD = 6400; // 80% 触发压缩
 
 // ═══════════════════════════════════════════════════════
 // 类型
 // ═══════════════════════════════════════════════════════
 
-export type PipelineStage =
-  | "idle"
-  | "reading"
-  | "analyzing"
-  | "merging"
-  | "complete";
+export type PipelineStage = "idle" | "reading" | "analyzing" | "merging" | "complete";
 
 export const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
   { key: "reading", label: "读取文件内容" },
@@ -90,9 +87,7 @@ export function detectFileInfo(fileName: string): { type: string; icon: string }
   return map[ext] ?? { type: "文本文件", icon: "📎" };
 }
 
-export function classifyFile(
-  fileName: string,
-): "image" | "text" | "csv" | "document" {
+export function classifyFile(fileName: string): "image" | "text" | "csv" | "document" {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   if (["png", "jpg", "jpeg", "tif", "tiff", "bmp", "webp"].includes(ext)) return "image";
   if (ext === "csv") return "csv";
@@ -181,7 +176,11 @@ async function analyzeFile(
         case "text":
         case "document":
         default:
-          rawOutput = await parseTextFile(content.textContent || file.name, file.name, template ?? GENERIC_TEMPLATE);
+          rawOutput = await parseTextFile(
+            content.textContent || file.name,
+            file.name,
+            template ?? DEFAULT_TEMPLATE,
+          );
           break;
       }
     }
@@ -213,15 +212,15 @@ function compressToMarkdown(
     const params = getProperty(props, "params");
     const paramsStr = Array.isArray(params)
       ? params
-        .filter((value) => value !== null && typeof value === "object" && !Array.isArray(value))
-        .map((value) => {
-          const param = value as Record<string, unknown>;
-          return typeof param.name === "string"
-            ? `${param.name}=${String(param.value ?? "")}${String(param.unit ?? "")}`
-            : "";
-        })
-        .filter(Boolean)
-        .join(", ")
+          .filter((value) => value !== null && typeof value === "object" && !Array.isArray(value))
+          .map((value) => {
+            const param = value as Record<string, unknown>;
+            return typeof param.name === "string"
+              ? `${param.name}=${String(param.value ?? "")}${String(param.unit ?? "")}`
+              : "";
+          })
+          .filter(Boolean)
+          .join(", ")
       : "";
     const purpose = getString(props, "purpose");
     const deviceName = getString(props, "device.name");
@@ -315,7 +314,7 @@ async function processBatch(
     }
 
     try {
-      const parsed = parseAPIResponse(rr.rawOutput, rr.fileName);
+      const parsed = parseAPIResponse(rr.rawOutput, rr.fileName, template);
       parsed.forEach((exp) => allPartials.push({ fileName: rr.fileName, experiment: exp }));
       onFileProgress(globalIdx, {
         name: batchFiles[i].name,
@@ -349,7 +348,7 @@ async function processBatch(
   if (useRealAPI && validResults.length > 1) {
     try {
       const mergedRaw = await mergeResults(validResults, template);
-      const merged = parseAPIResponse(mergedRaw, `__batch${batchIndex}__`);
+      const merged = parseAPIResponse(mergedRaw, `__batch${batchIndex}__`, template);
       if (merged.length > 0) {
         batchPartials = merged.map((m) => ({
           fileName: `批次${batchIndex + 1}合并`,
@@ -397,7 +396,9 @@ export async function runPipeline(
         if (template) {
           onStage("reading", `检测到实验类型: ${template.name}`);
         }
-      } catch { /* keep generic template */ }
+      } catch {
+        /* keep generic template */
+      }
     }
   }
 
@@ -455,33 +456,41 @@ export async function runPipeline(
 
     if (useRealAPI && allBatchPartials.length > 0) {
       try {
-        const summaryResults: RawResult[] = [{
-          fileName: `全部摘要`,
-          fileType: "text",
-          rawOutput: `请基于以下 ${totalBatches} 个批次的实验摘要，去重合并为最终的实验卡片列表。\n\n${truncatedSummary}`,
-        }];
+        const summaryResults: RawResult[] = [
+          {
+            fileName: `全部摘要`,
+            fileType: "text",
+            rawOutput: `请基于以下 ${totalBatches} 个批次的实验摘要，去重合并为最终的实验卡片列表。\n\n${truncatedSummary}`,
+          },
+        ];
 
         const { chat, MODEL_TEXT } = await import("./deepseek");
-        const tpl = template ?? GENERIC_TEMPLATE;
+        const tpl = template ?? DEFAULT_TEMPLATE;
         const { buildMergePrompt: _bmp } = await import("./prompt-builder");
-        const summaryResultsForMerge: RawResult[] = [{
-          fileName: "全部摘要", fileType: "text",
-          rawOutput: truncatedSummary,
-        }];
+        const summaryResultsForMerge: RawResult[] = [
+          {
+            fileName: "全部摘要",
+            fileType: "text",
+            rawOutput: truncatedSummary,
+          },
+        ];
         const customMergePrompt = _bmp(tpl, summaryResultsForMerge);
         const mergedRaw = await chat(
           MODEL_TEXT,
-          [{
-            role: "user",
-            content: `你是科研实验记录管理员。以下是 ${totalBatches} 个批次的实验摘要，请去重合并，输出最终的实验卡片列表。\n\n【重要】输出纯JSON（不要markdown代码块），字段尽可能完整：\n{"experiments":[{"name":"...","experimentType":"synthesis|characterization|measurement|simulation|other","date":"...","operator":"...","purpose":"...","hypothesis":"...","conclusion":"...","device":{"name":"...","model":"...","vendor":"..."},"instruments":[{"name":"...","model":"...","vendor":"..."}],"materials":[{"name":"...","casNumber":"...","purity":"...","role":"reactant|..."}],"sample":{"id":"...","batch":"...","source":"..."},"params":[{"name":"...","value":"...","unit":"..."}],"environment":{"temperature":"","humidity":"","other":""},"protocol":{"name":"...","version":"..."},"steps":["..."],"results":"...","notes":"...","controls":[{"type":"standard|...","name":"..."}],"replicates":1,"qcStatus":"na|...","source":"...","aiInsights":"..."}]}\n\n${truncatedSummary}`,
-          }],
+          [
+            {
+              role: "user",
+              content: `你是科研实验记录管理员。以下是 ${totalBatches} 个批次的实验摘要，请去重合并，输出最终的实验卡片列表。\n\n【重要】输出纯JSON（不要markdown代码块），字段尽可能完整：\n{"experiments":[{"name":"...","experimentType":"synthesis|characterization|measurement|simulation|other","date":"...","operator":"...","purpose":"...","hypothesis":"...","conclusion":"...","device":{"name":"...","model":"...","vendor":"..."},"instruments":[{"name":"...","model":"...","vendor":"..."}],"materials":[{"name":"...","casNumber":"...","purity":"...","role":"reactant|..."}],"sample":{"id":"...","batch":"...","source":"..."},"params":[{"name":"...","value":"...","unit":"..."}],"environment":{"temperature":"","humidity":"","other":""},"protocol":{"name":"...","version":"..."},"steps":["..."],"results":"...","notes":"...","controls":[{"type":"standard|...","name":"..."}],"replicates":1,"qcStatus":"na|...","source":"...","aiInsights":"..."}]}\n\n${truncatedSummary}`,
+            },
+          ],
           4096,
         );
 
-        const parsed = parseAPIResponse(mergedRaw, "__final__");
-        finalExperiments = parsed.length > 0
-          ? parsed.map((p) => normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }))
-          : buildFromPartials(allBatchPartials);
+        const parsed = parseAPIResponse(mergedRaw, "__final__", template);
+        finalExperiments =
+          parsed.length > 0
+            ? parsed.map((p) => normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }))
+            : buildFromPartials(allBatchPartials);
       } catch (err) {
         console.error("[Pipeline] 跨批合并失败，使用原始结果", err);
         finalExperiments = buildFromPartials(allBatchPartials);
@@ -489,6 +498,39 @@ export async function runPipeline(
     } else {
       finalExperiments = buildFromPartials(allBatchPartials);
     }
+  }
+
+  // ═══ Validator → Corrector → revalidate ═══
+  const selectedTemplate = template ?? DEFAULT_TEMPLATE;
+  for (let i = 0; i < finalExperiments.length; i++) {
+    let card = finalExperiments[i];
+    let validation = validateExperimentDoc(card, selectedTemplate);
+
+    if (!validation.passed && useRealAPI) {
+      const sourceFiles = files.map((file, index) => ({
+        name: file.name,
+        textContent: fileContents[index]?.textContent ?? "",
+      }));
+      card = await correctExperimentDoc(card, selectedTemplate, sourceFiles, validation.errors);
+      validation = validateExperimentDoc(card, selectedTemplate);
+      if (!validation.passed) {
+        card = markValidationFailed(card, validation.errors);
+      } else {
+        card = {
+          ...card,
+          properties: mergeProperties(card.properties, {
+            _meta: {
+              validationFailed: false,
+              validationWarnings: validation.warnings.map((item) => item.message),
+            },
+          }),
+        };
+      }
+    } else if (!validation.passed) {
+      card = markValidationFailed(card, validation.errors);
+    }
+
+    finalExperiments[i] = card;
   }
 
   // ═══ 附加文件元数据（不含 textContent，文件内容在 Supabase Storage）═══
@@ -501,7 +543,7 @@ export async function runPipeline(
       mimeType: f.type || "application/octet-stream",
       size: f.size,
       addedAt: now,
-      file_url: "",  // 待 workbench 上传后填充
+      file_url: "", // 待 workbench 上传后填充
       storage_path: "",
       parsedRaw: getString(allBatchPartials[i]?.experiment.properties ?? {}, "results"),
     }));
@@ -565,9 +607,7 @@ export async function rerunMerge(
     const mergedRaw = await mergeResults(valid);
     const parsed = parseAPIResponse(mergedRaw, "__remerge__");
     onStage("complete", `${parsed.length} 张卡片`);
-    return parsed.map((p) =>
-      normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }),
-    );
+    return parsed.map((p) => normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }));
   } catch {
     const allPartials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }> = [];
     for (const r of valid) {

@@ -21,13 +21,21 @@ export function extractJSON<T = unknown>(text: string): T {
   const trimmed = text.trim();
 
   // 策略 1: 直接解析
-  try { return JSON.parse(trimmed) as T; } catch { /* continue */ }
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    /* continue */
+  }
 
   // 策略 2: 剥去 markdown 代码块
   const fenceRegex = /```(?:json|javascript|js|text)?\s*\n?([\s\S]*?)\n?```/g;
   let match = fenceRegex.exec(trimmed);
   while (match) {
-    try { return JSON.parse(match[1].trim()) as T; } catch { /* try next */ }
+    try {
+      return JSON.parse(match[1].trim()) as T;
+    } catch {
+      /* try next */
+    }
     match = fenceRegex.exec(trimmed);
   }
 
@@ -35,32 +43,45 @@ export function extractJSON<T = unknown>(text: string): T {
   const objStart = trimmed.indexOf("{");
   const objEnd = trimmed.lastIndexOf("}");
   if (objStart !== -1 && objEnd > objStart) {
-    try { return JSON.parse(trimmed.slice(objStart, objEnd + 1)) as T; } catch { /* continue */ }
+    try {
+      return JSON.parse(trimmed.slice(objStart, objEnd + 1)) as T;
+    } catch {
+      /* continue */
+    }
   }
 
   // 策略 4: 找最外层 [ ... ]
   const arrStart = trimmed.indexOf("[");
   const arrEnd = trimmed.lastIndexOf("]");
   if (arrStart !== -1 && arrEnd > arrStart) {
-    try { return JSON.parse(trimmed.slice(arrStart, arrEnd + 1)) as T; } catch { /* continue */ }
+    try {
+      return JSON.parse(trimmed.slice(arrStart, arrEnd + 1)) as T;
+    } catch {
+      /* continue */
+    }
   }
 
   // 策略 5: "experiments": [...] 包装
   const expMatch = trimmed.match(/"experiments"\s*:\s*\[[\s\S]*?\]/);
   if (expMatch) {
-    try { return JSON.parse(`{${expMatch[0]}}`) as T; } catch { /* continue */ }
+    try {
+      return JSON.parse(`{${expMatch[0]}}`) as T;
+    } catch {
+      /* continue */
+    }
   }
 
   // 策略 6: 修复常见 JSON 错误
   try {
-    const fixed = trimmed
-      .replace(/,\s*}/g, "}")
-      .replace(/,\s*]/g, "]")
-      .replace(/'/g, '"');
+    const fixed = trimmed.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/'/g, '"');
     return JSON.parse(fixed) as T;
-  } catch { /* continue */ }
+  } catch {
+    /* continue */
+  }
 
-  throw new Error(`Could not extract JSON from AI response. First 200 chars: ${trimmed.slice(0, 200)}`);
+  throw new Error(
+    `Could not extract JSON from AI response. First 200 chars: ${trimmed.slice(0, 200)}`,
+  );
 }
 
 // ═══════════════════════════════════════════════════════
@@ -102,10 +123,7 @@ export function parseAPIResponse(
  *
  * AI 返回什么就保留什么。无法归入已知结构的字段放入 extra。
  */
-function asPartialDoc(
-  item: unknown,
-  template?: Template,
-): Partial<ExperimentDoc> {
+function asPartialDoc(item: unknown, template?: Template): Partial<ExperimentDoc> {
   if (!item || typeof item !== "object") return {};
 
   const obj = item as Record<string, unknown>;
@@ -123,7 +141,15 @@ function asPartialDoc(
     properties = deepSanitize(obj.properties as Record<string, unknown>);
   } else {
     // AI 可能把字段放在顶层而不是 properties 内 — 全部合并进 properties
-    const coreKeys = new Set(["name", "experimentType", "date", "operator", "aiInsights", "knowledgeTags", "attachedFiles"]);
+    const coreKeys = new Set([
+      "name",
+      "experimentType",
+      "date",
+      "operator",
+      "aiInsights",
+      "knowledgeTags",
+      "attachedFiles",
+    ]);
     const rawProps: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(obj)) {
       if (!coreKeys.has(key)) {
@@ -139,6 +165,21 @@ function asPartialDoc(
         templateVersion: template.version,
       };
     }
+  }
+
+  // 确保模板元数据由当前应用模板统一写入，避免 AI 响应覆盖或遗漏模板版本。
+  if (template) {
+    const currentMeta = properties._meta;
+    properties = {
+      ...properties,
+      _meta: {
+        ...(currentMeta && typeof currentMeta === "object" && !Array.isArray(currentMeta)
+          ? currentMeta
+          : {}),
+        templateId: template.id,
+        templateVersion: template.version,
+      },
+    } as DocProperties;
   }
 
   // 确保 extra 存在且不为空

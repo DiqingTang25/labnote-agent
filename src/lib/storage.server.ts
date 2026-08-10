@@ -8,7 +8,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getServiceSupabase } from "./supabase-server.server";
+import { getServiceSupabase, requireAuthenticatedUser } from "./supabase-server.server";
 
 const BUCKET = "experiment-files";
 
@@ -16,7 +16,7 @@ const BUCKET = "experiment-files";
 export const uploadFile = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
-      userId: z.string().min(1),
+      accessToken: z.string().min(1),
       expId: z.string().min(1),
       fileName: z.string().min(1),
       fileBase64: z.string().min(1),
@@ -25,18 +25,17 @@ export const uploadFile = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const supabase = getServiceSupabase();
+    const userId = await requireAuthenticatedUser(data.accessToken);
     const timestamp = Date.now();
     const safeName = data.fileName.replace(/[^a-zA-Z0-9._\-一-鿿]/g, "_");
-    const path = `${data.userId}/${data.expId}/${timestamp}-${safeName}`;
+    const path = `${userId}/${data.expId}/${timestamp}-${safeName}`;
 
     const binary = Buffer.from(data.fileBase64, "base64");
 
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, binary, {
-        contentType: data.mimeType,
-        upsert: false,
-      });
+    const { error } = await supabase.storage.from(BUCKET).upload(path, binary, {
+      contentType: data.mimeType,
+      upsert: false,
+    });
 
     if (error) {
       console.error("[Storage] Upload failed:", error);
@@ -44,9 +43,7 @@ export const uploadFile = createServerFn({ method: "POST" })
     }
 
     // 获取公开 URL
-    const { data: urlData } = supabase.storage
-      .from(BUCKET)
-      .getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
     return { url: urlData.publicUrl, path };
   });
@@ -55,14 +52,15 @@ export const uploadFile = createServerFn({ method: "POST" })
 export const deleteFile = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
+      accessToken: z.string().min(1),
       path: z.string().min(1),
     }),
   )
   .handler(async ({ data }) => {
     const supabase = getServiceSupabase();
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .remove([data.path]);
+    const userId = await requireAuthenticatedUser(data.accessToken);
+    if (!data.path.startsWith(`${userId}/`)) throw new Error("无权删除该文件");
+    const { error } = await supabase.storage.from(BUCKET).remove([data.path]);
 
     if (error) {
       console.error("[Storage] Delete failed:", error);
@@ -75,26 +73,23 @@ export const deleteFile = createServerFn({ method: "POST" })
 export const deleteExperimentFiles = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
-      userId: z.string().min(1),
+      accessToken: z.string().min(1),
       expId: z.string().min(1),
     }),
   )
   .handler(async ({ data }) => {
     const supabase = getServiceSupabase();
-    const prefix = `${data.userId}/${data.expId}/`;
+    const userId = await requireAuthenticatedUser(data.accessToken);
+    const prefix = `${userId}/${data.expId}/`;
 
     // 列出该实验下所有文件
-    const { data: files, error: listErr } = await supabase.storage
-      .from(BUCKET)
-      .list(prefix);
+    const { data: files, error: listErr } = await supabase.storage.from(BUCKET).list(prefix);
 
     if (listErr || !files || files.length === 0) return true;
 
     const paths = files.map((f: { name: string }) => `${prefix}${f.name}`);
 
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .remove(paths);
+    const { error } = await supabase.storage.from(BUCKET).remove(paths);
 
     if (error) {
       console.error("[Storage] Batch delete failed:", error);

@@ -6,6 +6,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireAuthenticatedUser } from "../supabase-server.server";
 
 export const decomposeOnServer = createServerFn({ method: "POST" })
   .inputValidator(
@@ -14,14 +15,13 @@ export const decomposeOnServer = createServerFn({ method: "POST" })
       paperDoi: z.string().default(""),
       methodsText: z.string().min(1),
       discipline: z.string().default("材料科学"),
-      userId: z.string(),
+      accessToken: z.string().min(1),
     }),
   )
   .handler(async ({ data }) => {
+    const userId = await requireAuthenticatedUser(data.accessToken);
     // 动态 import — 仅在服务端加载重依赖
-    const [{ decomposePaperMethods }] = await Promise.all([
-      import("../paper-decomposer"),
-    ]);
+    const [{ decomposePaperMethods }] = await Promise.all([import("../paper-decomposer")]);
 
     const result = await decomposePaperMethods(
       data.paperTitle,
@@ -38,7 +38,7 @@ export const decomposeOnServer = createServerFn({ method: "POST" })
 
       const { error } = await sb.from("reproduction_audits").insert({
         id: result.id,
-        user_id: data.userId,
+        user_id: userId,
         paper_title: result.paperTitle,
         paper_source: result.paperSource,
         discipline: data.discipline,

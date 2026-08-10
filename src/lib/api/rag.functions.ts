@@ -6,7 +6,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getServiceSupabase } from "../supabase-server.server";
+import { getServiceSupabase, requireAuthenticatedUser } from "../supabase-server.server";
 import { generateEmbedding, chatCompletion, rewriteQuery } from "./ai.functions";
 import { getServerConfig } from "../config.server";
 import { getProxiedFetch } from "../proxy-fetch.server";
@@ -21,16 +21,21 @@ export const ragSearch = createServerFn({ method: "POST" })
     z.object({
       question: z.string().min(1),
       limit: z.number().optional().default(3),
-      userId: z.string().optional().nullable(),
+      accessToken: z.string().min(1),
       selectedIds: z.array(z.string()).optional(),
-      history: z.array(z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      })).optional(),
+      history: z
+        .array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string(),
+          }),
+        )
+        .optional(),
     }),
   )
   .handler(async ({ data }) => {
     const supabase = getServiceSupabase();
+    const userId = await requireAuthenticatedUser(data.accessToken);
 
     // 1. Query 改写：模糊问题 → 精确检索词（失败静默降级）
     const searchQuery = await rewriteQuery({
@@ -41,7 +46,10 @@ export const ragSearch = createServerFn({ method: "POST" })
     const qVec = await generateEmbedding({ data: { text: searchQuery } });
     const hasEmbedding = Array.isArray(qVec) && qVec.length > 0;
 
-    let simMap = new Map<string, { name: string; similarity: number; bestChunk: string; chunkType: string }>();
+    let simMap = new Map<
+      string,
+      { name: string; similarity: number; bestChunk: string; chunkType: string }
+    >();
 
     if (hasEmbedding) {
       // 2a. 尝试 chunk 级向量搜索
@@ -51,7 +59,7 @@ export const ragSearch = createServerFn({ method: "POST" })
           query_embedding: qVec,
           match_threshold: 0.55,
           match_count: 20,
-          filter_user_id: data.userId ?? null,
+          filter_user_id: userId,
           filter_ids: data.selectedIds ?? null,
         },
       );
@@ -86,7 +94,7 @@ export const ragSearch = createServerFn({ method: "POST" })
           match_count: data.limit * 4,
           semantic_weight: 0.7,
           keyword_weight: 0.3,
-          filter_user_id: data.userId ?? null,
+          filter_user_id: userId,
           filter_ids: data.selectedIds ?? null,
         });
 
@@ -113,17 +121,26 @@ export const ragSearch = createServerFn({ method: "POST" })
       console.warn("[RAG] Embedding unavailable, using keyword-only search");
       const terms = searchQuery.split(/\s+/).filter((t) => t.length > 0);
       if (terms.length > 0) {
-        const ilikePattern = terms.map((t) => `%${t}%`).join("|");
         const { data: keywordResults } = await supabase
           .from("experiments")
           .select("id, name, properties")
+          .eq("user_id", userId)
           .or(
-            terms.map((_, i) => `name.ilike.%${terms[i]}%,purpose.ilike.%${terms[i]}%,results.ilike.%${terms[i]}%`).join(",")
+            terms
+              .map(
+                (term) =>
+                  `name.ilike.%${term}%,properties->>purpose.ilike.%${term}%,properties->>results.ilike.%${term}%`,
+              )
+              .join(","),
           )
           .limit(data.limit * 3);
 
         if (Array.isArray(keywordResults)) {
-          for (const r of keywordResults as Array<{ id: string; name: string; properties?: Record<string, unknown> }>) {
+          for (const r of keywordResults as Array<{
+            id: string;
+            name: string;
+            properties?: Record<string, unknown>;
+          }>) {
             const props = r.properties ?? {};
             const purpose = (props["purpose"] as string) ?? "";
             const results = (props["results"] as string) ?? "";
@@ -156,7 +173,10 @@ export const ragSearch = createServerFn({ method: "POST" })
 
         if (Array.isArray(reranked) && reranked.length > 0) {
           // 用 reranker 得分替换 similarity
-          const rerankMap = new Map<string, { name: string; similarity: number; bestChunk: string; chunkType: string }>();
+          const rerankMap = new Map<
+            string,
+            { name: string; similarity: number; bestChunk: string; chunkType: string }
+          >();
           for (const r of reranked) {
             const entry = entries[r.index];
             if (entry) {
@@ -203,13 +223,13 @@ export const ragSearch = createServerFn({ method: "POST" })
         const results = (props["results"] as string) ?? "";
         const steps = props["steps"] as string[] | undefined;
         const stepsText = Array.isArray(steps) ? steps.join("; ") : "";
-        const params = props["params"] as Array<{ name: string; value: string; unit: string }> | undefined;
+        const params = props["params"] as
+          | Array<{ name: string; value: string; unit: string }>
+          | undefined;
         const paramsText = Array.isArray(params)
           ? params.map((p) => `${p.name ?? ""}: ${p.value ?? ""}${p.unit ?? ""}`).join(", ")
           : "";
-        const fullText = [purpose, results, stepsText, paramsText]
-          .filter(Boolean)
-          .join(" | ");
+        const fullText = [purpose, results, stepsText, paramsText].filter(Boolean).join(" | ");
         // 如果有 chunk 精准匹配，优先用 chunk 内容
         const info = simMap.get(r.id);
         const chunkText = info?.bestChunk ?? "";
@@ -261,18 +281,28 @@ export const ragAnswer = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       question: z.string().min(1),
-      userId: z.string().optional().nullable(),
+      accessToken: z.string().min(1),
       selectedIds: z.array(z.string()).optional(),
-      history: z.array(z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      })).optional(),
+      history: z
+        .array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string(),
+          }),
+        )
+        .optional(),
     }),
   )
   .handler(async ({ data }) => {
     // 1. 向量检索 Top-3 相关实验（按用户隔离 + 可选卡片边界）
     const contexts = await ragSearch({
-      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds, history: data.history },
+      data: {
+        question: data.question,
+        limit: 3,
+        accessToken: data.accessToken,
+        selectedIds: data.selectedIds,
+        history: data.history,
+      },
     });
 
     if (!Array.isArray(contexts) || contexts.length === 0) {
@@ -303,7 +333,11 @@ export const ragAnswer = createServerFn({ method: "POST" })
     let answer: string;
     try {
       // LLM 响应缓存检查
-      const { contentHash: _ch, getCachedAnswer: _gca, setCachedAnswer: _sca } = await import("../rag-cache");
+      const {
+        contentHash: _ch,
+        getCachedAnswer: _gca,
+        setCachedAnswer: _sca,
+      } = await import("../rag-cache");
       const ctxHash = _ch(contextBlock + (data.history ? JSON.stringify(data.history) : ""));
       const cached = _gca(data.question, ctxHash);
       if (cached) {
@@ -323,7 +357,14 @@ export const ragAnswer = createServerFn({ method: "POST" })
         // 写入缓存
         const sourcesForCache = contexts.map((c) => {
           const ct = (c as any).chunkType as string | undefined;
-          return { doc: c.name, page: ct ? `实验卡片 · ${CHUNK_LABELS[ct] || ct}` : "实验卡片", confidence: `${(c.similarity * 100).toFixed(0)}%`, link: `/workbench?id=${c.id}`, chunkType: ct, snippet: ct ? c.text.slice(0, 180) : undefined };
+          return {
+            doc: c.name,
+            page: ct ? `实验卡片 · ${CHUNK_LABELS[ct] || ct}` : "实验卡片",
+            confidence: `${(c.similarity * 100).toFixed(0)}%`,
+            link: `/workbench?id=${c.id}`,
+            chunkType: ct,
+            snippet: ct ? c.text.slice(0, 180) : undefined,
+          };
         });
         _sca(data.question, ctxHash, answer, sourcesForCache as any);
       }
@@ -331,9 +372,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
       console.error("[RAG] LLM call failed:", err);
       answer =
         `检索到 ${contexts.length} 条相关实验（LLM 暂时不可用）：\n` +
-        contexts
-          .map((c) => `• ${c.name}（相似度 ${(c.similarity * 100).toFixed(0)}%）`)
-          .join("\n");
+        contexts.map((c) => `• ${c.name}（相似度 ${(c.similarity * 100).toFixed(0)}%）`).join("\n");
     }
 
     // 4. 构建来源（含 chunk 级精确定位）
@@ -367,18 +406,28 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       question: z.string().min(1),
-      userId: z.string().optional().nullable(),
+      accessToken: z.string().min(1),
       selectedIds: z.array(z.string()).optional(),
-      history: z.array(z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      })).optional(),
+      history: z
+        .array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string(),
+          }),
+        )
+        .optional(),
     }),
   )
   .handler(async ({ data }) => {
     // 1. RAG 检索（复用 ragSearch）
     const contexts = await ragSearch({
-      data: { question: data.question, limit: 3, userId: data.userId, selectedIds: data.selectedIds, history: data.history },
+      data: {
+        question: data.question,
+        limit: 3,
+        accessToken: data.accessToken,
+        selectedIds: data.selectedIds,
+        history: data.history,
+      },
     });
 
     let sources: RagSource[] = [];
@@ -425,11 +474,14 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
     if (!contextBlock) {
       const body = JSON.stringify({
         type: "done",
-        answer: "知识库中暂无与您问题相关的实验记录。建议：① 先上传实验数据 ② 使用更具体的关键词 ③ 直接在实验卡片中搜索。",
+        answer:
+          "知识库中暂无与您问题相关的实验记录。建议：① 先上传实验数据 ② 使用更具体的关键词 ③ 直接在实验卡片中搜索。",
         sources: [],
       });
       return new Response(
-        encoder.encode(`data: ${JSON.stringify({ type: "sources", sources: [] })}\n\ndata: ${JSON.stringify({ type: "token", content: "知识库中暂无与您问题相关的实验记录。" })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`),
+        encoder.encode(
+          `data: ${JSON.stringify({ type: "sources", sources: [] })}\n\ndata: ${JSON.stringify({ type: "token", content: "知识库中暂无与您问题相关的实验记录。" })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`,
+        ),
         {
           headers: {
             "Content-Type": "text/event-stream",
@@ -446,7 +498,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       sfRes = await apiFetch(`${AI_BASE}/chat/completions`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -466,7 +518,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       const errMsg = err instanceof Error ? err.message : "网络请求失败";
       return new Response(
         encoder.encode(
-          `data: ${JSON.stringify({ type: "error", message: errMsg })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`
+          `data: ${JSON.stringify({ type: "error", message: errMsg })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`,
         ),
         {
           headers: {
@@ -482,7 +534,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       const errText = await sfRes.text().catch(() => "");
       return new Response(
         encoder.encode(
-          `data: ${JSON.stringify({ type: "error", message: `API ${sfRes.status}: ${errText.slice(0, 200)}` })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`
+          `data: ${JSON.stringify({ type: "error", message: `API ${sfRes.status}: ${errText.slice(0, 200)}` })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`,
         ),
         {
           headers: {
@@ -499,11 +551,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
     const writer = writable.getWriter();
 
     // 先写 sources 事件
-    writer.write(
-      encoder.encode(
-        `data: ${JSON.stringify({ type: "sources", sources })}\n\n`
-      )
-    );
+    writer.write(encoder.encode(`data: ${JSON.stringify({ type: "sources", sources })}\n\n`));
 
     // 异步 pipe AI API SSE stream
     const sfReader = sfRes.body!.getReader();
@@ -529,9 +577,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
                 const content = parsed?.choices?.[0]?.delta?.content;
                 if (content) {
                   writer.write(
-                    encoder.encode(
-                      `data: ${JSON.stringify({ type: "token", content })}\n\n`
-                    )
+                    encoder.encode(`data: ${JSON.stringify({ type: "token", content })}\n\n`),
                   );
                 }
               } catch {
@@ -541,30 +587,36 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
           }
         }
         // 处理 buffer 中剩余的行
-        if (buffer.startsWith("data: ") && buffer.slice(6).trim() && buffer.slice(6).trim() !== "[DONE]") {
+        if (
+          buffer.startsWith("data: ") &&
+          buffer.slice(6).trim() &&
+          buffer.slice(6).trim() !== "[DONE]"
+        ) {
           try {
             const parsed = JSON.parse(buffer.slice(6).trim());
             const content = parsed?.choices?.[0]?.delta?.content;
             if (content) {
               writer.write(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "token", content })}\n\n`
-                )
+                encoder.encode(`data: ${JSON.stringify({ type: "token", content })}\n\n`),
               );
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
-        writer.write(
-          encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-        );
+        writer.write(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
       } catch (err) {
         writer.write(
           encoder.encode(
-            `data: ${JSON.stringify({ type: "error", message: "流中断" })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`
-          )
+            `data: ${JSON.stringify({ type: "error", message: "流中断" })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`,
+          ),
         );
       } finally {
-        try { await writer.close(); } catch { /* already closed */ }
+        try {
+          await writer.close();
+        } catch {
+          /* already closed */
+        }
       }
     })();
 
@@ -572,7 +624,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "x-tss-raw": "true",
       },
     });

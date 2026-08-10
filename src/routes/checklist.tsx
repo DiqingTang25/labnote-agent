@@ -13,11 +13,29 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import {
-  ListChecks, Sparkles, FileText, AlertTriangle,
-  CheckCircle2, Lightbulb, RotateCcw, ChevronDown, ChevronUp,
-  Download, Loader2, Target, Shield, Zap, Activity,
-  BookOpen, Beaker, Gauge, Copy,
-  Info, ExternalLink, HelpCircle, X,
+  ListChecks,
+  Sparkles,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  Lightbulb,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Loader2,
+  Target,
+  Shield,
+  Zap,
+  Activity,
+  BookOpen,
+  Beaker,
+  Gauge,
+  Copy,
+  Info,
+  ExternalLink,
+  HelpCircle,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -34,7 +52,16 @@ import {
 } from "../lib/reproduction-audit";
 import type { DecompositionStep, DecompositionProgress } from "../lib/paper-decomposer";
 import { queryDomainKnowledge } from "../lib/domain-knowledge";
-import { SRTIO3_PAPER, REAL_PAPERS, PLANT_EP_PAPER, SPATIAL_TRANSCRIPTOMICS_PAPER, WESTERN_BLOT_PAPER, MTT_ASSAY_PAPER, PATCH_CLAMP_PAPER, getPresetAudit } from "../lib/paper-test-data";
+import {
+  SRTIO3_PAPER,
+  REAL_PAPERS,
+  PLANT_EP_PAPER,
+  SPATIAL_TRANSCRIPTOMICS_PAPER,
+  WESTERN_BLOT_PAPER,
+  MTT_ASSAY_PAPER,
+  PATCH_CLAMP_PAPER,
+  getPresetAudit,
+} from "../lib/paper-test-data";
 import { RequireAuth } from "../lib/auth-guard";
 import { useAuth } from "../lib/auth-context";
 import { decomposeOnServer } from "../lib/api/decompose.functions";
@@ -54,7 +81,10 @@ export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [
       { title: "复现审计 – LabNote Agent" },
-      { name: "description", content: "论文实验方法拆解、复现参数提取、缺口分析、置信度评估——让实验真正可复现。" },
+      {
+        name: "description",
+        content: "论文实验方法拆解、复现参数提取、缺口分析、置信度评估——让实验真正可复现。",
+      },
     ],
   }),
   component: ReproductionAuditPage,
@@ -65,11 +95,20 @@ export const Route = createFileRoute("/checklist")({
 // ═══════════════════════════════════════════════════════
 
 function ReproductionAuditPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const userId = user?.id || "dev-user";
 
   // 输入状态
-  const [paperSource, setPaperSource] = useState<"preset-srtio3" | "preset-co3o4" | "preset-plant-ep" | "preset-spatial" | "preset-western" | "preset-mtt" | "preset-patch" | "custom">("preset-srtio3");
+  const [paperSource, setPaperSource] = useState<
+    | "preset-srtio3"
+    | "preset-co3o4"
+    | "preset-plant-ep"
+    | "preset-spatial"
+    | "preset-western"
+    | "preset-mtt"
+    | "preset-patch"
+    | "custom"
+  >("preset-srtio3");
   const [customPaperTitle, setCustomPaperTitle] = useState("");
   const [customPaperDoi, setCustomPaperDoi] = useState("");
   const [customMethods, setCustomMethods] = useState("");
@@ -113,31 +152,39 @@ function ReproductionAuditPage() {
   }, []);
 
   // 页面加载时获取历史
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   // ===== 保存审计到云端 =====
-  const saveCurrentAudit = useCallback(async (a: ReproductionAudit) => {
-    const id = await saveAudit(a, discipline);
-    if (id) {
-      setSavedAuditId(id);
-      loadHistory();
-      return true;
-    }
-    return false;
-  }, [discipline, loadHistory]);
+  const saveCurrentAudit = useCallback(
+    async (a: ReproductionAudit) => {
+      const id = await saveAudit(a, discipline);
+      if (id) {
+        setSavedAuditId(id);
+        loadHistory();
+        return true;
+      }
+      return false;
+    },
+    [discipline, loadHistory],
+  );
 
   // ===== 删除历史审计 =====
-  const handleDeleteHistory = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const ok = await deleteAudit(id);
-    if (ok) {
-      toast.success("已删除");
-      if (savedAuditId === id) setSavedAuditId(null);
-      loadHistory();
-    } else {
-      toast.error("删除失败");
-    }
-  }, [savedAuditId, loadHistory]);
+  const handleDeleteHistory = useCallback(
+    async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const ok = await deleteAudit(id);
+      if (ok) {
+        toast.success("已删除");
+        if (savedAuditId === id) setSavedAuditId(null);
+        loadHistory();
+      } else {
+        toast.error("删除失败");
+      }
+    },
+    [savedAuditId, loadHistory],
+  );
 
   // Background task polling disabled — using server-side decomposition instead.
   // The activeTaskId-based polling (see below) handles server-side result detection.
@@ -145,25 +192,60 @@ function ReproductionAuditPage() {
   // ===== 获取当前论文内容 =====
   const getCurrentPaperData = useCallback(() => {
     if (paperSource === "preset-srtio3") {
-      return { title: SRTIO3_PAPER.title, doi: SRTIO3_PAPER.doi, methods: SRTIO3_PAPER.methods, discipline: SRTIO3_PAPER.discipline };
+      return {
+        title: SRTIO3_PAPER.title,
+        doi: SRTIO3_PAPER.doi,
+        methods: SRTIO3_PAPER.methods,
+        discipline: SRTIO3_PAPER.discipline,
+      };
     }
     if (paperSource === "preset-co3o4") {
-      return { title: REAL_PAPERS[1].title, doi: REAL_PAPERS[1].doi, methods: REAL_PAPERS[1].methods, discipline: REAL_PAPERS[1].discipline };
+      return {
+        title: REAL_PAPERS[1].title,
+        doi: REAL_PAPERS[1].doi,
+        methods: REAL_PAPERS[1].methods,
+        discipline: REAL_PAPERS[1].discipline,
+      };
     }
     if (paperSource === "preset-plant-ep") {
-      return { title: PLANT_EP_PAPER.title, doi: PLANT_EP_PAPER.doi, methods: PLANT_EP_PAPER.methods, discipline: PLANT_EP_PAPER.discipline };
+      return {
+        title: PLANT_EP_PAPER.title,
+        doi: PLANT_EP_PAPER.doi,
+        methods: PLANT_EP_PAPER.methods,
+        discipline: PLANT_EP_PAPER.discipline,
+      };
     }
     if (paperSource === "preset-spatial") {
-      return { title: SPATIAL_TRANSCRIPTOMICS_PAPER.title, doi: SPATIAL_TRANSCRIPTOMICS_PAPER.doi, methods: SPATIAL_TRANSCRIPTOMICS_PAPER.methods, discipline: SPATIAL_TRANSCRIPTOMICS_PAPER.discipline };
+      return {
+        title: SPATIAL_TRANSCRIPTOMICS_PAPER.title,
+        doi: SPATIAL_TRANSCRIPTOMICS_PAPER.doi,
+        methods: SPATIAL_TRANSCRIPTOMICS_PAPER.methods,
+        discipline: SPATIAL_TRANSCRIPTOMICS_PAPER.discipline,
+      };
     }
     if (paperSource === "preset-western") {
-      return { title: WESTERN_BLOT_PAPER.title, doi: WESTERN_BLOT_PAPER.doi, methods: WESTERN_BLOT_PAPER.methods, discipline: WESTERN_BLOT_PAPER.discipline };
+      return {
+        title: WESTERN_BLOT_PAPER.title,
+        doi: WESTERN_BLOT_PAPER.doi,
+        methods: WESTERN_BLOT_PAPER.methods,
+        discipline: WESTERN_BLOT_PAPER.discipline,
+      };
     }
     if (paperSource === "preset-mtt") {
-      return { title: MTT_ASSAY_PAPER.title, doi: MTT_ASSAY_PAPER.doi, methods: MTT_ASSAY_PAPER.methods, discipline: MTT_ASSAY_PAPER.discipline };
+      return {
+        title: MTT_ASSAY_PAPER.title,
+        doi: MTT_ASSAY_PAPER.doi,
+        methods: MTT_ASSAY_PAPER.methods,
+        discipline: MTT_ASSAY_PAPER.discipline,
+      };
     }
     if (paperSource === "preset-patch") {
-      return { title: PATCH_CLAMP_PAPER.title, doi: PATCH_CLAMP_PAPER.doi, methods: PATCH_CLAMP_PAPER.methods, discipline: PATCH_CLAMP_PAPER.discipline };
+      return {
+        title: PATCH_CLAMP_PAPER.title,
+        doi: PATCH_CLAMP_PAPER.doi,
+        methods: PATCH_CLAMP_PAPER.methods,
+        discipline: PATCH_CLAMP_PAPER.discipline,
+      };
     }
     return {
       title: customPaperTitle || "未命名论文",
@@ -210,6 +292,11 @@ function ReproductionAuditPage() {
       // send_raw → 使用原始文本
     }
 
+    if (!session?.access_token) {
+      toast.error("登录已过期，请重新登录后再开始拆解");
+      return;
+    }
+
     setDecomposing(true);
     setDecomposeError(null);
     setProgress({ step: "connecting" });
@@ -217,12 +304,17 @@ function ReproductionAuditPage() {
     // 保存 pending 标记到 localStorage（切换页面后恢复用）
     const pendingKey = `decompose_pending_${Date.now()}`;
     try {
-      localStorage.setItem(pendingKey, JSON.stringify({
-        paperTitle: paper.title,
-        discipline: paper.discipline || discipline,
-        startedAt: Date.now(),
-      }));
-    } catch { /* localStorage 不可用则跳过 */ }
+      localStorage.setItem(
+        pendingKey,
+        JSON.stringify({
+          paperTitle: paper.title,
+          discipline: paper.discipline || discipline,
+          startedAt: Date.now(),
+        }),
+      );
+    } catch {
+      /* localStorage 不可用则跳过 */
+    }
 
     // 服务端拆解 — fire-and-forget，切换页面不中断
     decomposeOnServer({
@@ -231,30 +323,36 @@ function ReproductionAuditPage() {
         paperDoi: paper.doi,
         methodsText: paper.methods,
         discipline: paper.discipline || discipline,
-        userId,
+        accessToken: session.access_token,
       },
-    }).then((res) => {
-      try { localStorage.removeItem(pendingKey); } catch {}
-      if (res.saved) {
-        loadHistory();
-        toast.success(`✅ 拆解完成：${res.paramCount} 个参数已保存到云端`);
-      } else {
-        toast.error(`⚠️ 拆解完成但保存失败：${(res as any).error || "未知错误"}`);
-      }
-    }).catch((err) => {
-      try { localStorage.removeItem(pendingKey); } catch {}
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Decompose] error:", msg);
-      setDecomposeError(msg);
-      setDecomposing(false);
-      setActiveTaskId(null);
-      toast.error(`❌ AI 拆解失败：${msg.slice(0, 120)}。请检查 AI_API_KEY 环境和网络连接。`);
-    });
+    })
+      .then((res) => {
+        try {
+          localStorage.removeItem(pendingKey);
+        } catch {}
+        if (res.saved) {
+          loadHistory();
+          toast.success(`✅ 拆解完成：${res.paramCount} 个参数已保存到云端`);
+        } else {
+          toast.error(`⚠️ 拆解完成但保存失败：${(res as any).error || "未知错误"}`);
+        }
+      })
+      .catch((err) => {
+        try {
+          localStorage.removeItem(pendingKey);
+        } catch {}
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[Decompose] error:", msg);
+        setDecomposeError(msg);
+        setDecomposing(false);
+        setActiveTaskId(null);
+        toast.error(`❌ AI 拆解失败：${msg.slice(0, 120)}。请检查 AI_API_KEY 环境和网络连接。`);
+      });
 
     // 启动轮询检测结果
     setActiveTaskId(pendingKey);
     toast.success("🔗 服务端任务已启动，可自由切换页面，拆解不会中断");
-  }, [getCurrentPaperData, discipline, userId, loadHistory]);
+  }, [getCurrentPaperData, discipline, session, loadHistory]);
 
   // 轮询检测服务端拆解结果
   useEffect(() => {
@@ -284,9 +382,9 @@ function ReproductionAuditPage() {
 
       // 检查当前 paper title 是否已出现在最新历史中
       const paper = getCurrentPaperData();
-      const found = latestAudits.find((a) =>
-        a.paperTitle === paper.title &&
-        Date.now() - new Date(a.auditedAt).getTime() < 120000 // 2分钟内
+      const found = latestAudits.find(
+        (a) =>
+          a.paperTitle === paper.title && Date.now() - new Date(a.auditedAt).getTime() < 120000, // 2分钟内
       );
 
       if (found) {
@@ -305,7 +403,9 @@ function ReproductionAuditPage() {
         setSavedAuditId(found.id);
         setDecomposing(false);
         setActiveTaskId(null);
-        toast.success(`✅ 拆解完成：${found.parameters.length} 个参数，${found.gaps.length} 个缺口`);
+        toast.success(
+          `✅ 拆解完成：${found.parameters.length} 个参数，${found.gaps.length} 个缺口`,
+        );
       }
     }, 2000);
 
@@ -316,49 +416,58 @@ function ReproductionAuditPage() {
   }, [activeTaskId, decomposing, getCurrentPaperData]);
 
   // ===== 参数操作 =====
-  const confirmParam = useCallback((paramName: string, value: string) => {
-    if (!audit) return;
-    const updated: ReproductionAudit = {
-      ...audit,
-      parameters: audit.parameters.map((p) =>
-        p.name === paramName
-          ? { ...p, userConfirmed: true, userValue: value || p.value }
-          : p,
-      ),
-    };
-    const { score, breakdown } = calculateReproducibilityScore(updated.parameters, updated.gaps);
-    updated.reproducibilityScore = score;
-    updated.scoreBreakdown = breakdown;
-    setAudit(updated);
-    saveAudit(updated, discipline).then((id) => { if (id) setSavedAuditId(id); });
-    toast.success(`已确认: ${paramName}`);
-  }, [audit, discipline]);
+  const confirmParam = useCallback(
+    (paramName: string, value: string) => {
+      if (!audit) return;
+      const updated: ReproductionAudit = {
+        ...audit,
+        parameters: audit.parameters.map((p) =>
+          p.name === paramName ? { ...p, userConfirmed: true, userValue: value || p.value } : p,
+        ),
+      };
+      const { score, breakdown } = calculateReproducibilityScore(updated.parameters, updated.gaps);
+      updated.reproducibilityScore = score;
+      updated.scoreBreakdown = breakdown;
+      setAudit(updated);
+      saveAudit(updated, discipline).then((id) => {
+        if (id) setSavedAuditId(id);
+      });
+      toast.success(`已确认: ${paramName}`);
+    },
+    [audit, discipline],
+  );
 
-  const fillGap = useCallback((gapDesc: string, value: string) => {
-    if (!audit) return;
-    const updated: ReproductionAudit = {
-      ...audit,
-      gaps: audit.gaps.map((g) =>
-        g.description === gapDesc
-          ? { ...g, userFill: value, status: "user-filled" as const }
-          : g,
-      ),
-    };
-    const { score, breakdown } = calculateReproducibilityScore(updated.parameters, updated.gaps);
-    updated.reproducibilityScore = score;
-    updated.scoreBreakdown = breakdown;
-    setAudit(updated);
-    setGapFillValues((prev) => ({ ...prev, [gapDesc]: "" }));
-    saveAudit(updated, discipline).then((id) => { if (id) setSavedAuditId(id); });
-    toast.success("缺口已补全");
-  }, [audit, discipline]);
+  const fillGap = useCallback(
+    (gapDesc: string, value: string) => {
+      if (!audit) return;
+      const updated: ReproductionAudit = {
+        ...audit,
+        gaps: audit.gaps.map((g) =>
+          g.description === gapDesc ? { ...g, userFill: value, status: "user-filled" as const } : g,
+        ),
+      };
+      const { score, breakdown } = calculateReproducibilityScore(updated.parameters, updated.gaps);
+      updated.reproducibilityScore = score;
+      updated.scoreBreakdown = breakdown;
+      setAudit(updated);
+      setGapFillValues((prev) => ({ ...prev, [gapDesc]: "" }));
+      saveAudit(updated, discipline).then((id) => {
+        if (id) setSavedAuditId(id);
+      });
+      toast.success("缺口已补全");
+    },
+    [audit, discipline],
+  );
 
-  const acceptAISuggestion = useCallback((gapDesc: string) => {
-    if (!audit) return;
-    const gap = audit.gaps.find((g) => g.description === gapDesc);
-    if (!gap?.aiSuggestion) return;
-    fillGap(gapDesc, gap.aiSuggestion);
-  }, [audit, fillGap]);
+  const acceptAISuggestion = useCallback(
+    (gapDesc: string) => {
+      if (!audit) return;
+      const gap = audit.gaps.find((g) => g.description === gapDesc);
+      if (!gap?.aiSuggestion) return;
+      fillGap(gapDesc, gap.aiSuggestion);
+    },
+    [audit, fillGap],
+  );
 
   // 一键 AI 自动补全全部缺口
   const autoFillAllGaps = useCallback(() => {
@@ -415,10 +524,28 @@ function ReproductionAuditPage() {
     environment: "🌡️ 环境",
   };
 
-  const certaintyConfig: Record<CertaintyLevel, { icon: string; color: string; bg: string; label: string }> = {
-    explicit: { icon: "✅", color: "text-green-600", bg: "bg-green-50 border-green-200", label: "论文明确" },
-    implied: { icon: "📖", color: "text-blue-600", bg: "bg-blue-50 border-blue-200", label: "论文隐含" },
-    inferred: { icon: "🤖", color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "AI 推断" },
+  const certaintyConfig: Record<
+    CertaintyLevel,
+    { icon: string; color: string; bg: string; label: string }
+  > = {
+    explicit: {
+      icon: "✅",
+      color: "text-green-600",
+      bg: "bg-green-50 border-green-200",
+      label: "论文明确",
+    },
+    implied: {
+      icon: "📖",
+      color: "text-blue-600",
+      bg: "bg-blue-50 border-blue-200",
+      label: "论文隐含",
+    },
+    inferred: {
+      icon: "🤖",
+      color: "text-amber-600",
+      bg: "bg-amber-50 border-amber-200",
+      label: "AI 推断",
+    },
     unknown: { icon: "❓", color: "text-red-600", bg: "bg-red-50 border-red-200", label: "未知" },
   };
 
@@ -428,12 +555,23 @@ function ReproductionAuditPage() {
   const renderPaperInput = () => (
     <div className="card-soft p-5 mb-6">
       <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
-        <BookOpen size={16} className="text-primary"/> 论文输入
+        <BookOpen size={16} className="text-primary" /> 论文输入
       </h3>
 
       {/* Preset / Custom toggle */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {(["preset-srtio3", "preset-co3o4", "preset-plant-ep", "preset-spatial", "preset-western", "preset-mtt", "preset-patch", "custom"] as const).map((opt) => (
+        {(
+          [
+            "preset-srtio3",
+            "preset-co3o4",
+            "preset-plant-ep",
+            "preset-spatial",
+            "preset-western",
+            "preset-mtt",
+            "preset-patch",
+            "custom",
+          ] as const
+        ).map((opt) => (
           <button
             key={opt}
             onClick={() => setPaperSource(opt)}
@@ -443,14 +581,21 @@ function ReproductionAuditPage() {
                 : "border border-border hover:border-primary/40"
             }`}
           >
-            {opt === "preset-srtio3" ? "📄 SrTiO₃" :
-             opt === "preset-co3o4" ? "📄 Co₃O₄-rGO" :
-             opt === "preset-plant-ep" ? "🌿 植物电生理" :
-             opt === "preset-spatial" ? "🧬 空间转录组" :
-             opt === "preset-western" ? "🧪 Western Blot" :
-             opt === "preset-mtt" ? "💊 MTT 细胞毒" :
-             opt === "preset-patch" ? "⚡ 膜片钳" :
-             "✏️ 自定义输入"}
+            {opt === "preset-srtio3"
+              ? "📄 SrTiO₃"
+              : opt === "preset-co3o4"
+                ? "📄 Co₃O₄-rGO"
+                : opt === "preset-plant-ep"
+                  ? "🌿 植物电生理"
+                  : opt === "preset-spatial"
+                    ? "🧬 空间转录组"
+                    : opt === "preset-western"
+                      ? "🧪 Western Blot"
+                      : opt === "preset-mtt"
+                        ? "💊 MTT 细胞毒"
+                        : opt === "preset-patch"
+                          ? "⚡ 膜片钳"
+                          : "✏️ 自定义输入"}
           </button>
         ))}
       </div>
@@ -493,22 +638,37 @@ function ReproductionAuditPage() {
       ) : (
         <div className="rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2 font-medium text-foreground mb-1">
-            <FileText size={14}/>
-            {paperSource === "preset-srtio3" ? SRTIO3_PAPER.title :
-             paperSource === "preset-co3o4" ? REAL_PAPERS[1].title :
-             paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.title :
-             paperSource === "preset-spatial" ? SPATIAL_TRANSCRIPTOMICS_PAPER.title :
-             paperSource === "preset-western" ? WESTERN_BLOT_PAPER.title :
-             paperSource === "preset-mtt" ? MTT_ASSAY_PAPER.title :
-             PATCH_CLAMP_PAPER.title}
+            <FileText size={14} />
+            {paperSource === "preset-srtio3"
+              ? SRTIO3_PAPER.title
+              : paperSource === "preset-co3o4"
+                ? REAL_PAPERS[1].title
+                : paperSource === "preset-plant-ep"
+                  ? PLANT_EP_PAPER.title
+                  : paperSource === "preset-spatial"
+                    ? SPATIAL_TRANSCRIPTOMICS_PAPER.title
+                    : paperSource === "preset-western"
+                      ? WESTERN_BLOT_PAPER.title
+                      : paperSource === "preset-mtt"
+                        ? MTT_ASSAY_PAPER.title
+                        : PATCH_CLAMP_PAPER.title}
           </div>
-          <p>DOI: {paperSource === "preset-srtio3" ? SRTIO3_PAPER.doi :
-                   paperSource === "preset-co3o4" ? REAL_PAPERS[1].doi :
-                   paperSource === "preset-plant-ep" ? PLANT_EP_PAPER.doi :
-                   paperSource === "preset-spatial" ? SPATIAL_TRANSCRIPTOMICS_PAPER.doi :
-                   paperSource === "preset-western" ? WESTERN_BLOT_PAPER.doi :
-                   paperSource === "preset-mtt" ? MTT_ASSAY_PAPER.doi :
-                   PATCH_CLAMP_PAPER.doi}</p>
+          <p>
+            DOI:{" "}
+            {paperSource === "preset-srtio3"
+              ? SRTIO3_PAPER.doi
+              : paperSource === "preset-co3o4"
+                ? REAL_PAPERS[1].doi
+                : paperSource === "preset-plant-ep"
+                  ? PLANT_EP_PAPER.doi
+                  : paperSource === "preset-spatial"
+                    ? SPATIAL_TRANSCRIPTOMICS_PAPER.doi
+                    : paperSource === "preset-western"
+                      ? WESTERN_BLOT_PAPER.doi
+                      : paperSource === "preset-mtt"
+                        ? MTT_ASSAY_PAPER.doi
+                        : PATCH_CLAMP_PAPER.doi}
+          </p>
           <p className="mt-1">Methods 段落已预加载（真实论文内容），点击上方按钮开始 AI 拆解。</p>
         </div>
       )}
@@ -521,9 +681,13 @@ function ReproductionAuditPage() {
           className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition"
         >
           {decomposing ? (
-            <><Loader2 size={15} className="animate-spin"/> AI 拆解中…</>
+            <>
+              <Loader2 size={15} className="animate-spin" /> AI 拆解中…
+            </>
           ) : (
-            <><Sparkles size={15}/> AI 拆解论文 → 复现参数</>
+            <>
+              <Sparkles size={15} /> AI 拆解论文 → 复现参数
+            </>
           )}
         </button>
         {paperSource !== "custom" && (
@@ -534,11 +698,13 @@ function ReproductionAuditPage() {
               setAudit(preset);
               setSavedAuditId(null);
               saveCurrentAudit(preset);
-              toast.success(`✅ 已加载预设 Audit：${preset.parameters.length} 参数，${preset.gaps.length} 缺口`);
+              toast.success(
+                `✅ 已加载预设 Audit：${preset.parameters.length} 参数，${preset.gaps.length} 缺口`,
+              );
             }}
             className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-2.5 text-sm hover:bg-primary/10 transition"
           >
-            <Zap size={15}/> 加载预设 Audit（快速演示）
+            <Zap size={15} /> 加载预设 Audit（快速演示）
           </button>
         )}
       </div>
@@ -556,8 +722,12 @@ function ReproductionAuditPage() {
     const openGaps = audit.gaps.filter((g) => g.status === "open").length;
     const confirmedCount = audit.parameters.filter((p) => p.userConfirmed).length;
 
-    const scoreColor = audit.reproducibilityScore >= 80 ? "text-green-600" :
-      audit.reproducibilityScore >= 60 ? "text-amber-600" : "text-red-600";
+    const scoreColor =
+      audit.reproducibilityScore >= 80
+        ? "text-green-600"
+        : audit.reproducibilityScore >= 60
+          ? "text-amber-600"
+          : "text-red-600";
 
     return (
       <div className="card-soft p-5 mb-6">
@@ -570,10 +740,31 @@ function ReproductionAuditPage() {
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-4 flex-1">
-            <MiniStat label="总参数" value={audit.parameters.length.toString()} icon={<Beaker size={14}/>}/>
-            <MiniStat label="论文明确" value={explicitCount.toString()} icon={<CheckCircle2 size={14} className="text-green-600"/>}/>
-            <MiniStat label="AI 推断" value={(inferredCount + unknownCount).toString()} icon={<Sparkles size={14} className="text-amber-600"/>}/>
-            <MiniStat label="待补缺口" value={openGaps.toString()} icon={<AlertTriangle size={14} className={openGaps > 0 ? "text-red-600" : "text-green-600"}/>}/>
+            <MiniStat
+              label="总参数"
+              value={audit.parameters.length.toString()}
+              icon={<Beaker size={14} />}
+            />
+            <MiniStat
+              label="论文明确"
+              value={explicitCount.toString()}
+              icon={<CheckCircle2 size={14} className="text-green-600" />}
+            />
+            <MiniStat
+              label="AI 推断"
+              value={(inferredCount + unknownCount).toString()}
+              icon={<Sparkles size={14} className="text-amber-600" />}
+            />
+            <MiniStat
+              label="待补缺口"
+              value={openGaps.toString()}
+              icon={
+                <AlertTriangle
+                  size={14}
+                  className={openGaps > 0 ? "text-red-600" : "text-green-600"}
+                />
+              }
+            />
           </div>
 
           {/* Progress bar */}
@@ -581,8 +772,11 @@ function ReproductionAuditPage() {
             <div className="h-2 rounded-full bg-secondary overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
-                  audit.reproducibilityScore >= 80 ? "bg-green-500" :
-                  audit.reproducibilityScore >= 60 ? "bg-amber-500" : "bg-red-500"
+                  audit.reproducibilityScore >= 80
+                    ? "bg-green-500"
+                    : audit.reproducibilityScore >= 60
+                      ? "bg-amber-500"
+                      : "bg-red-500"
                 }`}
                 style={{ width: `${audit.reproducibilityScore}%` }}
               />
@@ -609,7 +803,7 @@ function ReproductionAuditPage() {
     return (
       <div className="mb-6 rounded-xl bg-red-50 border border-red-200 p-4">
         <h3 className="text-sm font-semibold text-red-700 flex items-center gap-2 mb-2">
-          <Shield size={15}/> 关键风险（{audit.criticalRisks.length} 项）
+          <Shield size={15} /> 关键风险（{audit.criticalRisks.length} 项）
         </h3>
         <ul className="space-y-1.5">
           {audit.criticalRisks.map((risk, i) => (
@@ -631,7 +825,7 @@ function ReproductionAuditPage() {
     return (
       <div className="mb-6 rounded-xl bg-primary-soft/10 border border-primary/15 p-4">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-2 text-primary">
-          <Lightbulb size={15}/> AI 总体评估
+          <Lightbulb size={15} /> AI 总体评估
         </h3>
         <p className="text-xs text-muted-foreground leading-relaxed">{audit.aiAssessment}</p>
       </div>
@@ -666,10 +860,18 @@ function ReproductionAuditPage() {
           <p className="font-semibold mb-1">📋 参数审核指南</p>
           <p>AI 从论文中提取了 {audit.parameters.length} 个实验参数，按确定性分为四级：</p>
           <div className="grid grid-cols-2 gap-1 mt-1.5">
-            <span>✅ <b>论文明确</b> = 论文中直接写出的数值</span>
-            <span>📖 <b>论文隐含</b> = 可从上下文合理推断</span>
-            <span>🤖 <b>AI推断</b> = 基于领域知识猜测，<b className="text-amber-600">建议核对</b></span>
-            <span>❓ <b>未知</b> = 完全不确定，标记为缺口</span>
+            <span>
+              ✅ <b>论文明确</b> = 论文中直接写出的数值
+            </span>
+            <span>
+              📖 <b>论文隐含</b> = 可从上下文合理推断
+            </span>
+            <span>
+              🤖 <b>AI推断</b> = 基于领域知识猜测，<b className="text-amber-600">建议核对</b>
+            </span>
+            <span>
+              ❓ <b>未知</b> = 完全不确定，标记为缺口
+            </span>
           </div>
           <p className="mt-1.5">点击参数可展开详情并修改确认。已确认的参数不计入缺口。</p>
         </div>
@@ -679,9 +881,7 @@ function ReproductionAuditPage() {
               {categoryLabels[cat]}
               <span className="text-[10px] text-muted-foreground/70">({params.length})</span>
             </h4>
-            <div className="space-y-2">
-              {params.map((p) => renderParamRow(p))}
-            </div>
+            <div className="space-y-2">{params.map((p) => renderParamRow(p))}</div>
           </div>
         ))}
       </div>
@@ -707,7 +907,9 @@ function ReproductionAuditPage() {
       >
         <div className="flex items-center gap-3">
           {/* Certainty badge */}
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${config.bg} ${config.color} border shrink-0`}>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${config.bg} ${config.color} border shrink-0`}
+          >
             {config.icon} {config.label}
           </span>
 
@@ -729,8 +931,11 @@ function ReproductionAuditPage() {
             <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
               <div
                 className={`h-full rounded-full transition ${
-                  p.confidence >= 80 ? "bg-green-500" :
-                  p.confidence >= 50 ? "bg-amber-500" : "bg-red-500"
+                  p.confidence >= 80
+                    ? "bg-green-500"
+                    : p.confidence >= 50
+                      ? "bg-amber-500"
+                      : "bg-red-500"
                 }`}
                 style={{ width: `${p.confidence}%` }}
               />
@@ -740,29 +945,32 @@ function ReproductionAuditPage() {
 
           {/* Actions */}
           <button
-            onClick={() => setExpandedParam((prev) => {
-              const next = new Set(prev);
-              next.has(p.name) ? next.delete(p.name) : next.add(p.name);
-              return next;
-            })}
+            onClick={() =>
+              setExpandedParam((prev) => {
+                const next = new Set(prev);
+                next.has(p.name) ? next.delete(p.name) : next.add(p.name);
+                return next;
+              })
+            }
             className="p-1 text-muted-foreground hover:text-foreground shrink-0"
           >
-            {isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
 
           {!p.userConfirmed && p.certainty !== "explicit" && (
             <button
-              onClick={() => { setEditingParam(p.name); setEditValue(p.value); }}
+              onClick={() => {
+                setEditingParam(p.name);
+                setEditValue(p.value);
+              }}
               className="p-1 text-primary hover:bg-primary-soft/20 rounded shrink-0"
               title="修改/确认"
             >
-              <Edit2 size={14}/>
+              <Edit2 size={14} />
             </button>
           )}
 
-          {p.userConfirmed && (
-            <CheckCircle2 size={16} className="text-green-600 shrink-0"/>
-          )}
+          {p.userConfirmed && <CheckCircle2 size={16} className="text-green-600 shrink-0" />}
         </div>
 
         {/* Expanded details */}
@@ -789,7 +997,14 @@ function ReproductionAuditPage() {
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
               <span>来源：{p.source}</span>
               <span>·</span>
-              <span>影响等级：{p.impactIfWrong === "critical" ? "🔴 关键" : p.impactIfWrong === "major" ? "🟡 重要" : "🟢 轻微"}</span>
+              <span>
+                影响等级：
+                {p.impactIfWrong === "critical"
+                  ? "🔴 关键"
+                  : p.impactIfWrong === "major"
+                    ? "🟡 重要"
+                    : "🟢 轻微"}
+              </span>
             </div>
             {p.relatedParams.length > 0 && (
               <div className="text-[10px] text-muted-foreground">
@@ -817,7 +1032,10 @@ function ReproductionAuditPage() {
               }}
             />
             <button
-              onClick={() => { confirmParam(p.name, editValue); setEditingParam(null); }}
+              onClick={() => {
+                confirmParam(p.name, editValue);
+                setEditingParam(null);
+              }}
               className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs hover:bg-primary/90"
             >
               确认
@@ -843,7 +1061,7 @@ function ReproductionAuditPage() {
     if (sortedGaps.length === 0) {
       return (
         <div className="text-center py-8">
-          <CheckCircle2 size={32} className="mx-auto text-green-500"/>
+          <CheckCircle2 size={32} className="mx-auto text-green-500" />
           <p className="mt-2 text-sm text-muted-foreground">所有信息已完整，无复现缺口 🎉</p>
         </div>
       );
@@ -885,7 +1103,10 @@ function ReproductionAuditPage() {
     const isResolved = gap.status === "user-filled" || gap.status === "resolved";
 
     return (
-      <div key={gap.description} className={`rounded-lg border ${ic.color} p-4 ${isResolved ? "opacity-70" : ""}`}>
+      <div
+        key={gap.description}
+        className={`rounded-lg border ${ic.color} p-4 ${isResolved ? "opacity-70" : ""}`}
+      >
         <div className="flex items-start gap-3">
           <span className="text-lg shrink-0 mt-0.5">{ic.icon}</span>
           <div className="flex-1 min-w-0">
@@ -906,20 +1127,24 @@ function ReproductionAuditPage() {
             {gap.aiSuggestion && (
               <div className="mt-2 rounded-lg bg-primary-soft/10 border border-primary/15 p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Sparkles size={12} className="text-primary"/>
+                  <Sparkles size={12} className="text-primary" />
                   <span className="text-[11px] font-semibold text-primary">AI 建议</span>
-                  <span className="text-[10px] text-muted-foreground">置信度 {gap.confidence}%</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    置信度 {gap.confidence}%
+                  </span>
                 </div>
                 <p className="text-xs">{gap.aiSuggestion}</p>
                 {gap.inferenceBasis && (
-                  <p className="mt-1 text-[10px] text-muted-foreground">依据：{gap.inferenceBasis}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    依据：{gap.inferenceBasis}
+                  </p>
                 )}
                 {!isResolved && (
                   <button
                     onClick={() => acceptAISuggestion(gap.description)}
                     className="mt-2 text-[11px] text-primary hover:underline flex items-center gap-1"
                   >
-                    <CheckCircle2 size={11}/> 采纳此建议
+                    <CheckCircle2 size={11} /> 采纳此建议
                   </button>
                 )}
               </div>
@@ -928,7 +1153,7 @@ function ReproductionAuditPage() {
             {/* DB Reference */}
             {gap.dbReference && (
               <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1">
-                <ExternalLink size={11}/>
+                <ExternalLink size={11} />
                 数据库参考：{gap.dbReference}
               </div>
             )}
@@ -938,7 +1163,9 @@ function ReproductionAuditPage() {
               <div className="mt-3 flex gap-2">
                 <input
                   value={gapFillValues[gap.description] ?? ""}
-                  onChange={(e) => setGapFillValues((prev) => ({ ...prev, [gap.description]: e.target.value }))}
+                  onChange={(e) =>
+                    setGapFillValues((prev) => ({ ...prev, [gap.description]: e.target.value }))
+                  }
                   placeholder="输入你确定的值…"
                   className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
                   onKeyDown={(e) => {
@@ -964,7 +1191,7 @@ function ReproductionAuditPage() {
             {/* Show filled value */}
             {isResolved && gap.userFill && (
               <div className="mt-2 text-xs text-green-700 flex items-center gap-1">
-                <CheckCircle2 size={11}/>
+                <CheckCircle2 size={11} />
                 已填入：{gap.userFill}
               </div>
             )}
@@ -1007,7 +1234,12 @@ function ReproductionAuditPage() {
     // 计算总步骤数
     let totalSteps = 0;
     let completedSteps = 0;
-    const phaseItems: { cat: ParameterCategory[]; icon: string; label: string; items: { key: string; text: string; isGap: boolean }[] }[] = [];
+    const phaseItems: {
+      cat: ParameterCategory[];
+      icon: string;
+      label: string;
+      items: { key: string; text: string; isGap: boolean }[];
+    }[] = [];
 
     for (const phase of phaseOrder) {
       const params = audit.parameters.filter((p) => phase.cat.includes(p.category));
@@ -1015,16 +1247,30 @@ function ReproductionAuditPage() {
       const items: { key: string; text: string; isGap: boolean }[] = [];
 
       for (const p of params) {
-        const statusIcon = p.userConfirmed ? "✅" : p.certainty === "explicit" ? "📄" : p.certainty === "inferred" ? "🤖" : "❓";
+        const statusIcon = p.userConfirmed
+          ? "✅"
+          : p.certainty === "explicit"
+            ? "📄"
+            : p.certainty === "inferred"
+              ? "🤖"
+              : "❓";
         const key = `param-${p.name}`;
-        items.push({ key, text: `${statusIcon} ${p.name}: ${p.userValue || p.value} ${p.unit}${p.paperQuote ? ` (原文: "${p.paperQuote.slice(0, 60)}")` : ""}`, isGap: false });
+        items.push({
+          key,
+          text: `${statusIcon} ${p.name}: ${p.userValue || p.value} ${p.unit}${p.paperQuote ? ` (原文: "${p.paperQuote.slice(0, 60)}")` : ""}`,
+          isGap: false,
+        });
         totalSteps++;
         if (checkedSteps.has(key)) completedSteps++;
       }
       for (const g of phaseGaps) {
         const key = `gap-${g.description}`;
         const filled = g.status === "user-filled" || g.status === "resolved";
-        items.push({ key, text: `${filled ? "✅" : "⚠️"} ${filled ? g.userFill || g.aiSuggestion : g.description} ${filled ? "" : "— 需补全"}`, isGap: !filled });
+        items.push({
+          key,
+          text: `${filled ? "✅" : "⚠️"} ${filled ? g.userFill || g.aiSuggestion : g.description} ${filled ? "" : "— 需补全"}`,
+          isGap: !filled,
+        });
         totalSteps++;
         if (checkedSteps.has(key) || filled) completedSteps++;
       }
@@ -1041,19 +1287,29 @@ function ReproductionAuditPage() {
         {/* 引导说明 */}
         <div className="rounded-lg bg-green-50/50 border border-green-200 p-3 text-xs text-green-800 leading-relaxed">
           <p className="font-semibold mb-1">📄 可执行实验方案</p>
-          <p>以下是按实验流程组织的详细步骤。逐项核对，完成打勾。开始实验前请先阅读安全防护部分。</p>
+          <p>
+            以下是按实验流程组织的详细步骤。逐项核对，完成打勾。开始实验前请先阅读安全防护部分。
+          </p>
           <div className="flex items-center gap-2 mt-2">
             <div className="flex-1 h-2 rounded-full bg-green-200 overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+              <div
+                className="h-full bg-green-500 rounded-full transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
             </div>
-            <span className="text-[11px] font-mono text-green-700">{completedSteps}/{totalSteps} 步完成</span>
+            <span className="text-[11px] font-mono text-green-700">
+              {completedSteps}/{totalSteps} 步完成
+            </span>
           </div>
         </div>
 
         {/* 下载按钮 */}
         <div className="flex gap-2">
-          <button onClick={exportProtocol} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-[11px] text-primary-foreground hover:bg-primary/90">
-            <Download size={12}/> 下载 Markdown
+          <button
+            onClick={exportProtocol}
+            className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-[11px] text-primary-foreground hover:bg-primary/90"
+          >
+            <Download size={12} /> 下载 Markdown
           </button>
         </div>
 
@@ -1062,7 +1318,9 @@ function ReproductionAuditPage() {
           <div className="rounded-lg bg-red-50 border border-red-200 p-3">
             <p className="text-xs font-semibold text-red-700 mb-1.5">🔴 关键风险提示</p>
             {audit.criticalRisks.map((r, i) => (
-              <p key={i} className="text-[11px] text-red-700 ml-4">• {r}</p>
+              <p key={i} className="text-[11px] text-red-700 ml-4">
+                • {r}
+              </p>
             ))}
           </div>
         )}
@@ -1088,13 +1346,22 @@ function ReproductionAuditPage() {
                     onChange={() => toggleCheckStep(item.key)}
                     className="mt-0.5 shrink-0 accent-primary"
                   />
-                  <span className={`text-xs leading-relaxed flex-1 ${
-                    checkedSteps.has(item.key) ? "text-muted-foreground line-through" :
-                    item.isGap ? "text-amber-700 font-medium" : "text-foreground"
-                  }`}>
+                  <span
+                    className={`text-xs leading-relaxed flex-1 ${
+                      checkedSteps.has(item.key)
+                        ? "text-muted-foreground line-through"
+                        : item.isGap
+                          ? "text-amber-700 font-medium"
+                          : "text-foreground"
+                    }`}
+                  >
                     {item.text}
                   </span>
-                  {item.isGap && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">待补全</span>}
+                  {item.isGap && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">
+                      待补全
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
@@ -1106,7 +1373,9 @@ function ReproductionAuditPage() {
           <div className="rounded-lg bg-secondary/30 p-3 text-[11px] text-muted-foreground">
             <p className="font-semibold text-foreground mb-1">⚠️ 开始实验前请确认：</p>
             {audit.criticalRisks.map((r, i) => (
-              <p key={i} className="ml-4">• {r}</p>
+              <p key={i} className="ml-4">
+                • {r}
+              </p>
             ))}
           </div>
         )}
@@ -1120,243 +1389,116 @@ function ReproductionAuditPage() {
   if (!audit && !decomposing) {
     return (
       <RequireAuth>
-      {pendingSanitize && (
-        <SanitizeConfirmDialog
-          scan={pendingSanitize.scan}
-          paperText={pendingSanitize.paperText}
-          onResolve={pendingSanitize.onResolve}
-        />
-      )}
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
-            <ListChecks size={20}/>
-          </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">复现审计</h1>
-            <p className="text-sm text-muted-foreground">
-              论文实验方法拆解 · 参数确定性标注 · 缺口智能推断 · 复现协议生成
-            </p>
-          </div>
-          <HelpButton />
-        </div>
-
-        {/* ── 历史审计记录 ── */}
-        <div className="mb-6">
-          <button
-            onClick={() => { setShowHistory(!showHistory); if (!showHistory) loadHistory(); }}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
-          >
-            {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            <ListChecks size={14} />
-            历史审计记录
-            {auditHistory.length > 0 && (
-              <span className="bg-primary/10 text-primary text-[11px] px-1.5 py-0.5 rounded-full">{auditHistory.length}</span>
-            )}
-          </button>
-
-          {showHistory && (
-            <div className="mt-3 rounded-xl border border-border bg-card p-4">
-              {loadingHistory ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 size={16} className="animate-spin text-muted-foreground" />
-                </div>
-              ) : auditHistory.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-2 text-center">
-                  暂无保存的审计记录。输入论文并点击 AI 拆解后会自动保存到云端。
-                </p>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {auditHistory.map((h) => (
-                    <div
-                      key={h.id}
-                      onClick={() => { setAudit(h); setSavedAuditId(h.id); setShowHistory(false); toast.success(`已加载: ${h.paperTitle.slice(0, 30)}…`); }}
-                      className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary/60 cursor-pointer transition group"
-                    >
-                      <div className={`text-lg shrink-0 ${
-                        h.reproducibilityScore >= 80 ? "" :
-                        h.reproducibilityScore >= 60 ? "opacity-70" : "opacity-50"
-                      }`}>
-                        {h.reproducibilityScore >= 80 ? "🟢" : h.reproducibilityScore >= 60 ? "🟡" : "🔴"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{h.paperTitle}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(h.auditedAt).toLocaleDateString("zh-CN", { year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })} · {h.reproducibilityScore}分 · {h.parameters.length}参数 · {h.gaps.length}缺口
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => handleDeleteHistory(h.id, e)}
-                        className="p-1 text-muted-foreground/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition shrink-0"
-                        title="删除"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {pendingSanitize && (
+          <SanitizeConfirmDialog
+            scan={pendingSanitize.scan}
+            paperText={pendingSanitize.paperText}
+            onResolve={pendingSanitize.onResolve}
+          />
+        )}
+        <div className="mx-auto max-w-4xl px-4 py-8">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-8">
+            <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
+              <ListChecks size={20} />
             </div>
-          )}
-        </div>
-
-        {/* Paper Input */}
-        {renderPaperInput()}
-
-        {/* API 用量仪表盘 */}
-        <details className="mt-6">
-          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1.5">
-            <Activity size={13} /> API 用量
-          </summary>
-          <div className="mt-3 card-soft p-4">
-            <UsageDashboard />
-          </div>
-        </details>
-      </div>
-      </RequireAuth>
-    );
-  }
-
-  // ═══════════════════════════════
-  // Main Audit View
-  // ═══════════════════════════════
-  return (
-    <RequireAuth>
-    {pendingSanitize && (
-      <SanitizeConfirmDialog
-        scan={pendingSanitize.scan}
-        paperText={pendingSanitize.paperText}
-        onResolve={pendingSanitize.onResolve}
-      />
-    )}
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-2">
-        <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
-          <ListChecks size={20}/>
-        </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">复现审计</h1>
-          <p className="text-sm text-muted-foreground">
-            论文实验方法拆解 · 参数确定性标注 · 缺口智能推断
-          </p>
-        </div>
-        <button
-          onClick={() => { setAudit(null); setActiveTaskId(null); setDecomposing(false); }}
-          className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
-        >
-          <RotateCcw size={14}/> 重新开始
-        </button>
-        <HelpButton />
-      </div>
-
-      {/* Paper info */}
-      {audit && (
-        <div className="mb-4 text-xs text-muted-foreground flex items-center gap-2">
-          <FileText size={12}/>
-          <span className="font-medium text-foreground truncate">{audit.paperTitle}</span>
-          <span>·</span>
-          <span>{audit.paperSource}</span>
-        </div>
-      )}
-
-      {/* Loading — 多步骤进度 */}
-      {decomposing && <DecompositionProgressBar progress={progress} />}
-
-      {/* Error display */}
-      {decomposeError && !decomposing && (
-        <div className="card-soft p-4 mb-6 rounded-xl bg-red-50 border border-red-200">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-red-700">AI 拆解失败</p>
-              <p className="text-xs text-red-600 mt-1 leading-relaxed">{decomposeError}</p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={() => setDecomposeError(null)}
-                  className="text-xs text-red-600 underline hover:text-red-800"
-                >
-                  关闭
-                </button>
-                <button
-                  onClick={() => { setDecomposeError(null); runDecomposition(); }}
-                  className="text-xs text-red-600 underline hover:text-red-800"
-                >
-                  重试
-                </button>
-              </div>
+              <h1 className="text-2xl font-bold">复现审计</h1>
+              <p className="text-sm text-muted-foreground">
+                论文实验方法拆解 · 参数确定性标注 · 缺口智能推断 · 复现协议生成
+              </p>
             </div>
+            <HelpButton />
           </div>
-        </div>
-      )}
 
-      {/* Score */}
-      {audit && renderScoreDashboard()}
+          {/* ── 历史审计记录 ── */}
+          <div className="mb-6">
+            <button
+              onClick={() => {
+                setShowHistory(!showHistory);
+                if (!showHistory) loadHistory();
+              }}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
+            >
+              {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              <ListChecks size={14} />
+              历史审计记录
+              {auditHistory.length > 0 && (
+                <span className="bg-primary/10 text-primary text-[11px] px-1.5 py-0.5 rounded-full">
+                  {auditHistory.length}
+                </span>
+              )}
+            </button>
 
-      {/* Critical Risks */}
-      {audit && renderCriticalRisks()}
-
-      {/* AI Assessment */}
-      {audit && renderAIAssessment()}
-
-      {/* Tabs */}
-      {audit && (
-        <>
-          {/* Tab bar */}
-          <div className="flex items-center gap-1 mb-4">
-            {(["params", "gaps", "protocol"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg text-sm transition ${
-                  activeTab === tab
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-secondary text-muted-foreground"
-                }`}
-              >
-                {tab === "params" ? `📋 参数 (${audit.parameters.length})` :
-                 tab === "gaps" ? `🔍 缺口 (${audit.gaps.length})` :
-                 "📄 协议"}
-              </button>
-            ))}
-
-            <div className="flex-1"/>
-
-            {/* Filters (only for params) */}
-            {activeTab === "params" && (
-              <div className="flex gap-2">
-                <select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value as ParameterCategory | "all")}
-                  className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
-                >
-                  <option value="all">全部类别</option>
-                  {Object.entries(categoryLabels).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-                <select
-                  value={filterCertainty}
-                  onChange={(e) => setFilterCertainty(e.target.value as CertaintyLevel | "all")}
-                  className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
-                >
-                  <option value="all">全部确定性</option>
-                  <option value="explicit">✅ 论文明确</option>
-                  <option value="implied">📖 论文隐含</option>
-                  <option value="inferred">🤖 AI 推断</option>
-                  <option value="unknown">❓ 未知</option>
-                </select>
+            {showHistory && (
+              <div className="mt-3 rounded-xl border border-border bg-card p-4">
+                {loadingHistory ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                  </div>
+                ) : auditHistory.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2 text-center">
+                    暂无保存的审计记录。输入论文并点击 AI 拆解后会自动保存到云端。
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {auditHistory.map((h) => (
+                      <div
+                        key={h.id}
+                        onClick={() => {
+                          setAudit(h);
+                          setSavedAuditId(h.id);
+                          setShowHistory(false);
+                          toast.success(`已加载: ${h.paperTitle.slice(0, 30)}…`);
+                        }}
+                        className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary/60 cursor-pointer transition group"
+                      >
+                        <div
+                          className={`text-lg shrink-0 ${
+                            h.reproducibilityScore >= 80
+                              ? ""
+                              : h.reproducibilityScore >= 60
+                                ? "opacity-70"
+                                : "opacity-50"
+                          }`}
+                        >
+                          {h.reproducibilityScore >= 80
+                            ? "🟢"
+                            : h.reproducibilityScore >= 60
+                              ? "🟡"
+                              : "🔴"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{h.paperTitle}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {new Date(h.auditedAt).toLocaleDateString("zh-CN", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}{" "}
+                            · {h.reproducibilityScore}分 · {h.parameters.length}参数 ·{" "}
+                            {h.gaps.length}缺口
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteHistory(h.id, e)}
+                          className="p-1 text-muted-foreground/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition shrink-0"
+                          title="删除"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Tab content */}
-          <div className="card-soft p-5">
-            {activeTab === "params" && renderParameters()}
-            {activeTab === "gaps" && renderGaps()}
-            {activeTab === "protocol" && renderProtocol()}
-          </div>
+          {/* Paper Input */}
+          {renderPaperInput()}
 
           {/* API 用量仪表盘 */}
           <details className="mt-6">
@@ -1367,9 +1509,174 @@ function ReproductionAuditPage() {
               <UsageDashboard />
             </div>
           </details>
-        </>
+        </div>
+      </RequireAuth>
+    );
+  }
+
+  // ═══════════════════════════════
+  // Main Audit View
+  // ═══════════════════════════════
+  return (
+    <RequireAuth>
+      {pendingSanitize && (
+        <SanitizeConfirmDialog
+          scan={pendingSanitize.scan}
+          paperText={pendingSanitize.paperText}
+          onResolve={pendingSanitize.onResolve}
+        />
       )}
-    </div>
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
+            <ListChecks size={20} />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">复现审计</h1>
+            <p className="text-sm text-muted-foreground">
+              论文实验方法拆解 · 参数确定性标注 · 缺口智能推断
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setAudit(null);
+              setActiveTaskId(null);
+              setDecomposing(false);
+            }}
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
+          >
+            <RotateCcw size={14} /> 重新开始
+          </button>
+          <HelpButton />
+        </div>
+
+        {/* Paper info */}
+        {audit && (
+          <div className="mb-4 text-xs text-muted-foreground flex items-center gap-2">
+            <FileText size={12} />
+            <span className="font-medium text-foreground truncate">{audit.paperTitle}</span>
+            <span>·</span>
+            <span>{audit.paperSource}</span>
+          </div>
+        )}
+
+        {/* Loading — 多步骤进度 */}
+        {decomposing && <DecompositionProgressBar progress={progress} />}
+
+        {/* Error display */}
+        {decomposeError && !decomposing && (
+          <div className="card-soft p-4 mb-6 rounded-xl bg-red-50 border border-red-200">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-700">AI 拆解失败</p>
+                <p className="text-xs text-red-600 mt-1 leading-relaxed">{decomposeError}</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => setDecomposeError(null)}
+                    className="text-xs text-red-600 underline hover:text-red-800"
+                  >
+                    关闭
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDecomposeError(null);
+                      runDecomposition();
+                    }}
+                    className="text-xs text-red-600 underline hover:text-red-800"
+                  >
+                    重试
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Score */}
+        {audit && renderScoreDashboard()}
+
+        {/* Critical Risks */}
+        {audit && renderCriticalRisks()}
+
+        {/* AI Assessment */}
+        {audit && renderAIAssessment()}
+
+        {/* Tabs */}
+        {audit && (
+          <>
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 mb-4">
+              {(["params", "gaps", "protocol"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 rounded-lg text-sm transition ${
+                    activeTab === tab
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  {tab === "params"
+                    ? `📋 参数 (${audit.parameters.length})`
+                    : tab === "gaps"
+                      ? `🔍 缺口 (${audit.gaps.length})`
+                      : "📄 协议"}
+                </button>
+              ))}
+
+              <div className="flex-1" />
+
+              {/* Filters (only for params) */}
+              {activeTab === "params" && (
+                <div className="flex gap-2">
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value as ParameterCategory | "all")}
+                    className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
+                  >
+                    <option value="all">全部类别</option>
+                    {Object.entries(categoryLabels).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterCertainty}
+                    onChange={(e) => setFilterCertainty(e.target.value as CertaintyLevel | "all")}
+                    className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
+                  >
+                    <option value="all">全部确定性</option>
+                    <option value="explicit">✅ 论文明确</option>
+                    <option value="implied">📖 论文隐含</option>
+                    <option value="inferred">🤖 AI 推断</option>
+                    <option value="unknown">❓ 未知</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Tab content */}
+            <div className="card-soft p-5">
+              {activeTab === "params" && renderParameters()}
+              {activeTab === "gaps" && renderGaps()}
+              {activeTab === "protocol" && renderProtocol()}
+            </div>
+
+            {/* API 用量仪表盘 */}
+            <details className="mt-6">
+              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1.5">
+                <Activity size={13} /> API 用量
+              </summary>
+              <div className="mt-3 card-soft p-4">
+                <UsageDashboard />
+              </div>
+            </details>
+          </>
+        )}
+      </div>
     </RequireAuth>
   );
 }
@@ -1388,7 +1695,11 @@ function SanitizeConfirmDialog({
   onResolve: (action: "sanitize" | "send_raw" | "cancel", sanitizedText?: string) => void;
 }) {
   const [showDetails, setShowDetails] = useState(false);
-  const impactConfig = { high: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: "🔴" }, medium: { color: "text-amber-600", bg: "bg-amber-50",border: "border-amber-200", icon: "🟡" }, low: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", icon: "🟢" } };
+  const impactConfig = {
+    high: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: "🔴" },
+    medium: { color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", icon: "🟡" },
+    low: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", icon: "🟢" },
+  };
 
   return (
     <Dialog open={true} onOpenChange={() => onResolve("cancel")}>
@@ -1420,7 +1731,9 @@ function SanitizeConfirmDialog({
             </div>
             <div className="rounded-lg bg-blue-50 p-2 text-center">
               <p className="text-lg">🟢</p>
-              <p className="font-bold text-blue-700">{scan.matches.length - scan.highRiskCount - scan.mediumRiskCount}</p>
+              <p className="font-bold text-blue-700">
+                {scan.matches.length - scan.highRiskCount - scan.mediumRiskCount}
+              </p>
               <p className="text-muted-foreground">低风险</p>
             </div>
           </div>
@@ -1445,7 +1758,8 @@ function SanitizeConfirmDialog({
                       <span className={`font-medium ${ic.color}`}>{m.label}</span>
                     </div>
                     <p className="mt-0.5 font-mono text-muted-foreground truncate">
-                      …{m.matched.slice(0, 80)}{m.matched.length > 80 ? "…" : ""}
+                      …{m.matched.slice(0, 80)}
+                      {m.matched.length > 80 ? "…" : ""}
                     </p>
                     <p className="text-muted-foreground mt-0.5">
                       → 替换为: <span className="font-medium">{m.replacement}</span>
@@ -1459,7 +1773,9 @@ function SanitizeConfirmDialog({
           {/* 提示 */}
           <div className="rounded-lg bg-amber-50/50 border border-amber-200 p-3 text-xs text-amber-700 leading-relaxed">
             <p className="font-semibold mb-1">⚠️ 你的数据将发送到第三方 AI 服务</p>
-            <p>检测到论文内容包含敏感信息。选择「脱敏后发送」将自动替换敏感字段后再发送；选择「发送原始数据」表示你知悉风险并同意发送；选择「取消」返回编辑。</p>
+            <p>
+              检测到论文内容包含敏感信息。选择「脱敏后发送」将自动替换敏感字段后再发送；选择「发送原始数据」表示你知悉风险并同意发送；选择「取消」返回编辑。
+            </p>
           </div>
 
           {/* 操作按钮 */}
@@ -1513,12 +1829,12 @@ function MiniStat({ label, value, icon }: { label: string; value: string; icon: 
 // ═══════════════════════════════════════════════════════
 
 const PIPELINE_STEPS: { step: DecompositionStep; icon: string; label: string }[] = [
-  { step: "connecting",       icon: "🔗", label: "连接 AI 引擎" },
-  { step: "decomposing",      icon: "🧠", label: "AI 拆解论文 Methods" },
+  { step: "connecting", icon: "🔗", label: "连接 AI 引擎" },
+  { step: "decomposing", icon: "🧠", label: "AI 拆解论文 Methods" },
   { step: "enhancing-static", icon: "📚", label: "静态领域知识库匹配" },
-  { step: "enhancing-mp",     icon: "🌐", label: "Materials Project 查询" },
-  { step: "enhancing-nist",   icon: "🌡️", label: "NIST Chemistry WebBook 查询" },
-  { step: "done",             icon: "✅", label: "生成复现审计报告" },
+  { step: "enhancing-mp", icon: "🌐", label: "Materials Project 查询" },
+  { step: "enhancing-nist", icon: "🌡️", label: "NIST Chemistry WebBook 查询" },
+  { step: "done", icon: "✅", label: "生成复现审计报告" },
 ];
 
 function DecompositionProgressBar({ progress }: { progress: DecompositionProgress }) {
@@ -1542,15 +1858,22 @@ function DecompositionProgressBar({ progress }: { progress: DecompositionProgres
             <div
               key={s.step}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
-                isCurrent ? "bg-primary/10 text-primary font-medium" :
-                isDone ? "text-muted-foreground" : "text-muted-foreground/50"
+                isCurrent
+                  ? "bg-primary/10 text-primary font-medium"
+                  : isDone
+                    ? "text-muted-foreground"
+                    : "text-muted-foreground/50"
               }`}
             >
               {/* 状态图标 */}
               <span className="flex-shrink-0 w-5 text-center">
-                {isDone ? <CheckCircle2 size={14} className="text-green-500 inline" /> :
-                 isCurrent ? <Loader2 size={14} className="animate-spin inline text-primary" /> :
-                 <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-muted-foreground/30" />}
+                {isDone ? (
+                  <CheckCircle2 size={14} className="text-green-500 inline" />
+                ) : isCurrent ? (
+                  <Loader2 size={14} className="animate-spin inline text-primary" />
+                ) : (
+                  <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-muted-foreground/30" />
+                )}
               </span>
               <span className={`w-5 text-center ${isPending ? "opacity-40" : ""}`}>{s.icon}</span>
               <span className={isPending ? "opacity-40" : ""}>{s.label}</span>
@@ -1611,7 +1934,6 @@ function HelpModal() {
       </DialogHeader>
 
       <div className="space-y-6 text-sm leading-relaxed mt-2">
-
         {/* ── 如何使用 ── */}
         <section>
           <h4 className="font-semibold text-foreground mb-3 flex items-center gap-1.5">
@@ -1620,24 +1942,38 @@ function HelpModal() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">1</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                  1
+                </span>
                 <h5 className="text-xs font-semibold">拆解而非猜测</h5>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">AI 系统性提取论文 Methods 中每一个数值参数，区分「明确写出」「隐含」「需推断」三级。不确定就是不确定。</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                AI 系统性提取论文 Methods
+                中每一个数值参数，区分「明确写出」「隐含」「需推断」三级。不确定就是不确定。
+              </p>
             </div>
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">2</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                  2
+                </span>
                 <h5 className="text-xs font-semibold">领域知识校验</h5>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">推断基于真实科研文献参数范围和公共数据库（Materials Project、NIST），置信度透明标注。</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                推断基于真实科研文献参数范围和公共数据库（Materials
+                Project、NIST），置信度透明标注。
+              </p>
             </div>
             <div className="rounded-lg border border-border p-3">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">3</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                  3
+                </span>
                 <h5 className="text-xs font-semibold">缺口驱动复现</h5>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">自动识别缺失但复现必需的信息，按关键程度排序，生成可执行的复现协议。</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                自动识别缺失但复现必需的信息，按关键程度排序，生成可执行的复现协议。
+              </p>
             </div>
           </div>
         </section>
@@ -1648,26 +1984,41 @@ function HelpModal() {
             <Zap size={13} className="text-amber-500" /> AI 管道架构
           </h4>
           <div className="rounded-lg bg-secondary/40 p-3 font-mono text-[11px] text-muted-foreground overflow-x-auto">
-            <div>论文 Methods ──→ <span className="text-primary font-semibold">DeepSeek-V3</span> (AI 拆解)</div>
+            <div>
+              论文 Methods ──→ <span className="text-primary font-semibold">DeepSeek-V3</span> (AI
+              拆解)
+            </div>
             <div className="ml-[13ch]">│</div>
             <div className="ml-[13ch]">├─→ 提取结构化参数 (explicit / implied / inferred)</div>
             <div className="ml-[13ch]">├─→ 识别信息缺口 (gaps)</div>
             <div className="ml-[13ch]">│</div>
-            <div>──────────→ <span className="text-primary font-semibold">静态领域知识库</span> (76 条目, 10 类别)</div>
-            <div className="ml-[13ch]">│   · 水热法、溶胶凝胶、煅烧… 典型参数范围</div>
-            <div className="ml-[13ch]">│   · 基于 10+ 篇 2024 年论文的真实数据</div>
+            <div>
+              ──────────→ <span className="text-primary font-semibold">静态领域知识库</span> (76
+              条目, 10 类别)
+            </div>
+            <div className="ml-[13ch]">│ · 水热法、溶胶凝胶、煅烧… 典型参数范围</div>
+            <div className="ml-[13ch]">│ · 基于 10+ 篇 2024 年论文的真实数据</div>
             <div className="ml-[13ch]">│</div>
-            <div>──────────→ <span className="text-primary font-semibold">Materials Project API</span> (实时查询)</div>
-            <div className="ml-[13ch]">│   · 提取化学式 → GET /materials/summary/?formula=TiO2</div>
-            <div className="ml-[13ch]">│   · 返回: band_gap, formation_energy, crystal_system…</div>
-            <div className="ml-[13ch]">│   · 会话缓存 (同化学式不重复请求)</div>
+            <div>
+              ──────────→ <span className="text-primary font-semibold">Materials Project API</span>{" "}
+              (实时查询)
+            </div>
+            <div className="ml-[13ch]">│ · 提取化学式 → GET /materials/summary/?formula=TiO2</div>
+            <div className="ml-[13ch]">│ · 返回: band_gap, formation_energy, crystal_system…</div>
+            <div className="ml-[13ch]">│ · 会话缓存 (同化学式不重复请求)</div>
             <div className="ml-[13ch]">│</div>
-            <div>──────────→ <span className="text-primary font-semibold">NIST Chemistry WebBook</span> (热力学数据)</div>
-            <div className="ml-[13ch]">│   · 按化学式/名称查询化合物热力学属性</div>
-            <div className="ml-[13ch]">│   · 返回: ΔHf°, S°, Cp, 分子量, 沸点/熔点, CAS</div>
-            <div className="ml-[13ch]">│   · 热力学相关参数置信度提升至 82-90%</div>
+            <div>
+              ──────────→ <span className="text-primary font-semibold">NIST Chemistry WebBook</span>{" "}
+              (热力学数据)
+            </div>
+            <div className="ml-[13ch]">│ · 按化学式/名称查询化合物热力学属性</div>
+            <div className="ml-[13ch]">│ · 返回: ΔHf°, S°, Cp, 分子量, 沸点/熔点, CAS</div>
+            <div className="ml-[13ch]">│ · 热力学相关参数置信度提升至 82-90%</div>
             <div className="ml-[13ch]">│</div>
-            <div>──────────→ <span className="text-primary font-semibold">复现审计报告</span> (ReproductionAudit)</div>
+            <div>
+              ──────────→ <span className="text-primary font-semibold">复现审计报告</span>{" "}
+              (ReproductionAudit)
+            </div>
           </div>
         </section>
 
@@ -1688,25 +2039,37 @@ function HelpModal() {
               </thead>
               <tbody>
                 <tr className="border-b border-border/50">
-                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />explicit</td>
+                  <td className="py-1.5 pr-3">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />
+                    explicit
+                  </td>
                   <td className="py-1.5 pr-3 text-muted-foreground">论文明确写出数值</td>
                   <td className="py-1.5 pr-3 font-mono">100%</td>
                   <td className="py-1.5 text-muted-foreground">"heated at 200°C for 4h"</td>
                 </tr>
                 <tr className="border-b border-border/50">
-                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />implied</td>
+                  <td className="py-1.5 pr-3">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />
+                    implied
+                  </td>
                   <td className="py-1.5 pr-3 text-muted-foreground">可从上下文合理推断</td>
                   <td className="py-1.5 pr-3 font-mono">80–95%</td>
                   <td className="py-1.5 text-muted-foreground">"dried overnight" → ~12h</td>
                 </tr>
                 <tr className="border-b border-border/50">
-                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />inferred</td>
+                  <td className="py-1.5 pr-3">
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />
+                    inferred
+                  </td>
                   <td className="py-1.5 pr-3 text-muted-foreground">AI 基于领域知识推断</td>
                   <td className="py-1.5 pr-3 font-mono">40–80%</td>
                   <td className="py-1.5 text-muted-foreground">KOH 用量 → 推测 pH 调节至 10-12</td>
                 </tr>
                 <tr>
-                  <td className="py-1.5 pr-3"><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5" />unknown</td>
+                  <td className="py-1.5 pr-3">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5" />
+                    unknown
+                  </td>
                   <td className="py-1.5 pr-3 text-muted-foreground">完全未知，标记为 gap</td>
                   <td className="py-1.5 pr-3 font-mono">0%</td>
                   <td className="py-1.5 text-muted-foreground">搅拌速度 — 未提及</td>
@@ -1722,12 +2085,29 @@ function HelpModal() {
             <ExternalLink size={13} className="text-green-500" /> Materials Project 集成
           </h4>
           <div className="space-y-1 text-xs text-muted-foreground">
-            <p>• <strong>覆盖范围:</strong> 15万+ 无机晶体材料（不含有机分子/聚合物/复合材料）</p>
-            <p>• <strong>查询属性:</strong> 带隙 (band_gap)、形成能 (formation_energy_per_atom)、能量凸包距离 (energy_above_hull)、晶系/空间群、密度、金属性</p>
-            <p>• <strong>触发条件:</strong> 参数涉及可识别化学式（如 SrTiO₃、TiO₂）且置信度低时自动查询</p>
-            <p>• <strong>增强效果:</strong> 匹配 → 置信度提升至 85-92%；未匹配 → 不影响原 AI 推断</p>
-            <p>• <strong>缓存策略:</strong> 同页面会话内相同化学式仅查询一次</p>
-            <p>• <strong>认证:</strong> 需要 <code className="bg-secondary px-1 rounded text-[11px]">MP_API_KEY</code>（免费注册获取）</p>
+            <p>
+              • <strong>覆盖范围:</strong> 15万+ 无机晶体材料（不含有机分子/聚合物/复合材料）
+            </p>
+            <p>
+              • <strong>查询属性:</strong> 带隙 (band_gap)、形成能
+              (formation_energy_per_atom)、能量凸包距离
+              (energy_above_hull)、晶系/空间群、密度、金属性
+            </p>
+            <p>
+              • <strong>触发条件:</strong> 参数涉及可识别化学式（如
+              SrTiO₃、TiO₂）且置信度低时自动查询
+            </p>
+            <p>
+              • <strong>增强效果:</strong> 匹配 → 置信度提升至 85-92%；未匹配 → 不影响原 AI 推断
+            </p>
+            <p>
+              • <strong>缓存策略:</strong> 同页面会话内相同化学式仅查询一次
+            </p>
+            <p>
+              • <strong>认证:</strong> 需要{" "}
+              <code className="bg-secondary px-1 rounded text-[11px]">MP_API_KEY</code>
+              （免费注册获取）
+            </p>
           </div>
         </section>
 
@@ -1744,7 +2124,8 @@ function HelpModal() {
               <div>· gapPenalty = 缺口数 × 5 (上限 30)</div>
             </div>
             <div className="mt-2 pt-2 border-t border-border text-muted-foreground/70">
-              示例: 28 参数 (avg 78%) + 5 缺口 + 2 个关键不确定 → 78 − 2.8 − 25 = <span className="text-amber-500 font-semibold">50</span> (中等可行)
+              示例: 28 参数 (avg 78%) + 5 缺口 + 2 个关键不确定 → 78 − 2.8 − 25 ={" "}
+              <span className="text-amber-500 font-semibold">50</span> (中等可行)
             </div>
           </div>
         </section>
@@ -1755,13 +2136,15 @@ function HelpModal() {
             <Info size={13} className="text-amber-500" /> 支持的真实数据来源
           </h4>
           <ul className="space-y-1 text-xs text-muted-foreground list-disc ml-4">
-            <li>Materials Project API — 15万+ 无机材料计算属性 (band gap, formation energy, crystal structure)</li>
+            <li>
+              Materials Project API — 15万+ 无机材料计算属性 (band gap, formation energy, crystal
+              structure)
+            </li>
             <li>NIST Chemistry WebBook — 化合物热力学数据 (ΔHf°, S°, Cp, 沸点/熔点)</li>
             <li>开放获取论文 — Scientific Reports, RSC Advances, MDPI Catalysts 等</li>
             <li>领域知识库 — 基于 2024 年发表的 10+ 篇光催化/材料论文的典型参数</li>
           </ul>
         </section>
-
       </div>
     </DialogContent>
   );
@@ -1770,9 +2153,18 @@ function HelpModal() {
 // Simple edit icon (avoiding Lucide import if not available)
 function Edit2({ size = 14 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-      <path d="m15 5 4 4"/>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <path d="m15 5 4 4" />
     </svg>
   );
 }

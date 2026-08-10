@@ -5,14 +5,16 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { getServiceSupabase } from "../supabase-server.server";
+import { getServiceSupabase, requireAuthenticatedUser } from "../supabase-server.server";
 
 /**
  * 刷新 field_patterns — 统计实验类型下所有字段的出现频率
  * 在每次实验保存后由 labStore 防抖调用
  */
 export const refreshFieldPatterns = createServerFn({ method: "POST" })
-  .handler(async () => {
+  .inputValidator((accessToken: string) => accessToken)
+  .handler(async ({ data: accessToken }) => {
+    await requireAuthenticatedUser(accessToken);
     const supabase = getServiceSupabase();
     const now = new Date().toISOString();
 
@@ -54,7 +56,10 @@ export const fetchFieldPatterns = createServerFn({ method: "GET" })
       occurrenceCount: r.occurrence_count as number,
       occurrenceRate: r.occurrence_rate as number,
       valueType: r.value_type as string,
-      valueStats: JSON.parse(JSON.stringify(r.value_stats ?? {})) as Record<string, string | number | boolean | null | string[]>,
+      valueStats: JSON.parse(JSON.stringify(r.value_stats ?? {})) as Record<
+        string,
+        string | number | boolean | null | string[]
+      >,
       coOccurring: r.co_occurring as string[],
       updatedAt: r.updated_at as string,
     }));
