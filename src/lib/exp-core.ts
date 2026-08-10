@@ -168,6 +168,8 @@ export type FieldDef = {
   required?: boolean;
   /** 是否由 AI 建议（从 field_patterns 统计） */
   suggested?: boolean;
+  /** 卡片自定义字段所在的模板分组 */
+  groupId?: string;
   /** 表格列定义（仅 table 类型） */
   columns?: TableColumn[];
   /** 物理约束（仅 number 类型）— 来源: NOMAD, Allotrope ASM, MLflow, CDISC 等标准 */

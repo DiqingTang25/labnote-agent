@@ -8,8 +8,8 @@
  */
 
 import { useState, useEffect } from "react";
-import type { ExperimentDoc, Template, FieldDef, DocProperties } from "../../lib/exp-core";
-import { getTemplate, GENERIC_TEMPLATE } from "../../lib/templates/presets";
+import type { ExperimentDoc, FieldDef } from "../../lib/exp-core";
+import { DEFAULT_TEMPLATE, getTemplate } from "../../lib/templates/presets";
 import { setProperty, getProperty, flattenProperties } from "../../lib/property-utils";
 import { DynamicField, FieldWrapper } from "./DynamicField";
 import { Plus, Save, FileText, FileJson, Printer, Trash2, Package, Sparkles, X } from "lucide-react";
@@ -65,6 +65,7 @@ export function DynamicCardEditor({
   const [newFieldPath, setNewFieldPath] = useState("");
   const [newFieldLabel, setNewFieldLabel] = useState("");
   const [newFieldType, setNewFieldType] = useState<string>("text");
+  const [newFieldGroupId, setNewFieldGroupId] = useState<string | undefined>();
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
 
   // Resolve template
@@ -88,14 +89,18 @@ export function DynamicCardEditor({
     }));
   };
 
-  const currentTemplate = template ?? GENERIC_TEMPLATE;
+  const currentTemplate = template ?? DEFAULT_TEMPLATE;
+  const overrides = (meta?.overrides as FieldDef[] | undefined) ?? [];
 
   // Collect extra keys (keys not in any template field)
   const templatePaths = new Set<string>();
   for (const group of currentTemplate.fieldGroups) {
-    for (const field of group.fields) {
+    for (const field of [...group.fields, ...overrides.filter((override) => override.groupId === group.id)]) {
       templatePaths.add(field.path);
     }
+  }
+  for (const field of overrides.filter((override) => !override.groupId)) {
+    templatePaths.add(field.path);
   }
   // Also collect reserved paths
   templatePaths.add("_meta");
@@ -123,20 +128,27 @@ export function DynamicCardEditor({
     if (!newFieldPath.trim()) return;
     const path = newFieldPath.trim();
     const label = newFieldLabel.trim() || path.split(".").pop() || path;
-    updateProperty(path, "");
-
-    // Record in _meta.overrides
-    const overrides = (meta?.overrides as FieldDef[]) ?? [];
-    const newOverrides = [...overrides, {
+    const newOverrides = [...overrides.filter((field) => field.path !== path), {
       path,
       label,
       type: newFieldType as FieldDef["type"],
+      groupId: newFieldGroupId,
     }];
-    updateProperty("_meta", { ...(meta ?? {}), overrides: newOverrides });
 
+    setDraft((current) => ({
+      ...current,
+      properties: setProperty(
+        getProperty(current.properties, path) === undefined
+          ? setProperty(current.properties, path, "")
+          : current.properties,
+        "_meta",
+        { ...(meta ?? {}), overrides: newOverrides } as import("../../lib/exp-core").PropValue,
+      ),
+    }));
     setShowAddField(false);
     setNewFieldPath("");
     setNewFieldLabel("");
+    setNewFieldGroupId(undefined);
   };
 
   // Source/discipline from properties
@@ -214,15 +226,16 @@ export function DynamicCardEditor({
 
         return (
           <Section key={group.id} title={group.label}>
-            {group.id === "steps" ? (
+            {group.id === "steps" && (
               <StepsEditor
                 steps={(draft.properties["steps"] as string[]) ?? []}
                 onChange={(v) => updateProperty("steps", v)}
                 inputCls={inputCls}
               />
-            ) : (
+            )}
+            {[...group.fields, ...overrides.filter((field) => field.groupId === group.id)].length > 0 && (
               <div className="grid grid-cols-2 gap-3">
-                {group.fields.map((field) => (
+                {[...group.fields, ...overrides.filter((field) => field.groupId === group.id)].map((field) => (
                   <FieldWrapper
                     key={field.path}
                     label={field.label}
@@ -240,10 +253,10 @@ export function DynamicCardEditor({
                 ))}
               </div>
             )}
-            {/* Group-scoped add field */}
             <button
               onClick={() => {
-                setNewFieldPath(group.id + ".");
+                setNewFieldPath("");
+                setNewFieldGroupId(group.id);
                 setShowAddField(true);
               }}
               className="mt-2 text-xs text-primary hover:underline flex items-center gap-1"
@@ -253,6 +266,29 @@ export function DynamicCardEditor({
           </Section>
         );
       })}
+
+      {overrides.filter((field) => !field.groupId).length > 0 && (
+        <Section title="自定义字段">
+          <div className="grid grid-cols-2 gap-3">
+            {overrides.filter((field) => !field.groupId).map((field) => (
+              <FieldWrapper
+                key={field.path}
+                label={field.label}
+                required={field.required}
+                suggested={field.suggested}
+                unit={field.type === "number" ? field.unit : undefined}
+              >
+                <DynamicField
+                  def={field}
+                  properties={draft.properties}
+                  onChange={(newProps) => setDraft((d) => ({ ...d, properties: newProps }))}
+                  inputCls={inputCls}
+                />
+              </FieldWrapper>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ═══ Unclassified Properties ═══ */}
       {unclassifiedEntries.length > 0 && (
@@ -339,7 +375,11 @@ export function DynamicCardEditor({
       )}
 
       <button
-        onClick={() => setShowAddField(true)}
+        onClick={() => {
+          setNewFieldPath("");
+          setNewFieldGroupId(undefined);
+          setShowAddField(true);
+        }}
         className="mt-4 text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
       >
         <Plus size={12} /> 添加自定义字段

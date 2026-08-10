@@ -20,7 +20,7 @@ import {
 import { createBlankDoc } from "../lib/exp-core";
 import { mergeProperties, getString } from "../lib/property-utils";
 import { DynamicCardEditor } from "../components/fields/DynamicCardEditor";
-import { GENERIC_TEMPLATE } from "../lib/templates/presets";
+import { DEFAULT_TEMPLATE } from "../lib/templates/presets";
 import {
   ragAnswerReal, ragAnswerRealStream, submitFeedback, fetchExperimentRelations, addExperimentRelation,
   deleteExperimentRelation, suggestRelations,
@@ -99,7 +99,7 @@ function Workbench() {
 }
 
 function createBlank(add: (e: ExperimentDoc) => void): string {
-  const blank = createBlankDoc(GENERIC_TEMPLATE);
+  const blank = createBlankDoc(DEFAULT_TEMPLATE);
   blank.name = "新建实验";
   add(blank);
   return blank.id;

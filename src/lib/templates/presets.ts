@@ -1,7 +1,7 @@
 /**
  * LabNote Agent — 实验模板库
  *
- * 25 个细分模板 + 1 个通用回退模板。
+ * 25 个细分模板 + 2 个通用模板（兼容回退与默认干实验）。
  * 来源：NOMAD, Materials Project, MLflow, ISA-TAB, LabIMotion, Allotrope ASM 等开源标准。
  * 全部由 Gemini 调研并转换为 LabNote field_groups 格式。
  */
@@ -40,6 +40,42 @@ export const GENERIC_TEMPLATE: Template = {
     ]},
   ],
 };
+
+export const GENERIC_DRY_EXPERIMENT_TEMPLATE: Template = {
+  id: "tpl_generic_dry_experiment", name: "通用干实验", experimentType: "other", domain: "dry_experiment", version: 1, isPreset: true,
+  keywords: ["simulation", "analysis", "model", "dataset", "code", "script", "计算", "模拟", "建模", "数据分析", "算法"],
+  fieldGroups: [
+    { id: "meta", label: "研究目标", chunkType: "meta", fields: [
+      { path: "purpose", label: "实验目的", type: "textarea", required: true },
+      { path: "hypothesis", label: "研究假设", type: "textarea" },
+      { path: "discipline", label: "研究领域", type: "text" },
+    ]},
+    { id: "inputs", label: "数据与输入", chunkType: "device_sample", fields: [
+      { path: "data.source", label: "数据来源", type: "text" },
+      { path: "data.version", label: "数据集或输入版本", type: "text" },
+      { path: "data.description", label: "数据说明", type: "textarea" },
+    ]},
+    { id: "method", label: "方法与环境", chunkType: "params_steps", fields: [
+      { path: "method.name", label: "方法或算法", type: "text", required: true },
+      { path: "method.implementation", label: "代码库或软件版本", type: "text" },
+      { path: "environment.runtime", label: "运行环境", type: "text", placeholder: "Python 3.12 / CUDA 12.4 / Linux" },
+      { path: "environment.compute", label: "计算资源", type: "text", placeholder: "CPU / GPU 型号与数量" },
+    ]},
+    { id: "parameters", label: "配置与参数", chunkType: "params_steps", fields: [
+      { path: "parameters.configRef", label: "配置文件或命令", type: "textarea" },
+      { path: "parameters.seed", label: "随机种子", type: "number" },
+      { path: "parameters.notes", label: "关键参数说明", type: "textarea" },
+    ]},
+    { id: "results", label: "结果与结论", chunkType: "results", fields: [
+      { path: "results.summary", label: "结果摘要", type: "textarea" },
+      { path: "results.artifactRef", label: "输出文件或图表路径", type: "text" },
+      { path: "conclusion", label: "实验结论", type: "textarea" },
+      { path: "notes", label: "异常与备注", type: "textarea" },
+    ]},
+  ],
+};
+
+export const DEFAULT_TEMPLATE = GENERIC_DRY_EXPERIMENT_TEMPLATE;
 
 // ═══════════════════════════════════════════════════════
 // 计算化学 — 7 个模板
@@ -530,6 +566,7 @@ export const TPL_ELECTROCHEMICAL_TEST: Template = {
 
 export const ALL_PRESET_TEMPLATES: Template[] = [
   GENERIC_TEMPLATE,
+  GENERIC_DRY_EXPERIMENT_TEMPLATE,
   // 计算化学 (7)
   TPL_STRUCTURE_OPTIMIZATION, TPL_BAND_STRUCTURE, TPL_PHONON_SPECTRUM,
   TPL_NEB_SEARCH, TPL_AIMD, TPL_OPTICAL_PROPERTIES, TPL_ELASTIC_CONSTANTS,
