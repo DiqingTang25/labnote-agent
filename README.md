@@ -7,33 +7,86 @@
 
 ---
 
-## 🚧 当前状态 (2026-08-04)
+## 当前状态 (2026-08-10) — Dynamic Document Store 架构重构
 
-### Phase 1 已完成 — 数据模型扩展
-Experiment 类型从 33 字段扩展到 50+ 字段，参照四大国际规范：
-- **ISA-TAB**: experimentType, instruments[], materials[], protocol, observations[], projectId
-- **FAIR**: license, ontologyTerms[], derivedFrom[], protocol.url
-- **Allotrope ADF**: instruments[], rawDataRefs[], processedDataRefs[], auditTrail[]
-- **ISO 17025 / GLP / 21 CFR Part 11**: controls[], replicates, qcStatus, reviewer, approver, signatures[]
+### ✅ 已完成：零硬编码字段架构
 
-工作台 CardEditor 新增区域：实验类型选择器、假设字段、多仪器卡片（含序列号+校准状态）、材料表格（CAS号/纯度/批次/供应商）、协议/SOP编辑器、结论字段、质控对照表。AI 提取 prompt 已同步更新。
+**Phase 1 的 50+ 固定字段方案已废弃。** 新架构核心原则：**结构跟着内容走，模板只是建议，字段从数据统计中涌现。**
 
-**⚠️ SQL 迁移未执行且决定暂不执行** — `supabase/migrations/20260731_phase1_enriched_experiment.sql` 在架构确定前不落库。
+#### 架构变更
 
-### ⚠️ 已知架构问题
-Phase 1 的 50+ 固定字段方案与核心设计目标「结构跟着内容走，无固定模板」存在张力。更多固定字段 = 更大的固定模板，不等于动态。
+| 维度 | 旧架构 | 新架构 |
+|------|--------|--------|
+| 数据模型 | 40+ TypeScript 字段 → 40+ PostgreSQL 列 | 8 核心索引列 + `properties JSONB`（无模式） |
+| 字段定义 | 手写在 7 个文件中 | 26 个 Template 的 `fieldGroups` 驱动 UI + AI |
+| AI Prompt | 40+ 字段硬编码在 4 个 prompt 中 | 从 Template 动态生成 JSON shape |
+| 卡片 UI | ~300 行手写 JSX 按字段 | `DynamicCardEditor` 按 fieldGroups 配置渲染 |
+| 字段校验 | 无 | 物理约束引擎：61 条模板约束 + 11 条通用物理定律 |
+| 模板匹配 | 25 行硬编码正则 | 模板自带 `keywords` 数组，按匹配评分 |
+| 全文检索 | 写死 8 个字段拼接 search_text | 动态遍历 properties 所有文本值 |
 
-### 🔄 下次迭代方向
-核心目标：**自演化实验模型（Self-Evolving Experiment Model）**。
-- 字段 schema 从数据统计中自动涌现，不靠人写
-- 实验类型通过 embedding 聚类自动发现
-- AI 补全基于同类实验的统计分布，而非黑盒猜测
-- 多文件上传自动对齐同一实验；增量上传自动匹配已有实验
+#### 数据库
 
-### ❓ 待解决问题
-- **领域未确定** — 需先选定聚焦的实验领域
-- **Phase 1 SQL 不执行** — 架构确定后再决定数据库方案
-- **种子数据量未知** — 影响自演化模型的冷启动策略
+`experiments` 表已从 40+ 列减至 13 列：
+
+| 列 | 类型 | 说明 |
+|----|------|------|
+| id, name, date, operator, user_id | text/uuid | 核心索引 |
+| experiment_type, version | text/int | 实验分类 |
+| created_at, updated_at | timestamptz | 时间戳 |
+| properties | JSONB | **所有实验数据** |
+| files | JSONB | 附件元数据 |
+| embedding | VECTOR(1024) | pgvector |
+| search_text, knowledge_tags | text/array | RAG 检索 |
+
+新增表：
+- `field_patterns` — 自演化字段统计引擎
+- `templates` — 实验模板库（26 个预设模板）
+
+#### 26 个实验模板（5 大领域）
+
+| 领域 | 数量 | 模板 |
+|------|:----:|------|
+| 计算化学 | 7 | 结构优化、能带、声子、NEB、AIMD、光学、弹性常数 |
+| 分子动力学 | 4 | 蛋白水溶液、结合自由能、材料拉伸、Martini粗粒化 |
+| 机器学习 | 5 | 图像分类、NLP微调、GNN预测、强化学习、时序预测 |
+| 统计分析 | 3 | 临床试验、流行病学、生存分析 |
+| 数据工程 | 1 | ETL流水线与数据质量 |
+| 湿实验 | 5 | 水热合成、溶胶凝胶、XRD、SEM/TEM、电化学 |
+| 通用回退 | 1 | 覆盖旧格式字段 |
+
+所有模板来源：NOMAD, Materials Project, MLflow, ISA-TAB, LabIMotion, Allotrope ASM, CDISC ODM, Great Expectations 等开源标准。由 Gemini 调研并转换为 LabNote field_groups 格式。
+
+#### 物理约束引擎
+
+- **通用物理定律**：温度≥0K, 产率∈[0,100%], p值∈[0,1], 泊松比∈[-1,0.5] 等 11 条
+- **模板约束**：61 条领域边界（来源标注：VASP manual, NOMAD, Allotrope ASM, CDISC ODM 等）
+- 硬边界违反 = 拒绝入库（error），常见范围偏离 = 警告但允许（warning）
+
+#### 待完成
+
+| 优先级 | 任务 |
+|:----:|------|
+| P0 | Supabase 迁移已执行 Step 1（回填），Step 2（删旧列+建新表）已执行 |
+| P0 | 26 个模板 seed 到 Supabase templates 表 |
+| P1 | 多 Agent 提取流水线（Extractor→Validator→Corrector） |
+| P2 | compare/assets/index/graph 适配新类型 |
+| P3 | extra → 技能库自演化 |
+| P4 | 零样本 CSV 列语义识别 |
+| P5 | MCP 仪器连接 |
+
+#### 2026 年前沿参考
+
+项目调研了 38 个 2026 年 AI 前沿项目/标准：
+
+- **多 Agent 科学自动化**: The AI Scientist v2, Robin, AutoLabs, EOS AI Agent, ProtoPilot, EAA, AI X-ray Scientist
+- **结构化提取 + 多模态 LLM**: SciDaSynth, HARMON-E (F1=0.93), nanoMINER (precision=0.98), SO-Bench (Apple)
+- **表格基础模型**: Google TabFM (zero-shot), Relational Transformer (ICLR 2026), SkillTFM (gate evolution)
+- **数据标准**: NOMAD, ISA-TAB, Allotrope ASM, CDISC ODM, NeXus NXxrd, OME-XML, BatteryDataGenome
+
+详见 [调研报告](docs/2026-ai-frontier-research.md)
+
+**已阅读但待融合的方向**：多 Agent 自纠错流水线、SkillTFM 技能库演化、TabFM 零样本列理解、MCP 仪器协议。
 
 ---
 
