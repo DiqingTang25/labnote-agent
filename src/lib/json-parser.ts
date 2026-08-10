@@ -222,32 +222,43 @@ export function normalizeExperiment(
   raw: Partial<ExperimentDoc>,
   defaults?: Partial<ExperimentDoc>,
 ): ExperimentDoc {
+  const base = createBlankDoc();
   const now = new Date().toISOString();
   const dateStr = now.slice(0, 16).replace("T", " ");
-
   const props: DocProperties = {
-    extra: {},
+    ...base.properties,
+    ...(defaults?.properties || {}),
     ...(raw.properties || {}),
   };
 
-  // Ensure extra exists
   if (!props.extra) (props as Record<string, unknown>).extra = {};
 
   return {
+    ...base,
     id: defaults?.id ?? raw.id ?? newExpId(),
-    name: raw.name || defaults?.name || "未命名实验",
-    experimentType: raw.experimentType || defaults?.experimentType || "other",
+    name: raw.name || defaults?.name || base.name,
+    experimentType: raw.experimentType || defaults?.experimentType || base.experimentType,
     date: raw.date || defaults?.date || dateStr,
-    operator: raw.operator || defaults?.operator || "",
-    userId: defaults?.userId ?? raw.userId ?? "",
+    operator: raw.operator || defaults?.operator || base.operator,
+    userId: defaults?.userId ?? raw.userId ?? base.userId,
     createdAt: defaults?.createdAt ?? raw.createdAt ?? now,
     updatedAt: defaults?.updatedAt ?? raw.updatedAt ?? now,
-    version: raw.version ?? defaults?.version ?? 1,
+    version: raw.version ?? defaults?.version ?? base.version,
+    projectId: raw.projectId ?? defaults?.projectId ?? base.projectId,
+    studyId: raw.studyId ?? defaults?.studyId ?? base.studyId,
+    supervisor: raw.supervisor ?? defaults?.supervisor ?? base.supervisor,
+    reviewer: raw.reviewer ?? defaults?.reviewer ?? base.reviewer,
+    approver: raw.approver ?? defaults?.approver ?? base.approver,
     properties: props,
-    attachedFiles: raw.attachedFiles || defaults?.attachedFiles || [],
-    aiInsights: raw.aiInsights || defaults?.aiInsights || "",
-    knowledgeTags: raw.knowledgeTags || defaults?.knowledgeTags || [],
-    lastParsedAt: raw.lastParsedAt ?? defaults?.lastParsedAt ?? null,
-    embedding: raw.embedding ?? defaults?.embedding ?? null,
+    attachedFiles: raw.attachedFiles || defaults?.attachedFiles || base.attachedFiles,
+    license: raw.license ?? defaults?.license ?? base.license,
+    ontologyTerms: raw.ontologyTerms ?? defaults?.ontologyTerms ?? base.ontologyTerms,
+    derivedFrom: raw.derivedFrom ?? defaults?.derivedFrom ?? base.derivedFrom,
+    auditTrail: raw.auditTrail ?? defaults?.auditTrail ?? base.auditTrail,
+    signatures: raw.signatures ?? defaults?.signatures ?? base.signatures,
+    aiInsights: raw.aiInsights || defaults?.aiInsights || base.aiInsights,
+    knowledgeTags: raw.knowledgeTags || defaults?.knowledgeTags || base.knowledgeTags,
+    lastParsedAt: raw.lastParsedAt ?? defaults?.lastParsedAt ?? base.lastParsedAt,
+    embedding: raw.embedding ?? defaults?.embedding ?? base.embedding,
   };
 }

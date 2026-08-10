@@ -18,6 +18,7 @@ import {
   type ExperimentDoc, type AttachedFile,
 } from "../lib/labStore";
 import { createBlankDoc } from "../lib/exp-core";
+import { mergeProperties, getString } from "../lib/property-utils";
 import { DynamicCardEditor } from "../components/fields/DynamicCardEditor";
 import { GENERIC_TEMPLATE } from "../lib/templates/presets";
 import {
@@ -391,7 +392,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
                 }`}
               >
                 <div className="font-medium truncate">{e.name}</div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground">{e.date} · {e.source}</div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">{e.date} · {getString(e.properties, "source")}</div>
               </button>
             </li>
           ))}
@@ -469,16 +470,8 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
             name: experiment.name,
             date: experiment.date,
             operator: experiment.operator,
-            purpose: experiment.purpose,
-            background: experiment.background,
-            discipline: experiment.discipline,
-            device: experiment.device,
-            sample: experiment.sample,
-            params: experiment.params,
-            environment: experiment.environment,
-            steps: experiment.steps,
-            results: experiment.results,
-            notes: experiment.notes,
+            experimentType: experiment.experimentType,
+            properties: experiment.properties,
           },
           sourceFiles.length > 0 ? sourceFiles : undefined,
         );
@@ -516,65 +509,29 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
     setAutoFilling(true);
     try {
       const raw = await autoFillExperiment({
-        name: experiment.name, experimentType: experiment.experimentType,
-        date: experiment.date, operator: experiment.operator,
-        purpose: experiment.purpose, background: experiment.background,
-        hypothesis: experiment.hypothesis, conclusion: experiment.conclusion,
-        discipline: experiment.discipline, device: experiment.device,
-        instruments: experiment.instruments, materials: experiment.materials,
-        sample: experiment.sample, params: experiment.params,
-        environment: experiment.environment, protocol: experiment.protocol,
-        steps: experiment.steps, results: experiment.results, notes: experiment.notes,
-        controls: experiment.controls, replicates: experiment.replicates,
-        qcStatus: experiment.qcStatus,
+        name: experiment.name,
+        experimentType: experiment.experimentType,
+        date: experiment.date,
+        operator: experiment.operator,
+        properties: experiment.properties,
       });
       const data = extractJSON<Record<string, unknown>>(raw);
       if (!data || typeof data !== "object") { toast.error("AI 返回格式异常，请重试"); return; }
 
-      const patch: Partial<Experiment> = {} as Partial<Experiment>;
-      const strFields = ["name", "experimentType", "date", "operator", "purpose", "background", "hypothesis", "conclusion", "discipline", "results", "notes", "qcStatus"] as const;
-      for (const f of strFields) {
-        const v = data[f];
-        if (typeof v === "string" && v.trim() && v.trim() !== (experiment[f as keyof typeof experiment] as unknown as string)) {
-          (patch as Record<string, unknown>)[f] = v.trim();
-        }
-      }
-      for (const nest of ["device", "sample", "environment"] as const) {
-        const v = data[nest];
-        if (v && typeof v === "object") {
-          const merged = { ...experiment[nest] }; let changed = false;
-          for (const nk of Object.keys(v as Record<string, unknown>)) {
-            const nv = (v as Record<string, unknown>)[nk];
-            if (typeof nv === "string" && nv.trim()) { (merged as Record<string, unknown>)[nk] = nv.trim(); changed = true; }
-          }
-          if (changed) (patch as Record<string, unknown>)[nest] = merged;
-        }
-      }
-      if (Array.isArray(data.params) && data.params.length > 0) {
-        const valid = data.params.filter((p: unknown) => p && typeof p === "object" && (p as Record<string, unknown>).name);
-        if (valid.length > 0) patch.params = valid as Param[];
-      }
-      if (Array.isArray(data.steps)) {
-        const valid = data.steps.filter((s: unknown) => typeof s === "string" && s.trim());
-        if (valid.length > 0) patch.steps = valid as string[];
-      }
-      // New Phase 1 fields
-      if (Array.isArray(data.instruments) && data.instruments.length > 0) {
-        patch.instruments = data.instruments as Instrument[];
-      }
-      if (Array.isArray(data.materials) && data.materials.length > 0) {
-        patch.materials = data.materials as Material[];
-      }
-      if (data.protocol && typeof data.protocol === "object" && (data.protocol as Record<string, unknown>).name) {
-        patch.protocol = data.protocol as Experiment["protocol"];
-      }
-      if (Array.isArray(data.controls) && data.controls.length > 0) {
-        patch.controls = data.controls as Control[];
-      }
-      if (typeof data.replicates === "number" && data.replicates > 0) {
-        patch.replicates = data.replicates;
-      }
-      updateExperiment(experiment.id, patch);
+      const { name, experimentType, date, operator, aiInsights, knowledgeTags, properties, ...propertyPatch } = data;
+      const nextProperties = mergeProperties(
+        experiment.properties,
+        (properties && typeof properties === "object" && !Array.isArray(properties) ? properties : propertyPatch) as ExperimentDoc["properties"],
+      );
+      updateExperiment(experiment.id, {
+        ...(typeof name === "string" && name.trim() ? { name: name.trim() } : {}),
+        ...(typeof experimentType === "string" && experimentType.trim() ? { experimentType: experimentType.trim() } : {}),
+        ...(typeof date === "string" && date.trim() ? { date: date.trim() } : {}),
+        ...(typeof operator === "string" && operator.trim() ? { operator: operator.trim() } : {}),
+        ...(typeof aiInsights === "string" && aiInsights.trim() ? { aiInsights: aiInsights.trim() } : {}),
+        ...(Array.isArray(knowledgeTags) ? { knowledgeTags: knowledgeTags.filter((tag): tag is string => typeof tag === "string") } : {}),
+        properties: nextProperties,
+      });
       toast.success("AI 已补全缺失字段，请人工复核");
       setEvalResult(null);
     } catch (err) {
@@ -586,44 +543,35 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
 
   const reparse = async () => {
     const filesWithContent = experiment.attachedFiles
-      .filter((f) => f.textContent)
-      .map((f) => ({ name: f.name, textContent: f.textContent! }));
+      .filter((file) => file.textContent)
+      .map((file) => ({ name: file.name, textContent: file.textContent! }));
     if (filesWithContent.length === 0) { toast.info("没有可解析的文件内容。请重新上传文件以触发文本提取。"); return; }
 
     setReparsing(true);
     try {
-      const raw = await reparseExperimentFiles(
-        { name: experiment.name, experimentType: experiment.experimentType,
-          date: experiment.date, operator: experiment.operator,
-          purpose: experiment.purpose, background: experiment.background,
-          hypothesis: experiment.hypothesis, conclusion: experiment.conclusion,
-          discipline: experiment.discipline, device: experiment.device,
-          instruments: experiment.instruments, materials: experiment.materials,
-          sample: experiment.sample, params: experiment.params,
-          environment: experiment.environment, protocol: experiment.protocol,
-          steps: experiment.steps, results: experiment.results, notes: experiment.notes,
-          controls: experiment.controls, replicates: experiment.replicates,
-          qcStatus: experiment.qcStatus },
-        filesWithContent,
-      );
+      const raw = await reparseExperimentFiles({
+        name: experiment.name,
+        experimentType: experiment.experimentType,
+        date: experiment.date,
+        operator: experiment.operator,
+        properties: experiment.properties,
+      }, filesWithContent);
       const data = extractJSON<Record<string, unknown>>(raw);
       if (!data || typeof data !== "object") { toast.error("AI 返回格式异常，请重试"); return; }
-      const patch: Partial<Experiment> = {} as Partial<Experiment>;
-      const strFields = ["name", "date", "operator", "purpose", "background", "discipline", "results", "notes"] as const;
-      for (const f of strFields) {
-        const v = data[f];
-        if (typeof v === "string" && v.trim()) (patch as Record<string, unknown>)[f] = v.trim();
-      }
-      for (const nest of ["device", "sample", "environment"] as const) {
-        const v = data[nest];
-        if (v && typeof v === "object") (patch as Record<string, unknown>)[nest] = v;
-      }
-      if (Array.isArray(data.params)) patch.params = data.params as Param[];
-      if (Array.isArray(data.steps)) patch.steps = data.steps as string[];
-      if (typeof data.aiInsights === "string" && data.aiInsights.trim()) {
-        (patch as Record<string, unknown>).aiInsights = data.aiInsights.trim();
-      }
-      updateExperiment(experiment.id, patch);
+
+      const { name, experimentType, date, operator, aiInsights, knowledgeTags, properties, ...propertyPatch } = data;
+      updateExperiment(experiment.id, {
+        ...(typeof name === "string" && name.trim() ? { name: name.trim() } : {}),
+        ...(typeof experimentType === "string" && experimentType.trim() ? { experimentType: experimentType.trim() } : {}),
+        ...(typeof date === "string" && date.trim() ? { date: date.trim() } : {}),
+        ...(typeof operator === "string" && operator.trim() ? { operator: operator.trim() } : {}),
+        ...(typeof aiInsights === "string" && aiInsights.trim() ? { aiInsights: aiInsights.trim() } : {}),
+        ...(Array.isArray(knowledgeTags) ? { knowledgeTags: knowledgeTags.filter((tag): tag is string => typeof tag === "string") } : {}),
+        properties: mergeProperties(
+          experiment.properties,
+          (properties && typeof properties === "object" && !Array.isArray(properties) ? properties : propertyPatch) as ExperimentDoc["properties"],
+        ),
+      });
       toast.success("已重新解析，请核对变更");
       setEvalResult(null);
     } catch (err) {

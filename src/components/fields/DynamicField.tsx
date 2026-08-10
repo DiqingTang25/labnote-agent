@@ -6,8 +6,8 @@
  */
 
 import { useState } from "react";
-import type { FieldDef, DocProperties, TableColumn } from "../../lib/exp-core";
-import { getProperty, setProperty, getString, getNumber, getBool, coerceValue } from "../../lib/property-utils";
+import type { FieldDef, DocProperties, PropValue, TableColumn } from "../../lib/exp-core";
+import { getProperty, setProperty, getString, getNumber, getBool } from "../../lib/property-utils";
 import { Plus, X } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════
@@ -99,7 +99,7 @@ export function DynamicField({ def, properties, onChange, inputCls = DEFAULT_INP
       return (
         <TableInput
           columns={def.columns ?? []}
-          value={getProperty(properties, def.path) as Array<Record<string, unknown>> | undefined}
+          value={getProperty(properties, def.path) as TableRow[] | undefined}
           cls={cls}
           onChange={(v) => onChange(setProperty(properties, def.path, v))}
         />
@@ -226,16 +226,18 @@ function DateInput({ value, cls, onChange }: {
 // Table Input
 // ═══════════════════════════════════════════════════════
 
+type TableRow = Record<string, PropValue>;
+
 function TableInput({ columns, value, cls, onChange }: {
   columns: TableColumn[];
-  value: Array<Record<string, unknown>> | undefined;
+  value: TableRow[] | undefined;
   cls: string;
-  onChange: (v: Array<Record<string, unknown>>) => void;
+  onChange: (v: TableRow[]) => void;
 }) {
   const rows = value ?? [];
 
   const addRow = () => {
-    const row: Record<string, unknown> = {};
+    const row: TableRow = {};
     for (const col of columns) row[col.key] = "";
     onChange([...rows, row]);
   };

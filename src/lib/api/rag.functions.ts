@@ -190,10 +190,7 @@ export const ragSearch = createServerFn({ method: "POST" })
     const rows = full as Array<{
       id: string;
       name: string;
-      purpose?: string;
-      results?: string;
-      steps?: unknown;
-      params?: unknown;
+      properties?: Record<string, unknown> | null;
     }>;
 
     // 按原始相似度排序

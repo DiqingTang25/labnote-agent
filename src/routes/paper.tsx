@@ -4,6 +4,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { useLab, generateMethods } from "../lib/labStore";
+import { getString } from "../lib/property-utils";
 import { FileText, Sparkles, Download, ArrowRight, CheckCircle2, BookOpen, Edit3 } from "lucide-react";
 import { toast } from "sonner";
 import { RequireAuth } from "../lib/auth-guard";
@@ -96,7 +97,7 @@ function PaperPage() {
                     className="mt-0.5 accent-[color:var(--color-primary)]"/>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{e.name}</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">{e.date} · {e.device.name || "—"} · {e.sample.id || "无样品"}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">{e.date} · {getString(e.properties, "device.name") || "—"} · {getString(e.properties, "sample.id") || "无样品"}</div>
                   </div>
                 </label>
               </li>

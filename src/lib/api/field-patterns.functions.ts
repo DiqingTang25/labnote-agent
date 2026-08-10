@@ -33,7 +33,7 @@ export const refreshFieldPatterns = createServerFn({ method: "POST" })
  * 获取指定实验类型的 field_patterns
  */
 export const fetchFieldPatterns = createServerFn({ method: "GET" })
-  .validator((experimentType: string) => experimentType)
+  .inputValidator((experimentType: string) => experimentType)
   .handler(async ({ data: experimentType }) => {
     const supabase = getServiceSupabase();
     const { data, error } = await supabase
@@ -54,7 +54,7 @@ export const fetchFieldPatterns = createServerFn({ method: "GET" })
       occurrenceCount: r.occurrence_count as number,
       occurrenceRate: r.occurrence_rate as number,
       valueType: r.value_type as string,
-      valueStats: r.value_stats as Record<string, unknown>,
+      valueStats: JSON.parse(JSON.stringify(r.value_stats ?? {})) as Record<string, string | number | boolean | null | string[]>,
       coOccurring: r.co_occurring as string[],
       updatedAt: r.updated_at as string,
     }));

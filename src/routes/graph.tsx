@@ -4,7 +4,8 @@
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useLab, type Experiment } from "../lib/labStore";
+import { useLab, type ExperimentDoc } from "../lib/labStore";
+import { getString } from "../lib/property-utils";
 import {
   Network, X, FileText, User, FlaskConical, Cpu,
   Lightbulb, ArrowUpRight, Download,
@@ -304,7 +305,7 @@ function DetailPanel({
   onClose,
 }: {
   node: GraphNode | null;
-  experiments: Experiment[];
+  experiments: ExperimentDoc[];
   onClose: () => void;
 }) {
   if (!node) {
@@ -389,12 +390,12 @@ function DetailPanel({
             <Row
               icon={<FlaskConical size={13} />}
               label="设备"
-              value={`${related[0].device.name || "—"} ${related[0].device.model || ""}`}
+              value={`${getString(related[0].properties, "device.name") || "—"} ${getString(related[0].properties, "device.model")}`}
             />
             <Row
               icon={<Cpu size={13} />}
               label="样品"
-              value={`${related[0].sample.id || "—"} (${related[0].sample.batch || ""})`}
+              value={`${getString(related[0].properties, "sample.id") || "—"} (${getString(related[0].properties, "sample.batch")})`}
             />
             <div className="pt-2">
               <Link

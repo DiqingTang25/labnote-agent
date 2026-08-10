@@ -16,6 +16,7 @@ import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, List
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { LabProvider, useLab } from "../lib/labStore";
+import { getString } from "../lib/property-utils";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 import { Toaster } from "sonner";
 import { AIAgent } from "../components/AIAgent";
@@ -217,7 +218,7 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState("");
   const results = experiments.filter((e) => {
     if (!q.trim()) return false;
-    const hay = (e.name + e.sample.id + e.device.name + e.date + e.operator).toLowerCase();
+    const hay = (e.name + getString(e.properties, "sample.id") + getString(e.properties, "device.name") + e.date + e.operator).toLowerCase();
     return hay.includes(q.toLowerCase());
   });
   return (
@@ -246,7 +247,7 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
             >
               <div className="text-sm font-medium">{e.name}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {e.date} · {e.operator} · {e.sample.id || "无样品编号"} · {e.device.name || "未指定设备"}
+                {e.date} · {e.operator} · {getString(e.properties, "sample.id") || "无样品编号"} · {getString(e.properties, "device.name") || "未指定设备"}
               </div>
             </Link>
           ))}

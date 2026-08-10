@@ -4,6 +4,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLab } from "../lib/labStore";
+import { getString } from "../lib/property-utils";
 import { setPendingUpload } from "../lib/upload-bridge";
 import {
   FileSearch, Sparkles, GitBranch, ArrowRight, Upload,
@@ -39,7 +40,7 @@ function Home() {
   const [dragging, setDragging] = useState(false);
 
   const totalCards = experiments.length;
-  const completeCards = experiments.filter(e => e.results && e.purpose).length;
+  const completeCards = experiments.filter((experiment) => getString(experiment.properties, "results") && getString(experiment.properties, "purpose")).length;
   const completeness = experiments.length > 0 ? Math.round((completeCards / experiments.length) * 100) : 0;
 
   const handleUpload = (files: FileList | null) => {
@@ -154,7 +155,7 @@ function Dashboard({ experiments, totalCards, completeness }: {
   experiments: ReturnType<typeof useLab>["experiments"];
   totalCards: number; completeness: number;
 }) {
-  const completeCards = experiments.filter(e => e.results && e.purpose).length;
+  const completeCards = experiments.filter((experiment) => getString(experiment.properties, "results") && getString(experiment.properties, "purpose")).length;
   return (
     <section className="mx-auto max-w-7xl px-4 py-12">
       <div className="flex items-end justify-between flex-wrap gap-2 mb-6">
@@ -173,7 +174,7 @@ function Dashboard({ experiments, totalCards, completeness }: {
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <RecentList title="最近实验" items={experiments.slice(0, 5).map(e => ({ title: e.name, sub: `${e.date} · ${e.operator || "—"}`, to: "/workbench", id: e.id }))} icon={<FileText size={14} />} />
-        <RecentList title="待补全实验" items={experiments.filter(e => !e.results || !e.purpose).slice(0, 5).map(e => ({ title: e.name, sub: `待补关键字段`, to: "/workbench", id: e.id }))} icon={<AlertTriangle size={14} />} />
+        <RecentList title="待补全实验" items={experiments.filter((experiment) => !getString(experiment.properties, "results") || !getString(experiment.properties, "purpose")).slice(0, 5).map((experiment) => ({ title: experiment.name, sub: "待补关键字段", to: "/workbench", id: experiment.id }))} icon={<AlertTriangle size={14} />} />
       </div>
     </section>
   );

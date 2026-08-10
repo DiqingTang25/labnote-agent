@@ -53,7 +53,7 @@ export const fetchTemplates = createServerFn({ method: "GET" }).handler(async ()
 // ═══════════════════════════════════════════════════════
 
 export const fetchTemplate = createServerFn({ method: "GET" })
-  .validator((id: string) => id)
+  .inputValidator((id: string) => id)
   .handler(async ({ data: id }) => {
     const supabase = getServiceSupabase();
     const { data, error } = await supabase
@@ -87,7 +87,7 @@ export const fetchTemplate = createServerFn({ method: "GET" })
 // ═══════════════════════════════════════════════════════
 
 export const saveUserTemplate = createServerFn({ method: "POST" })
-  .validator((tpl: {
+  .inputValidator((tpl: {
     id: string;
     name: string;
     experimentType: string;
@@ -121,7 +121,7 @@ export const saveUserTemplate = createServerFn({ method: "POST" })
 // ═══════════════════════════════════════════════════════
 
 export const seedPresetTemplates = createServerFn({ method: "POST" })
-  .validator((templates: Array<{
+  .inputValidator((templates: Array<{
     id: string;
     name: string;
     experimentType: string;

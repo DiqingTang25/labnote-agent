@@ -4,7 +4,7 @@
  * - 配额超限时自动丢弃最旧实验
  * - 用户配置独立存储
  */
-import type { Experiment } from "./labStore";
+import type { ExperimentDoc } from "./labStore";
 
 const EXPERIMENTS_KEY = "labnote:v1:experiments";
 const PROFILE_KEY = "labnote:v1:profile";
@@ -13,7 +13,7 @@ const CURRENT_VERSION = 1;
 
 interface PersistedData {
   version: number;
-  experiments: Experiment[];
+  experiments: ExperimentDoc[];
   savedAt: string;
 }
 
@@ -24,7 +24,7 @@ const hasStorage = () => typeof localStorage !== "undefined";
 // 实验数据
 // ═══════════════════════════════════════════════════════
 
-export function saveExperiments(experiments: Experiment[]): boolean {
+export function saveExperiments(experiments: ExperimentDoc[]): boolean {
   if (!hasStorage()) return false;
   try {
     const trimmed = experiments.slice(0, MAX_EXPERIMENTS);
@@ -68,7 +68,7 @@ export function saveExperiments(experiments: Experiment[]): boolean {
   }
 }
 
-export function loadExperiments(): Experiment[] | null {
+export function loadExperiments(): ExperimentDoc[] | null {
   if (!hasStorage()) return null;
   try {
     const raw = localStorage.getItem(EXPERIMENTS_KEY);

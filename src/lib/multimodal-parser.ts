@@ -4,8 +4,8 @@
  * 支持: TXT, CSV, MD, LOG, JSON, XML, PDF, DOCX, XLSX, PNG, JPG
  * 图片: Qwen3-VL-8B 视觉识别
  */
-import type { AttachedFile } from "./exp-core";
 import type { ExperimentDoc, Template } from "./exp-core";
+import { getProperty, getString } from "./property-utils";
 import {
   parseTextFile,
   parseImage,
@@ -181,7 +181,7 @@ async function analyzeFile(
         case "text":
         case "document":
         default:
-          rawOutput = await parseTextFile(content.textContent || file.name, file.name, template);
+          rawOutput = await parseTextFile(content.textContent || file.name, file.name, template ?? GENERIC_TEMPLATE);
           break;
       }
     }
@@ -201,7 +201,7 @@ async function analyzeFile(
 // ═══════════════════════════════════════════════════════
 
 function compressToMarkdown(
-  partials: Array<{ fileName: string; experiment: Partial<Experiment> }>,
+  partials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }>,
 ): string {
   if (partials.length === 0) return "";
 
@@ -209,21 +209,37 @@ function compressToMarkdown(
 
   for (const p of partials) {
     const e = p.experiment;
-    const paramsStr = (e.params ?? [])
-      .filter((x) => x?.name)
-      .map((x) => `${x.name}=${x.value}${x.unit}`)
-      .join(", ");
+    const props = e.properties ?? {};
+    const params = getProperty(props, "params");
+    const paramsStr = Array.isArray(params)
+      ? params
+        .filter((value) => value !== null && typeof value === "object" && !Array.isArray(value))
+        .map((value) => {
+          const param = value as Record<string, unknown>;
+          return typeof param.name === "string"
+            ? `${param.name}=${String(param.value ?? "")}${String(param.unit ?? "")}`
+            : "";
+        })
+        .filter(Boolean)
+        .join(", ")
+      : "";
+    const purpose = getString(props, "purpose");
+    const deviceName = getString(props, "device.name");
+    const deviceModel = getString(props, "device.model");
+    const sampleId = getString(props, "sample.id");
+    const results = getString(props, "results");
+    const notes = getString(props, "notes");
 
     lines.push(`### ${e.name || "未命名"}`);
     lines.push(`- 来源: ${p.fileName}`);
     if (e.date) lines.push(`- 日期: ${e.date}`);
     if (e.operator) lines.push(`- 操作人: ${e.operator}`);
-    if (e.purpose) lines.push(`- 目的: ${e.purpose}`);
-    if (e.device?.name) lines.push(`- 设备: ${e.device.name} (${e.device.model || ""})`);
-    if (e.sample?.id) lines.push(`- 样品: ${e.sample.id}`);
+    if (purpose) lines.push(`- 目的: ${purpose}`);
+    if (deviceName) lines.push(`- 设备: ${deviceName} (${deviceModel})`);
+    if (sampleId) lines.push(`- 样品: ${sampleId}`);
     if (paramsStr) lines.push(`- 参数: ${paramsStr}`);
-    if (e.results) lines.push(`- 结果: ${e.results.slice(0, 120)}`);
-    if (e.notes) lines.push(`- 备注: ${e.notes.slice(0, 80)}`);
+    if (results) lines.push(`- 结果: ${results.slice(0, 120)}`);
+    if (notes) lines.push(`- 备注: ${notes.slice(0, 80)}`);
     lines.push("");
   }
 
@@ -284,7 +300,7 @@ async function processBatch(
   }
 
   // 2b: 解析所有响应 → partial experiments
-  const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+  const allPartials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }> = [];
   for (let i = 0; i < rawResults.length; i++) {
     const rr = rawResults[i];
     const globalIdx = globalStartIdx + i;
@@ -312,8 +328,10 @@ async function processBatch(
         fileName: rr.fileName,
         experiment: {
           name: rr.fileName.replace(/\.[^.]+$/, ""),
-          results: rr.rawOutput.slice(0, 300),
-          notes: "AI JSON 解析失败，原始响应已放入结果区。",
+          properties: {
+            results: rr.rawOutput.slice(0, 300),
+            notes: "AI JSON 解析失败，原始响应已放入结果区。",
+          },
         },
       });
       onFileProgress(globalIdx, {
@@ -391,7 +409,7 @@ export async function runPipeline(
   // ═══ 分批 AI 分析 ═══
   const totalBatches = Math.ceil(files.length / BATCH_SIZE);
   const allBatchSummaries: string[] = [];
-  const allBatchPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+  const allBatchPartials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }> = [];
 
   for (let bi = 0; bi < totalBatches; bi++) {
     onStage("analyzing", `批次 ${bi + 1}/${totalBatches} · AI 多模态识别`);
@@ -485,7 +503,7 @@ export async function runPipeline(
       addedAt: now,
       file_url: "",  // 待 workbench 上传后填充
       storage_path: "",
-      parsedRaw: allBatchPartials[i]?.experiment?.results ?? "",
+      parsedRaw: getString(allBatchPartials[i]?.experiment.properties ?? {}, "results"),
     }));
     exp.lastParsedAt = now;
   }
@@ -505,10 +523,10 @@ export async function runPipeline(
 // ═══════════════════════════════════════════════════════
 
 function buildFromPartials(
-  allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }>,
-): Experiment[] {
+  allPartials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }>,
+): ExperimentDoc[] {
   // 去重：名称相近的合并
-  const groups = new Map<string, Partial<Experiment>[]>();
+  const groups = new Map<string, Partial<ExperimentDoc>[]>();
 
   for (const p of allPartials) {
     const key = (p.experiment.name || p.fileName).slice(0, 20);
@@ -525,7 +543,7 @@ function buildFromPartials(
         }
       }
     }
-    return normalizeExperiment(merged as Partial<Experiment>, {
+    return normalizeExperiment(merged as Partial<ExperimentDoc>, {
       lastParsedAt: new Date().toISOString(),
     });
   });
@@ -537,7 +555,7 @@ function buildFromPartials(
 export async function rerunMerge(
   fileResults: Array<{ fileName: string; fileType: string; rawOutput: string }>,
   onStage: (stage: PipelineStage, detail: string) => void,
-): Promise<Experiment[]> {
+): Promise<ExperimentDoc[]> {
   onStage("merging", `重新合并 ${fileResults.length} 个文件的结果`);
 
   const valid = fileResults.filter((r) => r.rawOutput.length > 0);
@@ -551,7 +569,7 @@ export async function rerunMerge(
       normalizeExperiment(p, { lastParsedAt: new Date().toISOString() }),
     );
   } catch {
-    const allPartials: Array<{ fileName: string; experiment: Partial<Experiment> }> = [];
+    const allPartials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }> = [];
     for (const r of valid) {
       try {
         const p = parseAPIResponse(r.rawOutput, r.fileName);
