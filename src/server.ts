@@ -45,12 +45,18 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
-const MCP_PROTOCOL_VERSION = "2025-03-26";
+const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
+  "2024-11-05",
+  "2025-03-26",
+  "2025-06-18",
+]);
+const DEFAULT_MCP_PROTOCOL_VERSION = "2025-03-26";
 const MCP_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type, mcp-session-id",
+  "access-control-expose-headers": "mcp-session-id",
 };
 const AI_MCP_TOOL = "parse_experiment_content";
 const AI_REQUEST_LIMIT = 5;
@@ -70,8 +76,10 @@ function canUseAiTool(request: Request): boolean {
   return true;
 }
 
-function mcpResponse(id: JsonRpcRequest["id"], result: unknown, status = 200): Response {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), { status, headers: MCP_HEADERS });
+function mcpResponse(id: JsonRpcRequest["id"], result: unknown, status = 200, sessionId?: string): Response {
+  const headers = new Headers(MCP_HEADERS);
+  if (sessionId) headers.set("mcp-session-id", sessionId);
+  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), { status, headers });
 }
 
 function mcpError(id: JsonRpcRequest["id"], code: number, message: string, data?: unknown): Response {
@@ -100,12 +108,19 @@ async function handleMcp(request: Request): Promise<Response> {
 
   if (rpc.jsonrpc !== "2.0" || !rpc.method) return mcpError(rpc.id, -32600, "Invalid Request");
   if (rpc.method === "initialize") {
+    const clientVersion = typeof rpc.params?.protocolVersion === "string"
+      ? rpc.params.protocolVersion
+      : DEFAULT_MCP_PROTOCOL_VERSION;
+    const protocolVersion = SUPPORTED_MCP_PROTOCOL_VERSIONS.has(clientVersion)
+      ? clientVersion
+      : DEFAULT_MCP_PROTOCOL_VERSION;
+    const sessionId = crypto.randomUUID();
     return mcpResponse(rpc.id, {
-      protocolVersion: MCP_PROTOCOL_VERSION,
+      protocolVersion,
       capabilities: { tools: {} },
       serverInfo: { name: "LabNote Agent MCP", version: "1.0.0" },
       instructions: "LabNote MCP exposes the same template, dynamic ExperimentDoc, validation, RAG chunking, and graph analysis domain capabilities as the LabNote web application. Tool calls create drafts or analysis only and never persist or delete user data.",
-    });
+    }, 200, sessionId);
   }
   if (rpc.method === "notifications/initialized") return new Response(null, { status: 202, headers: MCP_HEADERS });
   if (rpc.method === "tools/list") return mcpResponse(rpc.id, { tools: MCP_TOOLS });
