@@ -1,14 +1,22 @@
 /**
- * DeepSeek V4 Pro API — 文本解析与对话
+ * AI API — 文本解析与对话
  *
  * AI 调用通过 server functions 代理 — API key 仅在服务端
- *
- * 数据脱敏集成：
- *   chat() 和 chatWithSanitizer() 支持在发送前扫描敏感信息
- *   通过 onSensitive 回调让 UI 层展示确认弹窗
+ * Prompt 由模板动态生成（不再硬编码字段列表）
  */
+
 import type { ScanResult, AuditLogEntry } from "./sanitizer";
 import { scanSensitivity, applySanitization, createAuditEntry, persistAuditEntry } from "./sanitizer";
+import type { Template } from "./exp-core";
+import { GENERIC_TEMPLATE, getTemplate } from "./templates/presets";
+import {
+  buildExtractPrompt,
+  buildAutofillPrompt,
+  buildEvaluatePrompt,
+  buildReparsePrompt,
+  buildMergePrompt,
+  classifyExperimentType,
+} from "./prompt-builder";
 
 // ===== 模型 ID =====
 export const MODEL_TEXT = "d8j2d4r9dhtg6s3fevfg";
@@ -266,12 +274,17 @@ const EXTRACT_PROMPT = `你是科研数据治理专家。从以下文件内容�
   }]
 }`;
 
-export async function parseTextFile(text: string, fileName: string): Promise<string> {
+export async function parseTextFile(text: string, fileName: string): Promise<string>;
+export async function parseTextFile(text: string, fileName: string, template: Template): Promise<string>;
+export async function parseTextFile(text: string, fileName: string, template?: Template): Promise<string> {
   const content = text.slice(0, 12000);
+  const tpl = template ?? GENERIC_TEMPLATE;
+  const prompt = buildExtractPrompt(tpl);
+
   return chat(MODEL_TEXT, [
     {
       role: "user",
-      content: `${EXTRACT_PROMPT}\n\n文件名：${fileName}\n内容：\n${content}`,
+      content: `${prompt}\n\n文件名：${fileName}\n内容：\n${content}`,
     },
   ], 8192);
 }
@@ -404,9 +417,11 @@ function analyzeCSV(csvContent: string): {
 }
 
 // ===== CSV 数据解析（带预分析）=====
-export async function parseCSV(csvContent: string, fileName: string): Promise<string> {
+export async function parseCSV(csvContent: string, fileName: string, template?: Template): Promise<string> {
   const analysis = analyzeCSV(csvContent);
   const rawSample = csvContent.slice(0, 1000);
+  const tpl = template ?? GENERIC_TEMPLATE;
+  const prompt = buildExtractPrompt(tpl);
 
   return chat(MODEL_TEXT, [
     {
@@ -420,8 +435,7 @@ ${analysis.summary}
 ${rawSample}
 
 请根据预分析结果判断实验数据类型，提取可转化为实验卡片的信息。aiInsights 中写明数据质量（是否有缺失/异常）、趋势判断、后续建议。
-输出格式（纯JSON，不要markdown代码块）：
-${EXTRACT_PROMPT.slice(EXTRACT_PROMPT.indexOf("{"))}`,
+${prompt}`,
     },
   ], 8192);
 }
@@ -451,23 +465,10 @@ const AUTOFILL_PROMPT = `你是科研实验专家。根据已有字段，推断�
 【输出格式】纯JSON（不要markdown代码块）：
 {"name":"","experimentType":"synthesis|...","date":"","operator":"","purpose":"","background":"","hypothesis":"","conclusion":"","discipline":"","device":{"name":"","model":"","vendor":""},"instruments":[{"name":"","model":"","vendor":""}],"materials":[{"name":"","role":"reactant|..."}],"sample":{"id":"","batch":"","source":""},"params":[{"name":"","value":"","unit":""}],"environment":{"temperature":"","humidity":"","other":""},"protocol":{"name":"","version":""},"steps":[""],"results":"","notes":"","controls":[{"type":"standard|...","name":""}],"replicates":1,"qcStatus":"na|pending|passed|failed","aiInsights":""}`;
 
-export async function autoFillExperiment(experiment: {
-  name: string; experimentType?: string; date: string; operator: string;
-  purpose: string; background: string; hypothesis?: string; conclusion?: string;
-  discipline: string;
-  device: { name: string; model: string; vendor: string };
-  instruments?: Array<{ name: string; model: string; vendor: string; serialNumber?: string }>;
-  materials?: Array<{ name: string; casNumber?: string; purity?: string; lotNumber?: string; supplier?: string; amount?: string; role: string }>;
-  sample: { id: string; batch: string; source: string };
-  params: Array<{ name: string; value: string; unit: string }>;
-  environment: { temperature: string; humidity: string; other: string };
-  protocol?: { name: string; version?: string };
-  steps: string[];
-  results: string; notes: string;
-  controls?: Array<{ type: string; name: string; expectedResult?: string }>;
-  replicates?: number; qcStatus?: string;
-}): Promise<string> {
-  const input = JSON.stringify(experiment, null, 2);
+export async function autoFillExperiment(
+  doc: { name: string; experimentType: string; date: string; operator: string; properties: Record<string, unknown> },
+): Promise<string> {
+  const input = JSON.stringify({ name: doc.name, experimentType: doc.experimentType, date: doc.date, operator: doc.operator, properties: doc.properties }, null, 2);
   return chat(MODEL_TEXT, [
     {
       role: "user",
@@ -515,24 +516,10 @@ const REPARSE_PROMPT = `你是科研数据治理专家。以下是之前已解�
 【输出格式】纯JSON，与输入结构一致（不要markdown代码块）。`;
 
 export async function reparseExperimentFiles(
-  experiment: {
-    name: string; experimentType?: string; date: string; operator: string;
-    purpose: string; background: string; hypothesis?: string; conclusion?: string;
-    discipline: string;
-    device: { name: string; model: string; vendor: string };
-    instruments?: Array<{ name: string; model: string; vendor: string; serialNumber?: string }>;
-    materials?: Array<{ name: string; casNumber?: string; purity?: string; lotNumber?: string; supplier?: string; amount?: string; role: string }>;
-    sample: { id: string; batch: string; source: string };
-    params: Array<{ name: string; value: string; unit: string }>;
-    environment: { temperature: string; humidity: string; other: string };
-    protocol?: { name: string; version?: string };
-    steps: string[]; results: string; notes: string;
-    controls?: Array<{ type: string; name: string; expectedResult?: string }>;
-    replicates?: number; qcStatus?: string;
-  },
+  doc: { name: string; experimentType: string; date: string; operator: string; properties: Record<string, unknown> },
   fileContents: Array<{ name: string; textContent: string }>,
 ): Promise<string> {
-  const expJson = JSON.stringify(experiment, null, 2);
+  const expJson = JSON.stringify({ name: doc.name, experimentType: doc.experimentType, date: doc.date, operator: doc.operator, properties: doc.properties }, null, 2);
   const filesText = fileContents
     .map((f) => `=== 文件: ${f.name} ===\n${f.textContent.slice(0, 6000)}`)
     .join("\n\n");
@@ -548,15 +535,19 @@ export async function reparseExperimentFiles(
 // ===== 综合解析结果，去重合并为最终实验卡片 =====
 export async function mergeResults(
   allResults: Array<{ fileName: string; fileType: string; rawOutput: string }>,
+  template?: Template,
 ): Promise<string> {
   const summary = allResults
     .map((r) => `[${r.fileType}] ${r.fileName}:\n${r.rawOutput.slice(0, 1500)}`)
     .join("\n\n---\n\n");
 
+  const tpl = template ?? GENERIC_TEMPLATE;
+  const prompt = buildMergePrompt(tpl, allResults);
+
   return chat(MODEL_TEXT, [
     {
       role: "user",
-      content: `你是科研实验记录管理员。以下是多个文件分别解析的结果，请去重合并，输出最终的实验卡片列表（每个独立实验一张卡片）。严格输出JSON数组（不要markdown代码块）：\n\n${summary.slice(0, 8000)}`,
+      content: prompt,
     },
   ], 4096);
 }

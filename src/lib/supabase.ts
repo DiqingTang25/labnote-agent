@@ -9,10 +9,11 @@
  *   - ragSearch / ragAnswer  → src/lib/api/rag.functions.ts
  */
 import { createBrowserClient } from "@supabase/ssr";
-import type { Experiment } from "./labStore";
+import type { ExperimentDoc } from "./labStore";
 import type { ReproductionAudit, ReproductionParameter, ReproductionGap } from "./reproduction-audit";
 import { toRow, fromRow, buildDbPatch } from "./experiment-utils";
 import type { ExperimentRow } from "./experiment-utils";
+import { getString, flattenProperties } from "./property-utils";
 
 export type { ExperimentRow };
 export { toRow, fromRow, parseEmbedding } from "./experiment-utils";
@@ -56,7 +57,7 @@ export function isSupabaseReady(): boolean {
 // 实验 CRUD
 // ═══════════════════════════════════════════════════════
 
-export async function fetchExperiments(): Promise<Experiment[]> {
+export async function fetchExperiments(): Promise<ExperimentDoc[]> {
   if (!isSupabaseReady()) return [];
   // 获取当前用户 — 未登录返回空
   const { data: sessionData } = await supabase.auth.getSession();
@@ -76,7 +77,7 @@ export async function fetchExperiments(): Promise<Experiment[]> {
 }
 
 export async function insertExperiment(
-  exp: Experiment,
+  exp: ExperimentDoc,
   userId?: string,
 ): Promise<boolean> {
   if (!isSupabaseReady()) return false;
@@ -111,7 +112,7 @@ export async function insertExperiment(
 
 export async function updateExperimentDB(
   id: string,
-  patch: Partial<Experiment>,
+  patch: Partial<ExperimentDoc>,
 ): Promise<boolean> {
   if (!isSupabaseReady()) return false;
   const { data: sessionData } = await supabase.auth.getSession();
@@ -218,12 +219,19 @@ export async function embedExperiment(expId: string): Promise<void> {
   if (!data) return;
 
   const r = data as Record<string, unknown>;
-  const stepsText = Array.isArray(r.steps)
-    ? (r.steps as string[]).join(" ")
-    : "";
-  const semanticText = [r.name, r.purpose, r.results, stepsText]
+  const props = (r.properties as Record<string, unknown>) ?? {};
+
+  // Build semantic text from all properties (flat)
+  const flatEntries = flattenProperties(props as import("./exp-core").DocProperties);
+  const semanticText = [
+    r.name,
+    r.operator,
+    r.experiment_type,
+    ...flatEntries.map((e) => `${e.path}: ${e.value}`),
+  ]
     .filter(Boolean)
-    .join(" ");
+    .join(" ")
+    .slice(0, 8000); // Trim to avoid oversized embeddings
 
   // 整卡 embedding（向后兼容 + fallback），带内容哈希缓存
   if (semanticText.trim()) {
@@ -271,8 +279,9 @@ async function embedExperimentChunks(expId: string): Promise<void> {
   if (!data) return;
 
   const { splitExperimentIntoChunks } = await import("./experiment-utils");
+  const { GENERIC_TEMPLATE } = await import("./templates/presets");
   const exp = fromRow(data as Record<string, unknown>);
-  const chunks = splitExperimentIntoChunks(exp);
+  const chunks = splitExperimentIntoChunks(exp, GENERIC_TEMPLATE);
 
   if (chunks.length === 0) return;
 
@@ -386,39 +395,45 @@ export const RELATION_LABELS: Record<ExperimentRelation["relation_type"], string
 };
 
 /** 自动为实验生成关系（共享设备/样品/操作人 + AI 语义） */
-export async function autoGenerateRelations(exp: Experiment): Promise<number> {
+export async function autoGenerateRelations(exp: ExperimentDoc): Promise<number> {
   if (!isSupabaseReady()) return 0;
 
-  // 获取同用户所有其他实验
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) return 0;
 
   const { data: others } = await supabase
     .from("experiments")
-    .select("id, name, device_name, sample_id, operator, discipline")
+    .select("id, name, operator, properties")
     .eq("user_id", userId)
     .neq("id", exp.id);
 
   if (!others || others.length === 0) return 0;
 
-  let count = 0;
-  const otherList = others as Array<{ id: string; name: string; device_name: string | null; sample_id: string | null; operator: string | null; discipline: string | null }>;
+  const expDevice = getString(exp.properties, "device.name");
+  const expSample = getString(exp.properties, "sample.id");
 
-  for (const other of otherList) {
+  let count = 0;
+
+  for (const other of others) {
+    const op = other as Record<string, unknown>;
+    const otherProps = (op.properties as Record<string, unknown>) ?? {};
+    const otherDevice = (otherProps["device"] as Record<string, unknown>)?.["name"] as string | undefined;
+    const otherSample = (otherProps["sample"] as Record<string, unknown>)?.["id"] as string | undefined;
+
     // 1. 共享设备
-    if (exp.device.name && other.device_name && exp.device.name === other.device_name) {
-      const ok = await addExperimentRelation(exp.id, other.id, "device_shared", { device: exp.device.name });
+    if (expDevice && otherDevice && expDevice === otherDevice) {
+      const ok = await addExperimentRelation(exp.id, op.id as string, "device_shared", { device: expDevice });
       if (ok) count++;
     }
     // 2. 共享样品
-    if (exp.sample.id && other.sample_id && exp.sample.id === other.sample_id) {
-      const ok = await addExperimentRelation(exp.id, other.id, "sample_shared", { sample: exp.sample.id });
+    if (expSample && otherSample && expSample === otherSample) {
+      const ok = await addExperimentRelation(exp.id, op.id as string, "sample_shared", { sample: expSample });
       if (ok) count++;
     }
     // 3. 相同操作人
-    if (exp.operator && other.operator && exp.operator === other.operator) {
-      const ok = await addExperimentRelation(exp.id, other.id, "operator_shared", { operator: exp.operator });
+    if (exp.operator && op.operator && exp.operator === op.operator) {
+      const ok = await addExperimentRelation(exp.id, op.id as string, "operator_shared", { operator: exp.operator });
       if (ok) count++;
     }
   }
@@ -507,32 +522,36 @@ export async function deleteExperimentRelation(relationId: string): Promise<bool
 
 /** AI 推断实验关系 */
 export async function suggestRelations(
-  sourceExp: Experiment,
-  allExperiments: Experiment[],
+  sourceExp: ExperimentDoc,
+  allExperiments: ExperimentDoc[],
 ): Promise<Array<{ targetId: string; targetName: string; type: ExperimentRelation["relation_type"]; reason: string }>> {
-  // 排除自己
   const others = allExperiments.filter((e) => e.id !== sourceExp.id);
   if (others.length === 0) return [];
+
+  const srcDevice = getString(sourceExp.properties, "device.name");
+  const srcSample = getString(sourceExp.properties, "sample.id");
+  const srcPurpose = getString(sourceExp.properties, "purpose");
+  const srcDiscipline = getString(sourceExp.properties, "discipline");
 
   const ctx = others.map((e) => ({
     id: e.id,
     name: e.name,
-    discipline: e.discipline,
-    device: e.device.name,
-    sample: e.sample.id,
+    discipline: getString(e.properties, "discipline"),
+    device: getString(e.properties, "device.name"),
+    sample: getString(e.properties, "sample.id"),
     operator: e.operator,
-    purpose: e.purpose?.slice(0, 80),
+    purpose: getString(e.properties, "purpose").slice(0, 80),
   }));
 
   const prompt = `你是科研知识图谱构建助手。以下是一个实验和候选关联实验列表，请推断它们之间的关系。
 
 【当前实验】
 名称: ${sourceExp.name}
-学科: ${sourceExp.discipline}
-设备: ${sourceExp.device.name}
-样品: ${sourceExp.sample.id}
+学科: ${srcDiscipline}
+设备: ${srcDevice}
+样品: ${srcSample}
 操作人: ${sourceExp.operator}
-目的: ${sourceExp.purpose?.slice(0, 100)}
+目的: ${srcPurpose.slice(0, 100)}
 
 【候选实验】
 ${JSON.stringify(ctx, null, 2)}
@@ -543,8 +562,8 @@ ${JSON.stringify(ctx, null, 2)}
 [{"targetId":"...","type":"...","reason":"一句话解释为什么关联"}]`;
 
   try {
-    const { chat } = await import("./deepseek");
-    const raw = await chat("deepseek-ai/DeepSeek-V3", [
+    const { chat, MODEL_TEXT } = await import("./deepseek");
+    const raw = await chat(MODEL_TEXT, [
       { role: "system", content: "你是科研知识图谱构建助手。输出严格JSON数组。" },
       { role: "user", content: prompt },
     ], 2048);

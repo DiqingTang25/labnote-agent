@@ -4,7 +4,8 @@
  * 支持: TXT, CSV, MD, LOG, JSON, XML, PDF, DOCX, XLSX, PNG, JPG
  * 图片: Qwen3-VL-8B 视觉识别
  */
-import type { AttachedFile, Experiment } from "./labStore";
+import type { AttachedFile } from "./exp-core";
+import type { ExperimentDoc, Template } from "./exp-core";
 import {
   parseTextFile,
   parseImage,
@@ -14,6 +15,9 @@ import {
   fileToBase64,
 } from "./deepseek";
 import { parseAPIResponse, normalizeExperiment } from "./json-parser";
+import { classifyExperimentType } from "./prompt-builder";
+import { matchTemplate, GENERIC_TEMPLATE } from "./templates/presets";
+import { createBlankDoc } from "./exp-core";
 
 // ═══════════════════════════════════════════════════════
 // 配置
@@ -152,6 +156,7 @@ async function analyzeFile(
   file: File,
   content: FileContent,
   useRealAPI: boolean,
+  template?: Template,
 ): Promise<RawResult> {
   const category = classifyFile(file.name);
 
@@ -171,12 +176,12 @@ async function analyzeFile(
           rawOutput = await parseImage(content.base64!, content.mime!, file.name);
           break;
         case "csv":
-          rawOutput = await parseCSV(content.textContent, file.name);
+          rawOutput = await parseCSV(content.textContent, file.name, template);
           break;
         case "text":
         case "document":
         default:
-          rawOutput = await parseTextFile(content.textContent || file.name, file.name);
+          rawOutput = await parseTextFile(content.textContent || file.name, file.name, template);
           break;
       }
     }
@@ -236,8 +241,9 @@ async function processBatch(
   totalBatches: number,
   onFileProgress: (fileIndex: number, progress: FileProgress) => void,
   useRealAPI: boolean,
+  template?: Template,
 ): Promise<{
-  partials: Array<{ fileName: string; experiment: Partial<Experiment> }>;
+  partials: Array<{ fileName: string; experiment: Partial<ExperimentDoc> }>;
   summaryMd: string;
 }> {
   const rawResults: RawResult[] = [];
@@ -259,7 +265,7 @@ async function processBatch(
 
     await sleep(API_DELAY_MS);
 
-    const result = await analyzeFile(file, fc, useRealAPI);
+    const result = await analyzeFile(file, fc, useRealAPI, template);
     rawResults.push(result);
 
     if (result.rawOutput.length > 0) {
@@ -324,7 +330,7 @@ async function processBatch(
 
   if (useRealAPI && validResults.length > 1) {
     try {
-      const mergedRaw = await mergeResults(validResults);
+      const mergedRaw = await mergeResults(validResults, template);
       const merged = parseAPIResponse(mergedRaw, `__batch${batchIndex}__`);
       if (merged.length > 0) {
         batchPartials = merged.map((m) => ({
@@ -352,12 +358,29 @@ export async function runPipeline(
   onStage: (stage: PipelineStage, detail: string) => void,
   onFileProgress: (fileIndex: number, progress: FileProgress) => void,
   useRealAPI = true,
-): Promise<Experiment[]> {
+): Promise<ExperimentDoc[]> {
   if (files.length === 0) return [];
 
   // 初始化进度
   for (let i = 0; i < files.length; i++) {
     onFileProgress(i, { name: files[i].name, status: "waiting" });
+  }
+
+  // ═══ 模板分类 ═══
+  // 从第一个文本文件的内容推断实验类型
+  let template: Template | undefined;
+  if (useRealAPI) {
+    const firstTextFile = files.find((f) => classifyFile(f.name) !== "image");
+    if (firstTextFile) {
+      try {
+        const textSample = (await firstTextFile.text()).slice(0, 2000);
+        const { type } = classifyExperimentType(firstTextFile.name, textSample);
+        template = matchTemplate(type);
+        if (template) {
+          onStage("reading", `检测到实验类型: ${template.name}`);
+        }
+      } catch { /* keep generic template */ }
+    }
   }
 
   // ═══ 读取文件 ═══
@@ -385,6 +408,7 @@ export async function runPipeline(
       totalBatches,
       onFileProgress,
       useRealAPI,
+      template,
     );
 
     allBatchPartials.push(...partials);
@@ -401,7 +425,7 @@ export async function runPipeline(
   // ═══ 跨批合并 ═══
   onStage("merging", `合并 ${totalBatches} 批结果`);
 
-  let finalExperiments: Experiment[];
+  let finalExperiments: ExperimentDoc[];
 
   if (totalBatches === 1) {
     // 单批次：直接用 partials
@@ -419,10 +443,16 @@ export async function runPipeline(
           rawOutput: `请基于以下 ${totalBatches} 个批次的实验摘要，去重合并为最终的实验卡片列表。\n\n${truncatedSummary}`,
         }];
 
-        // 直接调 chat 而非 mergeResults，因为 mergeResults 期望的是 rawOutput
-        const { chat } = await import("./deepseek");
+        const { chat, MODEL_TEXT } = await import("./deepseek");
+        const tpl = template ?? GENERIC_TEMPLATE;
+        const { buildMergePrompt: _bmp } = await import("./prompt-builder");
+        const summaryResultsForMerge: RawResult[] = [{
+          fileName: "全部摘要", fileType: "text",
+          rawOutput: truncatedSummary,
+        }];
+        const customMergePrompt = _bmp(tpl, summaryResultsForMerge);
         const mergedRaw = await chat(
-          "d8j2d4r9dhtg6s3fevfg",
+          MODEL_TEXT,
           [{
             role: "user",
             content: `你是科研实验记录管理员。以下是 ${totalBatches} 个批次的实验摘要，请去重合并，输出最终的实验卡片列表。\n\n【重要】输出纯JSON（不要markdown代码块），字段尽可能完整：\n{"experiments":[{"name":"...","experimentType":"synthesis|characterization|measurement|simulation|other","date":"...","operator":"...","purpose":"...","hypothesis":"...","conclusion":"...","device":{"name":"...","model":"...","vendor":"..."},"instruments":[{"name":"...","model":"...","vendor":"..."}],"materials":[{"name":"...","casNumber":"...","purity":"...","role":"reactant|..."}],"sample":{"id":"...","batch":"...","source":"..."},"params":[{"name":"...","value":"...","unit":"..."}],"environment":{"temperature":"","humidity":"","other":""},"protocol":{"name":"...","version":"..."},"steps":["..."],"results":"...","notes":"...","controls":[{"type":"standard|...","name":"..."}],"replicates":1,"qcStatus":"na|...","source":"...","aiInsights":"..."}]}\n\n${truncatedSummary}`,

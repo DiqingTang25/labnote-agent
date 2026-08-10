@@ -116,19 +116,22 @@ export const ragSearch = createServerFn({ method: "POST" })
         const ilikePattern = terms.map((t) => `%${t}%`).join("|");
         const { data: keywordResults } = await supabase
           .from("experiments")
-          .select("id, name, purpose, results")
+          .select("id, name, properties")
           .or(
             terms.map((_, i) => `name.ilike.%${terms[i]}%,purpose.ilike.%${terms[i]}%,results.ilike.%${terms[i]}%`).join(",")
           )
           .limit(data.limit * 3);
 
         if (Array.isArray(keywordResults)) {
-          for (const r of keywordResults as Array<{ id: string; name: string; purpose?: string; results?: string }>) {
-            const snippet = [r.purpose, r.results].filter(Boolean).join(" | ").slice(0, 200);
+          for (const r of keywordResults as Array<{ id: string; name: string; properties?: Record<string, unknown> }>) {
+            const props = r.properties ?? {};
+            const purpose = (props["purpose"] as string) ?? "";
+            const results = (props["results"] as string) ?? "";
+            const snippet = [purpose, results].filter(Boolean).join(" | ").slice(0, 200);
             simMap.set(r.id, {
               name: r.name,
               similarity: 0.5,
-              bestChunk: snippet,
+              bestChunk: snippet || JSON.stringify(props).slice(0, 200),
               chunkType: "keyword",
             });
           }
@@ -179,7 +182,7 @@ export const ragSearch = createServerFn({ method: "POST" })
     const ids = topEntries.map(([id]) => id);
     const { data: full } = await supabase
       .from("experiments")
-      .select("id, name, purpose, results, steps, params")
+      .select("id, name, properties")
       .in("id", ids);
 
     if (!full) return [];
@@ -198,15 +201,16 @@ export const ragSearch = createServerFn({ method: "POST" })
 
     return rows
       .map((r) => {
-        const stepsText = Array.isArray(r.steps)
-          ? (r.steps as string[]).join("; ")
+        const props = (r.properties as Record<string, unknown>) ?? {};
+        const purpose = (props["purpose"] as string) ?? "";
+        const results = (props["results"] as string) ?? "";
+        const steps = props["steps"] as string[] | undefined;
+        const stepsText = Array.isArray(steps) ? steps.join("; ") : "";
+        const params = props["params"] as Array<{ name: string; value: string; unit: string }> | undefined;
+        const paramsText = Array.isArray(params)
+          ? params.map((p) => `${p.name ?? ""}: ${p.value ?? ""}${p.unit ?? ""}`).join(", ")
           : "";
-        const paramsText = Array.isArray(r.params)
-          ? (r.params as Array<{ name: string; value: string; unit: string }>)
-              .map((p) => `${p.name ?? ""}: ${p.value ?? ""}${p.unit ?? ""}`)
-              .join(", ")
-          : "";
-        const fullText = [r.purpose, r.results, stepsText, paramsText]
+        const fullText = [purpose, results, stepsText, paramsText]
           .filter(Boolean)
           .join(" | ");
         // 如果有 chunk 精准匹配，优先用 chunk 内容

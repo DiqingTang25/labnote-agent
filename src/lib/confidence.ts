@@ -322,17 +322,10 @@ export async function calibratedExtract(
  * 对 extractJSON 返回的 experiments[0] 逐字段校准
  */
 export async function calibrateExperimentFields(
-  experiment: {
-    name: string; date: string; operator: string; purpose: string; background: string;
-    discipline: string; device: { name: string; model: string; vendor: string };
-    sample: { id: string; batch: string; source: string };
-    params: Array<{ name: string; value: string; unit: string }>;
-    environment: { temperature: string; humidity: string; other: string };
-    steps: string[]; results: string; notes: string;
-  },
+  doc: { name: string; date: string; operator: string; experimentType: string; properties: Record<string, unknown> },
   sourceFiles?: Array<{ name: string; textContent: string }>,
 ): Promise<CalibratedResult> {
-  const expJson = JSON.stringify(experiment, null, 2);
+  const expJson = JSON.stringify(doc, null, 2);
   const sourceContext = sourceFiles?.length
     ? "\n\n【原始文件内容用于校验】\n" + sourceFiles
         .map((f) => `=== ${f.name} ===\n${f.textContent.slice(0, 4000)}`)

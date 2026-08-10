@@ -3,6 +3,8 @@
  */
 import { useState, useMemo } from "react";
 import { useLab } from "../lib/labStore";
+import { getString } from "../lib/property-utils";
+import type { ExperimentDoc } from "../lib/labStore";
 import { ragAnswerReal, ragAnswerRealStream, submitFeedback } from "../lib/supabase";
 import {
   MessageCircle, X, Sparkles, Loader2, Send, FileText, Target,
@@ -284,7 +286,7 @@ export function AIAgent() {
                       <input type="checkbox" checked={selectedIds.has(e.id)} onChange={() => toggleCard(e.id)}
                         className="accent-primary"/>
                       <span className="truncate">{e.name}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{e.sample.id}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{getSampleId(e)}</span>
                     </label>
                   ))}
                 </div>
@@ -425,4 +427,8 @@ export function AIAgent() {
       )}
     </>
   );
+}
+
+function getSampleId(e: ExperimentDoc): string {
+  return getString(e.properties, "sample.id") || "—";
 }

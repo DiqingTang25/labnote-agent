@@ -1,23 +1,23 @@
 /**
  * 实验结束总结面板 — 解析完成后弹出
  */
-import { useState } from "react";
-import { useLab, type Experiment } from "../lib/labStore";
 import {
-  X, CheckCircle2, TrendingUp, Package, Download, FileJson, FileText,
-  ClipboardList, BookOpen, Share2, Sparkles, Clock, AlertTriangle,
+  X, CheckCircle2, TrendingUp, Package, Download,
+  ClipboardList, BookOpen, Share2,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { ExperimentDoc } from "../lib/labStore";
+import { flattenProperties, getString } from "../lib/property-utils";
 
 interface Props {
-  experiments: Experiment[];
+  experiments: ExperimentDoc[];
   fileCount: number;
   onClose: () => void;
 }
 
 export function ExperimentSummary({ experiments, fileCount, onClose }: Props) {
-  const totalParams = experiments.reduce((s, e) => s + e.params.length, 0);
-  const totalSteps = experiments.reduce((s, e) => s + e.steps.length, 0);
+  const totalFields = experiments.reduce((s, e) => s + flattenProperties(e.properties).length, 0);
+  const disciplines = new Set(experiments.map((e) => getString(e.properties, "discipline") || "未知"));
 
   const exportPackage = () => {
     const md = experiments.map(toMD).join("\n\n---\n\n");
@@ -33,7 +33,6 @@ export function ExperimentSummary({ experiments, fileCount, onClose }: Props) {
     <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="card-soft w-full max-w-2xl max-h-[85vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--color-success)] text-white">
@@ -47,15 +46,13 @@ export function ExperimentSummary({ experiments, fileCount, onClose }: Props) {
           <button onClick={onClose} className="p-1.5 hover:bg-secondary rounded-lg"><X size={18}/></button>
         </div>
 
-        {/* 统计 */}
         <div className="grid grid-cols-4 gap-3 p-5 border-b border-border">
           <MiniStat icon={<Package size={14}/>} label="实验卡片" value={experiments.length}/>
-          <MiniStat icon={<TrendingUp size={14}/>} label="参数字段" value={totalParams}/>
-          <MiniStat icon={<ClipboardList size={14}/>} label="实验步骤" value={totalSteps}/>
-          <MiniStat icon={<BookOpen size={14}/>} label="学科" value={[...new Set(experiments.map(e=>e.discipline))].length}/>
+          <MiniStat icon={<TrendingUp size={14}/>} label="提取字段" value={totalFields}/>
+          <MiniStat icon={<ClipboardList size={14}/>} label="文件数" value={fileCount}/>
+          <MiniStat icon={<BookOpen size={14}/>} label="学科" value={disciplines.size}/>
         </div>
 
-        {/* 卡片列表 */}
         <div className="p-5 space-y-2 max-h-60 overflow-auto">
           {experiments.map((e) => (
             <div key={e.id} className="flex items-center gap-3 rounded-lg bg-secondary/40 p-3 text-sm">
@@ -63,17 +60,16 @@ export function ExperimentSummary({ experiments, fileCount, onClose }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{e.name}</div>
                 <div className="text-[10px] text-muted-foreground">
-                  {e.date} · {e.operator} · {e.sample.id}
+                  {e.date} · {e.operator} · {getString(e.properties, "sample.id") || "—"}
                 </div>
               </div>
               <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full shrink-0">
-                {e.params.length} 参数
+                {flattenProperties(e.properties).length} 字段
               </span>
             </div>
           ))}
         </div>
 
-        {/* 操作 */}
         <div className="flex gap-3 p-5 border-t border-border">
           <button onClick={exportPackage}
             className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm text-primary-foreground hover:bg-primary/90 transition">
@@ -102,6 +98,21 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-function toMD(e: Experiment): string {
-  return `## ${e.name}\n- 时间：${e.date}\n- 人员：${e.operator}\n- 样品：${e.sample.id}\n\n### 目的\n${e.purpose}\n\n### 设备\n${e.device.name} / ${e.device.model}\n\n### 参数\n${e.params.map(p => `- ${p.name}: ${p.value} ${p.unit}`).join("\n")}\n\n### 步骤\n${e.steps.map((s,i) => `${i+1}. ${s}`).join("\n")}\n\n### 结果\n${e.results}\n\n### 备注\n${e.notes}`;
+function toMD(e: ExperimentDoc): string {
+  const props = e.properties as Record<string, unknown>;
+  const purpose = (props["purpose"] as string) ?? "";
+  const device = props["device"] as Record<string, unknown> | undefined;
+  const deviceName = (device?.["name"] as string) || "";
+  const deviceModel = (device?.["model"] as string) || "";
+  const sample = props["sample"] as Record<string, unknown> | undefined;
+  const sampleId = (sample?.["id"] as string) || "";
+  const results = (props["results"] as string) ?? "";
+  const notes = (props["notes"] as string) ?? "";
+  const params = props["params"] as Array<{ name: string; value: string; unit?: string }> | undefined;
+  const steps = props["steps"] as string[] | undefined;
+
+  const paramsStr = params?.map((p) => `- ${p.name}: ${p.value} ${p.unit ?? ""}`).join("\n") ?? "";
+  const stepsStr = steps?.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n") ?? "";
+
+  return `## ${e.name}\n- 时间：${e.date}\n- 人员：${e.operator}\n- 样品：${sampleId}\n\n### 目的\n${purpose}\n\n### 设备\n${deviceName} / ${deviceModel}\n\n${paramsStr ? `### 参数\n${paramsStr}\n\n` : ""}${stepsStr ? `### 步骤\n${stepsStr}\n\n` : ""}### 结果\n${results}\n\n### 备注\n${notes}`;
 }
