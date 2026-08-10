@@ -2,6 +2,14 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { MCP_TOOLS, callMcpTool } from "./lib/mcp-tools";
+
+type JsonRpcRequest = {
+  jsonrpc?: string;
+  id?: string | number | null;
+  method?: string;
+  params?: Record<string, unknown>;
+};
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -37,8 +45,62 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
+const MCP_PROTOCOL_VERSION = "2025-03-26";
+const MCP_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "content-type, mcp-session-id",
+};
+
+function mcpResponse(id: JsonRpcRequest["id"], result: unknown, status = 200): Response {
+  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), { status, headers: MCP_HEADERS });
+}
+
+function mcpError(id: JsonRpcRequest["id"], code: number, message: string, data?: unknown): Response {
+  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message, ...(data === undefined ? {} : { data }) } }), { status: 200, headers: MCP_HEADERS });
+}
+
+async function handleMcp(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MCP_HEADERS });
+  if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: MCP_HEADERS });
+
+  let rpc: JsonRpcRequest;
+  try {
+    rpc = await request.json() as JsonRpcRequest;
+  } catch {
+    return mcpError(null, -32700, "Parse error");
+  }
+
+  if (rpc.jsonrpc !== "2.0" || !rpc.method) return mcpError(rpc.id, -32600, "Invalid Request");
+  if (rpc.method === "initialize") {
+    return mcpResponse(rpc.id, {
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: { tools: {} },
+      serverInfo: { name: "LabNote Agent MCP", version: "1.0.0" },
+      instructions: "LabNote MCP exposes the same template, dynamic ExperimentDoc, validation, RAG chunking, and graph analysis domain capabilities as the LabNote web application. Tool calls create drafts or analysis only and never persist or delete user data.",
+    });
+  }
+  if (rpc.method === "notifications/initialized") return new Response(null, { status: 202, headers: MCP_HEADERS });
+  if (rpc.method === "tools/list") return mcpResponse(rpc.id, { tools: MCP_TOOLS });
+  if (rpc.method === "tools/call") {
+    const name = rpc.params?.name;
+    if (typeof name !== "string") return mcpError(rpc.id, -32602, "tools/call requires params.name");
+    try {
+      const result = await callMcpTool(name, rpc.params?.arguments);
+      return mcpResponse(rpc.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Tool execution failed";
+      return mcpResponse(rpc.id, { content: [{ type: "text", text: message }], isError: true });
+    }
+  }
+  return mcpError(rpc.id, -32601, `Method not found: ${rpc.method}`);
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    if (new URL(request.url).pathname === "/mcp") return handleMcp(request);
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
