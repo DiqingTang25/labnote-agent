@@ -52,6 +52,23 @@ const MCP_HEADERS = {
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type, mcp-session-id",
 };
+const AI_MCP_TOOL = "parse_experiment_content";
+const AI_REQUEST_LIMIT = 5;
+const AI_REQUEST_WINDOW_MS = 60 * 60 * 1000;
+const aiRequestsByClient = new Map<string, number[]>();
+
+function canUseAiTool(request: Request): boolean {
+  const client = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  const now = Date.now();
+  const requests = (aiRequestsByClient.get(client) ?? []).filter((time) => now - time < AI_REQUEST_WINDOW_MS);
+  if (requests.length >= AI_REQUEST_LIMIT) {
+    aiRequestsByClient.set(client, requests);
+    return false;
+  }
+  requests.push(now);
+  aiRequestsByClient.set(client, requests);
+  return true;
+}
 
 function mcpResponse(id: JsonRpcRequest["id"], result: unknown, status = 200): Response {
   return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), { status, headers: MCP_HEADERS });
@@ -86,6 +103,9 @@ async function handleMcp(request: Request): Promise<Response> {
   if (rpc.method === "tools/call") {
     const name = rpc.params?.name;
     if (typeof name !== "string") return mcpError(rpc.id, -32602, "tools/call requires params.name");
+    if (name === AI_MCP_TOOL && !canUseAiTool(request)) {
+      return mcpResponse(rpc.id, { content: [{ type: "text", text: "AI parsing rate limit reached. Retry after one hour." }], isError: true });
+    }
     try {
       const result = await callMcpTool(name, rpc.params?.arguments);
       return mcpResponse(rpc.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: false });

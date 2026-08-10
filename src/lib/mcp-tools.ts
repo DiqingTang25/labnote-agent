@@ -2,8 +2,9 @@ import { validateProperties } from "./constraint-validator";
 import { createBlankDoc, type DocProperties, type ExperimentDoc, type PropValue, type Template } from "./exp-core";
 import { splitExperimentIntoChunks } from "./experiment-utils";
 import { buildGraphData } from "./graph-data";
-import { normalizeExperiment } from "./json-parser";
+import { normalizeExperiment, parseAPIResponse } from "./json-parser";
 import { getProperty, mergeProperties, setProperty } from "./property-utils";
+import { applySanitization, scanSensitivity } from "./sanitizer";
 import { ALL_PRESET_TEMPLATES, DEFAULT_TEMPLATE, getTemplate, matchTemplate } from "./templates/presets";
 
 export type McpTool = {
@@ -104,6 +105,11 @@ export const MCP_TOOLS: McpTool[] = [
     description: "Applies path-based dynamic property patches immutably to an unsaved LabNote ExperimentDoc draft. It never writes to Supabase.",
     inputSchema: { type: "object", required: ["experiment", "property_patches"], properties: { experiment: { type: "object" }, property_patches: { type: "array", minItems: 1, items: { type: "object", required: ["path", "value"], properties: { path: { type: "string" }, value: {} } } } } },
   },
+  {
+    name: "parse_experiment_content",
+    description: "Uses LabNote's existing AI extraction pipeline, dynamic template prompt, response parser, and sensitivity sanitizer to turn text or CSV content into unsaved ExperimentDoc drafts. Input is never stored.",
+    inputSchema: { type: "object", required: ["content", "file_name"], properties: { content: { type: "string", minLength: 1, maxLength: 12000 }, file_name: { type: "string", minLength: 1 }, mode: { type: "string", enum: ["text", "csv"], default: "text" }, template_id: { type: "string", default: "tpl_generic_dry_experiment" } } },
+  },
 ];
 
 export async function callMcpTool(name: string, args: unknown): Promise<ToolResult> {
@@ -166,6 +172,30 @@ export async function callMcpTool(name: string, args: unknown): Promise<ToolResu
     case "apply_experiment_property_patches": {
       const experiment = normalizeExperiment(object(input.experiment, "experiment") as Partial<ExperimentDoc>);
       return { saved: false, experiment: { ...experiment, properties: applyPropertyPatches(experiment.properties, input.property_patches) } };
+    }
+    case "parse_experiment_content": {
+      const content = stringValue(input.content, "content");
+      if (content.length > 12000) throw new Error("content must not exceed 12000 characters");
+      const fileName = stringValue(input.file_name, "file_name");
+      const template = findTemplate(input.template_id);
+      const scan = scanSensitivity(content);
+      const sanitizedContent = scan.hasSensitive
+        ? applySanitization(content, scan.matches).sanitized
+        : content;
+      const { parseCSV, parseTextFile } = await import("./deepseek");
+      const rawOutput = input.mode === "csv"
+        ? await parseCSV(sanitizedContent, fileName, template)
+        : await parseTextFile(sanitizedContent, fileName, template);
+      const experiments = parseAPIResponse(rawOutput, fileName, template)
+        .map((item) => normalizeExperiment(item, { properties: { _meta: { templateId: template.id, templateVersion: template.version } } }));
+      return {
+        saved: false,
+        templateId: template.id,
+        sanitized: scan.hasSensitive,
+        sensitivitySummary: scan.hasSensitive ? scan.summary : undefined,
+        rawOutput,
+        experiments,
+      };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
