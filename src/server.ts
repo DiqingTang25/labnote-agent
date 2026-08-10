@@ -80,6 +80,15 @@ function mcpError(id: JsonRpcRequest["id"], code: number, message: string, data?
 
 async function handleMcp(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MCP_HEADERS });
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({
+      name: "LabNote Agent MCP",
+      status: "ready",
+      protocol: "Streamable HTTP / JSON-RPC 2.0",
+      endpoint: "/mcp",
+      usage: "Send POST requests with Content-Type: application/json. Browser GET is a health check only.",
+    }), { status: 200, headers: MCP_HEADERS });
+  }
   if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: MCP_HEADERS });
 
   let rpc: JsonRpcRequest;
