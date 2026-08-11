@@ -7,7 +7,7 @@
 
 ---
 
-## 当前状态 (2026-08-10) — Dynamic Document Store 架构重构
+## 当前状态 (2026-08-11) — Dynamic Document Store 架构重构 + MCP 上线
 
 ### ✅ 已完成：零硬编码字段架构
 
@@ -18,7 +18,7 @@
 | 维度 | 旧架构 | 新架构 |
 |------|--------|--------|
 | 数据模型 | 40+ TypeScript 字段 → 40+ PostgreSQL 列 | 8 核心索引列 + `properties JSONB`（无模式） |
-| 字段定义 | 手写在 7 个文件中 | 26 个 Template 的 `fieldGroups` 驱动 UI + AI |
+| 字段定义 | 手写在 7 个文件中 | 27 个 Template 的 `fieldGroups` 驱动 UI + AI |
 | AI Prompt | 40+ 字段硬编码在 4 个 prompt 中 | 从 Template 动态生成 JSON shape |
 | 卡片 UI | ~300 行手写 JSX 按字段 | `DynamicCardEditor` 按 fieldGroups 配置渲染 |
 | 字段校验 | 无 | 物理约束引擎：61 条模板约束 + 11 条通用物理定律 |
@@ -27,7 +27,7 @@
 
 #### 数据库
 
-`experiments` 表已从 40+ 列减至 13 列：
+`experiments` 表已从 40+ 列减至 14 列：
 
 | 列 | 类型 | 说明 |
 |----|------|------|
@@ -41,9 +41,9 @@
 
 新增表：
 - `field_patterns` — 自演化字段统计引擎
-- `templates` — 实验模板库（26 个预设模板）
+- `templates` — 实验模板库（27 个预设模板）
 
-#### 26 个实验模板（5 大领域）
+#### 27 个实验模板（6 大领域）
 
 | 领域 | 数量 | 模板 |
 |------|:----:|------|
@@ -53,7 +53,7 @@
 | 统计分析 | 3 | 临床试验、流行病学、生存分析 |
 | 数据工程 | 1 | ETL流水线与数据质量 |
 | 湿实验 | 5 | 水热合成、溶胶凝胶、XRD、SEM/TEM、电化学 |
-| 通用回退 | 1 | 覆盖旧格式字段 |
+| 通用回退 | 2 | 通用实验（覆盖旧字段）、通用干实验 |
 
 所有模板来源：NOMAD, Materials Project, MLflow, ISA-TAB, LabIMotion, Allotrope ASM, CDISC ODM, Great Expectations 等开源标准。由 Gemini 调研并转换为 LabNote field_groups 格式。
 
@@ -63,17 +63,40 @@
 - **模板约束**：61 条领域边界（来源标注：VASP manual, NOMAD, Allotrope ASM, CDISC ODM 等）
 - 硬边界违反 = 拒绝入库（error），常见范围偏离 = 警告但允许（warning）
 
+#### MCP 集成
+
+LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验治理能力。端点：`https://labnote-vault-main.vercel.app/mcp`（JSON-RPC 2.0 Streamable HTTP）。
+
+8 个 MCP 工具与 Web 前端共享同一套 TypeScript 领域模块：
+
+| 工具 | 功能 |
+|------|------|
+| `list_labnote_templates` | 完整动态模板目录（27 模板、字段组、约束） |
+| `match_labnote_template` | 关键词评分匹配实验类型 |
+| `create_experiment_card_draft` | 用真实 `ExperimentDoc` 创建未保存草稿 |
+| `validate_experiment_properties` | 模板必填字段 + 物理/数值约束校验 |
+| `build_experiment_rag_chunks` | 模板驱动的 RAG 分块 |
+| `build_experiment_graph` | 实验图谱数据构建 |
+| `apply_experiment_property_patches` | 动态点路径更新实验草稿 |
+| `parse_experiment_content` | 复用 AI 文本/CSV 解析 + 脱敏 + JSON 归一化 |
+
+详见 [MCP 比赛提交说明](docs/mcp-competition-submission.md)
+
 #### 待完成
 
-| 优先级 | 任务 |
-|:----:|------|
-| P0 | Supabase 迁移已执行 Step 1（回填），Step 2（删旧列+建新表）已执行 |
-| P0 | 26 个模板 seed 到 Supabase templates 表 |
-| P1 | 多 Agent 提取流水线（Extractor→Validator→Corrector） |
-| P2 | compare/assets/index/graph 适配新类型 |
-| P3 | extra → 技能库自演化 |
-| P4 | 零样本 CSV 列语义识别 |
-| P5 | MCP 仪器连接 |
+| 优先级 | 任务 | 状态 |
+|:----:|------|:----:|
+| P0 | Supabase 迁移 Step 1-2 脚本已就绪（`scripts/p0-migration-*.sql`），待执行 | 脚本就绪 |
+| P0 | 27 个模板 seed 到 Supabase templates 表（`scripts/seed-presets.ts`） | 脚本就绪 |
+| P1 | 多 Agent 提取流水线（`validator-agent.ts` + `corrector-agent.ts` 已实现） | 待集成测试 |
+| P2 | compare/assets/index/graph 适配新 ExperimentDoc 类型 | 待完成 |
+| P3 | extra → 技能库自演化（`field-patterns.ts` + `AddFieldDialog` 已实现） | 待集成 |
+| P4 | 零样本 CSV 列语义识别（LLM 辅助列类型理解） | 待实现 |
+| ✅ | MCP 端点（`https://labnote-vault-main.vercel.app/mcp`，8 个工具） | 已完成 |
+| ✅ | 物理约束引擎（`constraint-validator.ts`，61+11 条规则） | 已完成 |
+| ✅ | 动态模板 Prompt（`prompt-builder.ts`，从 Template 动态生成） | 已完成 |
+| ✅ | DynamicCardEditor + DynamicField 配置驱动 UI | 已完成 |
+| ✅ | 数据模型迁移（`exp-core.ts`，8 列 + properties JSONB） | 已完成 |
 
 #### 2026 年前沿参考
 
@@ -84,7 +107,7 @@
 - **表格基础模型**: Google TabFM (zero-shot), Relational Transformer (ICLR 2026), SkillTFM (gate evolution)
 - **数据标准**: NOMAD, ISA-TAB, Allotrope ASM, CDISC ODM, NeXus NXxrd, OME-XML, BatteryDataGenome
 
-详见 [调研报告](docs/2026-ai-frontier-research.md)
+详见 [调研报告](docs/2026-ai-frontier-research.md)（位于 `demo` 分支）
 
 **已阅读但待融合的方向**：多 Agent 自纠错流水线、SkillTFM 技能库演化、TabFM 零样本列理解、MCP 仪器协议。
 
@@ -117,6 +140,7 @@
 | 展示层 | `src/routes/`, `src/components/` | 浏览器 | 页面渲染、用户交互、文件拖拽 |
 | 业务逻辑层 | `src/lib/`（不含 `api/`） | 浏览器 | 状态管理、流水线编排、数据脱敏 |
 | 服务端代理层 | `src/lib/api/` | Nitro (Node.js) | API Key 隔离、AI 网关转发、RAG 检索 |
+| MCP 接口层 | `src/server.ts`, `src/lib/mcp-tools.ts` | Nitro (Node.js) | JSON-RPC 2.0 Streamable HTTP，向外部 AI Agent 暴露 8 个工具 |
 | 基础设施层 | 外部服务 | 云端 | Supabase (数据库/存储/认证)、XJTLU AI Gateway、Vercel |
 
 ### 1.2 请求流转
@@ -424,6 +448,8 @@ Supabase Auth 邮箱/密码。会话通过 `@supabase/ssr` cookie 管理。`Requ
 labnote-vault-main/
 |
 |-- src/
+|   |-- server.ts                  # MCP Streamable HTTP 端点
+|   |
 |   |-- routes/                    # 文件路由（TanStack Start）
 |   |   |-- __root.tsx             # 根布局、导航栏、认证包裹
 |   |   |-- index.tsx              # /          首页
@@ -440,21 +466,35 @@ labnote-vault-main/
 |   |   +-- auth/callback.tsx      # OAuth 回调
 |   |
 |   |-- lib/
+|   |   |-- exp-core.ts            # 核心类型：ExperimentDoc, Template, FieldGroup
+|   |   |-- property-utils.ts      # 动态属性路径 get/set/merge/coerce
+|   |   |-- prompt-builder.ts      # 从 Template 动态生成 AI prompt
+|   |   |-- constraint-validator.ts # 物理约束引擎（61 模板约束 + 11 通用定律）
+|   |   |-- validator-agent.ts     # 实验文档校验 Agent
+|   |   |-- corrector-agent.ts     # 校验失败后自动修正 Agent
+|   |   |-- mcp-tools.ts           # MCP 工具实现（与前端共享领域模块）
+|   |   |-- field-patterns.ts      # 自演化字段统计（客户端）
+|   |   |
 |   |   |-- api/                   # Server Functions（仅 Nitro 运行时）
 |   |   |   |-- ai.functions.ts        # chat、embedding、rerank、logprobs
 |   |   |   |-- rag.functions.ts       # RAG 搜索、流式回答
 |   |   |   |-- decompose.functions.ts # 论文拆解编排
 |   |   |   |-- materials-project.functions.ts  # MP API 代理
-|   |   |   +-- nist.functions.ts      # NIST API 代理
+|   |   |   |-- nist.functions.ts      # NIST API 代理
+|   |   |   |-- template.functions.ts  # 模板 CRUD + seed
+|   |   |   +-- field-patterns.functions.ts  # 字段模式统计
+|   |   |
+|   |   |-- templates/
+|   |   |   +-- presets.ts          # 27 个预设模板定义
 |   |   |
 |   |   |-- deepseek.ts            # 客户端 AI 调用封装（调 server fns）
-|   |   |-- multimodal-parser.ts   # 4 阶段文件解析流水线
+|   |   |-- multimodal-parser.ts   # 多阶段文件解析 + Validator/Corrector 流水线
 |   |   |-- confidence.ts          # Token 级 logprobs 校准引擎
 |   |   |-- paper-decomposer.ts    # 论文拆解（MP/NIST 增强）
 |   |   |-- reproduction-audit.ts  # 审计评分、缺口分析、协议生成
 |   |   |-- domain-knowledge.ts    # 69 条目静态知识库（真实引用）
 |   |   |-- paper-test-data.ts     # 7 篇预设论文演示数据
-|   |   |-- labStore.tsx           # 全局实验状态（React Context）
+|   |   |-- labStore.tsx           # 全局实验状态（React Context，新 ExperimentDoc 类型）
 |   |   |-- supabase.ts            # 浏览器 Supabase 客户端
 |   |   |-- supabase-server.server.ts  # Service-role 客户端（绕过 RLS）
 |   |   |-- storage.server.ts      # 服务端文件上传/删除
@@ -463,10 +503,11 @@ labnote-vault-main/
 |   |   |-- auth-guard.tsx         # 路由保护包裹组件
 |   |   |-- config.server.ts       # 环境变量读取（仅服务端）
 |   |   |-- proxy-fetch.server.ts  # HTTP_PROXY 感知的 fetch 封装
-|   |   |-- experiment-utils.ts    # 数据库行映射、分块器
-|   |   |-- json-parser.ts         # AI 响应 JSON 提取
+|   |   |-- experiment-utils.ts    # toRow/fromRow/buildDbPatch（动态映射）
+|   |   |-- json-parser.ts         # AI 响应 JSON 提取（通用 asPartialDoc）
+|   |   |-- persistence.ts         # 实验持久化层
 |   |   |-- graph-types.ts         # 图谱节点/边类型定义
-|   |   |-- graph-data.ts          # 图谱构建逻辑（实体去重、边计算）
+|   |   |-- graph-data.ts          # 图谱构建逻辑（从 properties 提取实体）
 |   |   |-- sanitizer/             # 数据脱敏模块
 |   |   |   |-- detector.ts        # 31 条正则扫描器
 |   |   |   |-- transformer.ts     # 位置感知替换引擎
@@ -482,9 +523,12 @@ labnote-vault-main/
 |   |
 |   |-- components/
 |   |   |-- ui/                    # shadcn/ui 原语（50+ 组件）
+|   |   |-- fields/
+|   |   |   |-- DynamicCardEditor.tsx  # 配置驱动的实验卡片编辑器
+|   |   |   +-- DynamicField.tsx       # FieldDef → 输入控件映射
 |   |   |-- ForceGraph.tsx         # d3-force SVG 渲染
 |   |   |-- GraphSearch.tsx        # 节点搜索（自动补全）
-|   |   |-- ExperimentSummary.tsx  # 实验卡片摘要视图
+|   |   |-- ExperimentSummary.tsx  # 实验卡片摘要视图（从 properties 提取）
 |   |   |-- FeedbackDialog.tsx     # 全局反馈弹窗
 |   |   +-- usage-dashboard.tsx    # API 用量和费用面板
 |   |
@@ -492,11 +536,27 @@ labnote-vault-main/
 |       |-- useGraphData.ts        # 图谱数据获取和缓存
 |       +-- useForceSimulation.ts  # d3-force 生命周期管理
 |
-|-- supabase/
-|   +-- migrations/                # SQL 迁移文件
-|       +-- 20260731_phase1_enriched_experiment.sql  # ⚠️ 不执行
+|-- scripts/                       # 运维脚本
+|   |-- p0-migration-step0.sql     # 迁移 Step 0：备份
+|   |-- p0-migration-step1.sql     # 迁移 Step 1：回填旧列→properties
+|   |-- p0-migration-step2.sql     # 迁移 Step 2：删旧列、建 field_patterns/templates
+|   |-- seed-presets.ts            # 27 个模板 seed 到 Supabase
+|   |-- template-research-prompt.md # Gemini 调研 prompt
+|   +-- download-media.mjs         # 媒体下载脚本
 |
-|-- test-harness/                  # Playwright E2E 测试（未纳入 CI）
+|-- supabase/
+|   +-- migrations/
+|       +-- 20260731_phase1_enriched_experiment.sql  # ⚠️ 不执行
+|       +-- 20260810_dynamic_store.sql  # Dynamic Document Store 迁移
+|
+|-- docs/
+|   |-- agent-usage-guide.md       # 最终用户使用指南
+|   |-- product-intro.md           # 产品介绍（385 字符）
+|   |-- mcp-competition-submission.md  # MCP 比赛提交说明
+|   +-- remaining-tasks-for-codex.md   # Codex 执行任务清单
+|
+|-- test-harness/                  # 测试
+|   +-- pipeline-validation.test.ts # 流水线验证测试
 |-- public/                        # 静态资源
 |-- package.json
 |-- vite.config.ts                 # Vite + TanStack Start + Nitro 配置
@@ -586,47 +646,50 @@ Vercel 构建使用 Nitro Vercel preset。TanStack Start 将 server functions �
 
 ## 11. 下一步开发
 
-### 11.1 愿景：动态结构化实验卡片
+### 11.1 当前架构：Dynamic Document Store
 
-**「结构跟着内容走，无固定模板」**
+**已实现。** 实验数据模型已从 40+ 硬编码字段迁移至 `ExperimentDoc`（8 索引列 + `properties JSONB` + `files JSONB`）。27 个模板的 `fieldGroups` 同时驱动 UI（`DynamicCardEditor`）和 AI prompt（`prompt-builder.ts`）。物理约束引擎（61+11 条）在校验阶段自动执行。字段统计（`field_patterns` 表）在数据积累中持续更新。
 
-当前 50 字段的实验 schema 是过渡方案，不是终点。最终目标是**自演化实验模型**：
+### 11.2 优先任务
 
-1. **字段 schema 从数据中涌现** — `field_patterns` 表自动统计每种实验类型出现哪些字段、频率、值分布。不需要人写字段定义。
+| 优先级 | 任务 | 说明 |
+|:----:|------|------|
+| P0 | 执行 Supabase 迁移 | 运行 `scripts/p0-migration-step{0,1,2}.sql`，迁移现有数据 |
+| P0 | Seed 27 个模板 | 运行 `scripts/seed-presets.ts`，填充 `templates` 表 |
+| P1 | 多 Agent 流水线集成测试 | `validator-agent.ts` + `corrector-agent.ts` 已实现，需在 `runPipeline` 中端到端测试 |
+| P2 | 静态页面适配 | `compare.tsx`、`assets.tsx`、`index.tsx`、`graph.tsx` 的旧字段引用（`.purpose`、`.device` 等）→ `getProperty(props, path)` |
+| P3 | 技能库自演化集成 | `detectEmergingFields` + `AddFieldDialog` 候选建议已实现，需与 UI 联调 |
+| P4 | 零样本 CSV 列语义识别 | LLM 辅助列类型理解（列名→物理含义→单位推断） |
+| — | Pipeline 验证测试 | `test-harness/pipeline-validation.test.ts` 58/61 通过，3 个边缘案例待修复 |
 
-2. **实验类型自动聚类** — embedding 聚类在数据增长中自动发现新类型。从「合成」→「水热合成-氧化物」→「水热合成-氧化物-光催化」
+### 11.3 自演化架构
 
-3. **AI 补全质变** — 不再让 LLM 黑盒猜测缺失字段，而是查询 `field_patterns` 获取「这类实验的必需字段+统计分布」，在数据约束下推断。
+系统设计为随数据积累自行演化，无需手动定义字段：
 
-4. **多文件智能对齐** — 上传混杂格式文件，系统通过指纹提取+embedding相似度+LLM决策，判断哪些文件属于同一实验。
+1. **字段涌现** — `field_patterns` 表按 `experiment_type` 统计每个字段的出现频率、值分布、共现关系。同类实验积累 ≥5 个后，高频 extra 字段自动建议纳入模板
+2. **模板演化** — 用户确认字段建议后，`templates.field_groups` 更新。下次同类型实验自动按新模板渲染和提取
+3. **约束发现** — 从 `field_patterns.value_stats` 中自动推断数值字段的常见范围（均值 ± 3σ），作为软约束补充到模板
+4. **冷启动策略** — 27 个预设模板（源自 NOMAD/MLflow/Allotrope ASM/CDISC 等国际标准）提供初始覆盖。种子数据积累后自演化接管
 
-5. **增量匹配** — 新上传与全部已有实验匹配，判断属于已有实验（追加）还是新建。
+### 11.4 2026 前沿方向（已调研，待融合）
 
-### 11.2 候选架构
+| 方向 | 来源 | 融合点 |
+|------|------|--------|
+| 多 Agent 自纠错 | The AI Scientist v2, Robin | Validator→Corrector 循环（已实现框架，待深度集成） |
+| 技能库演化 | SkillTFM (gate evolution) | `field_patterns` → 模板自动更新 |
+| 零样本列理解 | Google TabFM | CSV 列名 → 物理含义（P4 任务） |
+| MCP 仪器连接 | MCP 协议 | `/mcp` 端点已上线，下一步连接真实仪器 |
+| 结构化提取 | HARMON-E (F1=0.93), nanoMINER (precision=0.98) | 改进多模态提取 prompt 质量 |
+| FAIR 自动合规 | Herbie (2026) | 从 Template 自动生成 FAIR 元数据 |
 
-```
-experiments (id, name, experiment_type, date, operator, user_id)
-observations (id, experiment_id, key, value, unit, group, source, confidence)
-field_patterns (experiment_type, field_key, occurrence_count, rate, co_occurring, value_pattern)
-```
+详见 [调研报告](docs/2026-ai-frontier-research.md)（位于 `demo` 分支）
 
-关键特性：
-- **无固定字段列** — 所有实验数据存为灵活 observations
-- **field_patterns 自动更新** — 每次数据变更后后台 job 刷新统计
-- **实验类型自动发现** — embedding 聚类，非人工分类
-- **本地小模型**（延后）：类型分类、异常检测、字段标准化
+### 11.5 记忆文件
 
-### 11.3 待解决
-
-- **领域未确定** — 需先选定聚焦哪个实验领域
-- **Phase 1 SQL 不执行** — 架构确定前不做数据库变更
-- **种子数据量未知** — 影响自演化模型的冷启动策略
-
-### 11.4 记忆文件
-
-关键设计讨论和决策记录在 Claude Memory 中：
-- `dynamic-experiment-card.md` — 自演化模型架构讨论
-- `phase1-caveats.md` — Phase 1 已知问题
-- `unresolved-questions.md` — 待解决问题（领域/SQL/种子数据）
-- `实验复现工作台.md` — 复现审计入口
-- `current-state.md` — 项目整体状态
+关键设计决策记录在 Claude Memory 中：
+- `current-state.md` — 项目整体状态（API 迁移、对象存储、4 模型上线）
+- `dynamic-experiment-card.md` — 自演化模型架构讨论（固定模板→字段涌现）
+- `knowledge-graph-architecture.md` — d3-force + 实体去重 + Supabase 关系
+- `reproduction-audit.md` — 论文拆解 + 置信度推断 + 复现协议
+- `ai-analysis-refactor.md` — Token-level 置信度校准引擎
+- `实验复现工作台.md` — 复现审计入口（说"实验复现"自动加载）
