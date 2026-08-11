@@ -152,7 +152,7 @@ LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验�
   → 客户端脱敏扫描（31 条正则规则）
   → TanStack Server Function（Nitro handler）
   → 服务端二次扫描（仅告警）
-  → XJTLU AI Gateway（从环境变量读取 Bearer token）
+  → AI Gateway（从环境变量读取 Bearer token）
   → 响应返回浏览器
 ```
 
@@ -187,7 +187,7 @@ LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验�
 
 | 服务 | 端点 | 认证 | 速率限制 |
 |---------|----------|---------------|------------|
-| XJTLU AI Gateway | `aiagent.xjtlu.edu.cn/api/aigw/v1` | 每模型独立 Bearer token | 未知 |
+| AI Gateway | 自建 OpenAI-compatible 网关 | 每模型独立 Bearer token | 未知 |
 | Materials Project | `api.materialsproject.org` | `MP_API_KEY` header | ~100 req/min |
 | NIST Chemistry WebBook | `webbook.nist.gov/api/cgi.cgi` | 无（公开） | 1 req/s（自限流） |
 
@@ -589,9 +589,9 @@ cp .env.example .env.local
 
 ```env
 # Supabase
-VITE_SUPABASE_URL=https://kwwjdrwcvgjbjxtewbnk.supabase.co
+VITE_SUPABASE_URL=https://<your-project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
-SUPABASE_URL=https://kwwjdrwcvgjbjxtewbnk.supabase.co
+SUPABASE_URL=https://<your-project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 
 # AI Gateway（每个模型独立 key）

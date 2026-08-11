@@ -2,7 +2,7 @@
 
 项目路径: `D:\labnote\labnote-vault-main`
 GitHub: `DiqingTang25/labnote-agent` (private)
-Supabase: `kwwjdrwcvgjbjxtewbnk.supabase.co`
+Supabase: `<your-project>.supabase.co`
 
 ---
 

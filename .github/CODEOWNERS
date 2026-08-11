@@ -1,0 +1,40 @@
+# LabNote Agent — Code Owners
+#
+# 最后一条匹配的规则生效。所有对核心代码、数据库、部署配置的
+# 修改必须经过 DiqingTang25 的 review 才能合并。
+
+# ===== 全局默认：必须由 DiqingTang25 Review =====
+* @DiqingTang25
+
+# ===== 部署与基础设施（最高敏感度）=====
+/.github/              @DiqingTang25
+/scripts/              @DiqingTang25
+/supabase/             @DiqingTang25
+/vite.config.ts        @DiqingTang25
+/package.json          @DiqingTang25
+/.env.example          @DiqingTang25
+/vercel.json           @DiqingTang25
+
+# ===== 服务端代码（API Key 代理层）=====
+/src/lib/api/          @DiqingTang25
+/src/lib/config.server.ts  @DiqingTang25
+/src/lib/supabase-server.server.ts  @DiqingTang25
+/src/lib/storage.server.ts  @DiqingTang25
+/src/server.ts         @DiqingTang25
+
+# ===== 数据模型与数据库操作（核心业务逻辑）=====
+/src/lib/exp-core.ts   @DiqingTang25
+/src/lib/experiment-utils.ts  @DiqingTang25
+/src/lib/supabase.ts   @DiqingTang25
+/src/lib/labStore.tsx  @DiqingTang25
+/src/lib/json-parser.ts @DiqingTang25
+/src/lib/multimodal-parser.ts  @DiqingTang25
+
+# ===== 模板与校验（领域知识）=====
+/src/lib/templates/    @DiqingTang25
+/src/lib/constraint-validator.ts  @DiqingTang25
+/src/lib/prompt-builder.ts  @DiqingTang25
+
+# ===== 文档（README 等）=====
+/README.md             @DiqingTang25
+/docs/                 @DiqingTang25
