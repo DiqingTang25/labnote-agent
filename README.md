@@ -86,8 +86,8 @@ LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验�
 
 | 优先级 | 任务 | 状态 |
 |:----:|------|:----:|
-| P0 | Supabase 迁移 Step 1-2 脚本已就绪（`scripts/p0-migration-*.sql`），待执行 | 脚本就绪 |
-| P0 | 27 个模板 seed 到 Supabase templates 表（`scripts/seed-presets.ts`） | 脚本就绪 |
+| P0 | 27 个模板 seed 到 Supabase templates 表（`scripts/seed-presets.ts`） | 待执行 |
+| ✅ | Supabase 迁移 Step 1 + Step 2（properties/files 列、templates/field_patterns 表、旧列删除） | 已完成 |
 | P1 | 多 Agent 提取流水线（`validator-agent.ts` + `corrector-agent.ts` 已实现） | 待集成测试 |
 | P2 | compare/assets/index/graph 适配新 ExperimentDoc 类型 | 待完成 |
 | P3 | extra → 技能库自演化（`field-patterns.ts` + `AddFieldDialog` 已实现） | 待集成 |
