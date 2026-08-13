@@ -56,7 +56,7 @@ export function ExperimentSummary({ experiments, fileCount, onClose }: Props) {
         <div className="p-5 space-y-2 max-h-60 overflow-auto">
           {experiments.map((e) => (
             <div key={e.id} className="flex items-center gap-3 rounded-lg bg-secondary/40 p-3 text-sm">
-              <span className="text-xs">📋</span>
+              <ClipboardList size={14} className="text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{e.name}</div>
                 <div className="text-[10px] text-muted-foreground">

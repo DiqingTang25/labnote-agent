@@ -332,9 +332,9 @@ function ReproductionAuditPage() {
         } catch {}
         if (res.saved) {
           loadHistory();
-          toast.success(`✅ 拆解完成：${res.paramCount} 个参数已保存到云端`);
+          toast.success(`拆解完成：${res.paramCount} 个参数已保存到云端`);
         } else {
-          toast.error(`⚠️ 拆解完成但保存失败：${(res as any).error || "未知错误"}`);
+          toast.error(`拆解完成但保存失败：${(res as any).error || "未知错误"}`);
         }
       })
       .catch((err) => {
@@ -342,16 +342,16 @@ function ReproductionAuditPage() {
           localStorage.removeItem(pendingKey);
         } catch {}
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Decompose] error:", msg);
+        console.error("[Decompose] error:", err);
         setDecomposeError(msg);
         setDecomposing(false);
         setActiveTaskId(null);
-        toast.error(`❌ AI 拆解失败：${msg.slice(0, 120)}。请检查 AI_API_KEY 环境和网络连接。`);
+        toast.error("AI 拆解暂时失败，请稍后重试");
       });
 
     // 启动轮询检测结果
     setActiveTaskId(pendingKey);
-    toast.success("🔗 服务端任务已启动，可自由切换页面，拆解不会中断");
+    toast.success("服务端任务已启动，可自由切换页面，拆解不会中断");
   }, [getCurrentPaperData, discipline, session, loadHistory]);
 
   // 轮询检测服务端拆解结果
@@ -404,7 +404,7 @@ function ReproductionAuditPage() {
         setDecomposing(false);
         setActiveTaskId(null);
         toast.success(
-          `✅ 拆解完成：${found.parameters.length} 个参数，${found.gaps.length} 个缺口`,
+          `拆解完成：${found.parameters.length} 个参数，${found.gaps.length} 个缺口`,
         );
       }
     }, 2000);
@@ -480,7 +480,7 @@ function ReproductionAuditPage() {
     for (const gap of fillableGaps) {
       fillGap(gap.description, gap.aiSuggestion!);
     }
-    toast.success(`✅ AI 已自动补全 ${fillableGaps.length} 个缺口`);
+    toast.success(`AI 已自动补全 ${fillableGaps.length} 个缺口`);
   }, [audit, fillGap]);
 
   // ===== 导出协议 =====
@@ -514,14 +514,14 @@ function ReproductionAuditPage() {
   }, [audit]);
 
   const categoryLabels: Record<ParameterCategory, string> = {
-    safety: "🦺 安全",
-    precursor: "🧪 前驱体",
-    equipment: "🔬 设备",
-    synthesis: "⚗️ 合成",
-    "post-processing": "🔥 后处理",
-    characterization: "📊 表征",
-    testing: "🧫 测试",
-    environment: "🌡️ 环境",
+    safety: "安全",
+    precursor: "前驱体",
+    equipment: "设备",
+    synthesis: "合成",
+    "post-processing": "后处理",
+    characterization: "表征",
+    testing: "测试",
+    environment: "环境",
   };
 
   const certaintyConfig: Record<
@@ -529,24 +529,24 @@ function ReproductionAuditPage() {
     { icon: string; color: string; bg: string; label: string }
   > = {
     explicit: {
-      icon: "✅",
+      icon: "●",
       color: "text-green-600",
       bg: "bg-green-50 border-green-200",
       label: "论文明确",
     },
     implied: {
-      icon: "📖",
+      icon: "●",
       color: "text-blue-600",
       bg: "bg-blue-50 border-blue-200",
       label: "论文隐含",
     },
     inferred: {
-      icon: "🤖",
+      icon: "●",
       color: "text-amber-600",
       bg: "bg-amber-50 border-amber-200",
       label: "AI 推断",
     },
-    unknown: { icon: "❓", color: "text-red-600", bg: "bg-red-50 border-red-200", label: "未知" },
+    unknown: { icon: "●", color: "text-red-600", bg: "bg-red-50 border-red-200", label: "未知" },
   };
 
   // ═══════════════════════════════
@@ -582,20 +582,20 @@ function ReproductionAuditPage() {
             }`}
           >
             {opt === "preset-srtio3"
-              ? "📄 SrTiO₃"
+              ? "SrTiO₃"
               : opt === "preset-co3o4"
-                ? "📄 Co₃O₄-rGO"
+                ? "Co₃O₄-rGO"
                 : opt === "preset-plant-ep"
-                  ? "🌿 植物电生理"
+                  ? "植物电生理"
                   : opt === "preset-spatial"
-                    ? "🧬 空间转录组"
+                    ? "空间转录组"
                     : opt === "preset-western"
-                      ? "🧪 Western Blot"
+                      ? "Western Blot"
                       : opt === "preset-mtt"
-                        ? "💊 MTT 细胞毒"
+                        ? "MTT 细胞毒"
                         : opt === "preset-patch"
-                          ? "⚡ 膜片钳"
-                          : "✏️ 自定义输入"}
+                          ? "膜片钳"
+                          : "自定义输入"}
           </button>
         ))}
       </div>
@@ -699,7 +699,7 @@ function ReproductionAuditPage() {
               setSavedAuditId(null);
               saveCurrentAudit(preset);
               toast.success(
-                `✅ 已加载预设 Audit：${preset.parameters.length} 参数，${preset.gaps.length} 缺口`,
+                `已加载预设 Audit：${preset.parameters.length} 参数，${preset.gaps.length} 缺口`,
               );
             }}
             className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-2.5 text-sm hover:bg-primary/10 transition"
@@ -787,7 +787,7 @@ function ReproductionAuditPage() {
           {/* Confirmed count */}
           {confirmedCount > 0 && (
             <p className="text-[11px] text-muted-foreground">
-              ✅ {confirmedCount} 个参数已由你确认
+              {confirmedCount} 个参数已由你确认
             </p>
           )}
         </div>
@@ -808,7 +808,7 @@ function ReproductionAuditPage() {
         <ul className="space-y-1.5">
           {audit.criticalRisks.map((risk, i) => (
             <li key={i} className="text-xs text-red-800 flex items-start gap-2">
-              <span className="mt-0.5">🔴</span>
+              <span className="mt-0.5 text-red-500">●</span>
               <span>{risk}</span>
             </li>
           ))}
@@ -857,20 +857,20 @@ function ReproductionAuditPage() {
       <div className="space-y-4">
         {/* 引导说明 */}
         <div className="rounded-lg bg-blue-50/50 border border-blue-200 p-3 text-xs text-blue-800 leading-relaxed">
-          <p className="font-semibold mb-1">📋 参数审核指南</p>
+          <p className="font-semibold mb-1">参数审核指南</p>
           <p>AI 从论文中提取了 {audit.parameters.length} 个实验参数，按确定性分为四级：</p>
           <div className="grid grid-cols-2 gap-1 mt-1.5">
             <span>
-              ✅ <b>论文明确</b> = 论文中直接写出的数值
+              <span className="text-green-600">●</span> <b>论文明确</b> = 论文中直接写出的数值
             </span>
             <span>
-              📖 <b>论文隐含</b> = 可从上下文合理推断
+              <span className="text-blue-600">●</span> <b>论文隐含</b> = 可从上下文合理推断
             </span>
             <span>
-              🤖 <b>AI推断</b> = 基于领域知识猜测，<b className="text-amber-600">建议核对</b>
+              <span className="text-amber-600">●</span> <b>AI推断</b> = 基于领域知识猜测，<b className="text-amber-600">建议核对</b>
             </span>
             <span>
-              ❓ <b>未知</b> = 完全不确定，标记为缺口
+              <span className="text-red-600">●</span> <b>未知</b> = 完全不确定，标记为缺口
             </span>
           </div>
           <p className="mt-1.5">点击参数可展开详情并修改确认。已确认的参数不计入缺口。</p>
@@ -1000,10 +1000,10 @@ function ReproductionAuditPage() {
               <span>
                 影响等级：
                 {p.impactIfWrong === "critical"
-                  ? "🔴 关键"
+                  ? "关键"
                   : p.impactIfWrong === "major"
-                    ? "🟡 重要"
-                    : "🟢 轻微"}
+                    ? "重要"
+                    : "轻微"}
               </span>
             </div>
             {p.relatedParams.length > 0 && (
@@ -1073,7 +1073,7 @@ function ReproductionAuditPage() {
       <div className="space-y-3">
         {/* 引导说明 */}
         <div className="rounded-lg bg-amber-50/50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
-          <p className="font-semibold mb-1">🔍 缺口补全指南</p>
+          <p className="font-semibold mb-1">缺口补全指南</p>
           <p>发现 {sortedGaps.length} 个信息缺口（复现必需但论文未提及），按关键程度排序。</p>
           <p className="mt-1">你可以：① 手动填入你已知的值 → ② 或让 AI 一键自动补全：</p>
         </div>
@@ -1084,7 +1084,7 @@ function ReproductionAuditPage() {
             onClick={autoFillAllGaps}
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 text-white px-4 py-2.5 text-sm font-semibold hover:bg-amber-600 transition"
           >
-            <Sparkles size={15} /> 🤖 AI 自动补全全部 {openGaps.length} 个缺口
+            <Sparkles size={15} /> AI 自动补全全部 {openGaps.length} 个缺口
           </button>
         )}
 
@@ -1095,9 +1095,9 @@ function ReproductionAuditPage() {
 
   const renderGapRow = (gap: ReproductionGap) => {
     const impactConfig = {
-      critical: { icon: "🔴", color: "border-red-300 bg-red-50/50", label: "关键" },
-      major: { icon: "🟡", color: "border-amber-300 bg-amber-50/50", label: "重要" },
-      minor: { icon: "🟢", color: "border-blue-300 bg-blue-50/50", label: "轻微" },
+      critical: { icon: "●", color: "border-red-300 bg-red-50/50", label: "关键" },
+      major: { icon: "●", color: "border-amber-300 bg-amber-50/50", label: "重要" },
+      minor: { icon: "●", color: "border-blue-300 bg-blue-50/50", label: "轻微" },
     };
     const ic = impactConfig[gap.impactIfWrong];
     const isResolved = gap.status === "user-filled" || gap.status === "resolved";
@@ -1117,7 +1117,7 @@ function ReproductionAuditPage() {
               </span>
               {isResolved && (
                 <span className="text-[10px] text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-                  ✅ 已补全
+                  已补全
                 </span>
               )}
             </div>
@@ -1221,14 +1221,14 @@ function ReproductionAuditPage() {
 
     // 按实验阶段组织参数（排除 safety 放最前）
     const phaseOrder: { cat: ParameterCategory[]; icon: string; label: string }[] = [
-      { cat: ["safety"], icon: "🦺", label: "安全防护（实验前必读）" },
-      { cat: ["precursor"], icon: "🧪", label: "前驱体与原料准备" },
-      { cat: ["equipment"], icon: "🔬", label: "设备与仪器" },
-      { cat: ["synthesis"], icon: "⚗️", label: "合成步骤" },
-      { cat: ["post-processing"], icon: "🔥", label: "后处理" },
-      { cat: ["characterization"], icon: "📊", label: "表征条件" },
-      { cat: ["testing"], icon: "🧫", label: "性能测试" },
-      { cat: ["environment"], icon: "🌡️", label: "环境条件" },
+      { cat: ["safety"], icon: "●", label: "安全防护（实验前必读）" },
+      { cat: ["precursor"], icon: "●", label: "前驱体与原料准备" },
+      { cat: ["equipment"], icon: "●", label: "设备与仪器" },
+      { cat: ["synthesis"], icon: "●", label: "合成步骤" },
+      { cat: ["post-processing"], icon: "●", label: "后处理" },
+      { cat: ["characterization"], icon: "●", label: "表征条件" },
+      { cat: ["testing"], icon: "●", label: "性能测试" },
+      { cat: ["environment"], icon: "●", label: "环境条件" },
     ];
 
     // 计算总步骤数
@@ -1248,12 +1248,12 @@ function ReproductionAuditPage() {
 
       for (const p of params) {
         const statusIcon = p.userConfirmed
-          ? "✅"
+          ? "【已确认】"
           : p.certainty === "explicit"
-            ? "📄"
+            ? "【论文明确】"
             : p.certainty === "inferred"
-              ? "🤖"
-              : "❓";
+              ? "【AI推断】"
+              : "【未知】";
         const key = `param-${p.name}`;
         items.push({
           key,
@@ -1268,7 +1268,7 @@ function ReproductionAuditPage() {
         const filled = g.status === "user-filled" || g.status === "resolved";
         items.push({
           key,
-          text: `${filled ? "✅" : "⚠️"} ${filled ? g.userFill || g.aiSuggestion : g.description} ${filled ? "" : "— 需补全"}`,
+          text: `${filled ? "【已补全】" : "【需补全】"} ${filled ? g.userFill || g.aiSuggestion : g.description}`,
           isGap: !filled,
         });
         totalSteps++;
@@ -1286,7 +1286,7 @@ function ReproductionAuditPage() {
       <div className="space-y-4">
         {/* 引导说明 */}
         <div className="rounded-lg bg-green-50/50 border border-green-200 p-3 text-xs text-green-800 leading-relaxed">
-          <p className="font-semibold mb-1">📄 可执行实验方案</p>
+          <p className="font-semibold mb-1">可执行实验方案</p>
           <p>
             以下是按实验流程组织的详细步骤。逐项核对，完成打勾。开始实验前请先阅读安全防护部分。
           </p>
@@ -1316,7 +1316,7 @@ function ReproductionAuditPage() {
         {/* 关键风险提示 */}
         {audit.criticalRisks.length > 0 && (
           <div className="rounded-lg bg-red-50 border border-red-200 p-3">
-            <p className="text-xs font-semibold text-red-700 mb-1.5">🔴 关键风险提示</p>
+            <p className="text-xs font-semibold text-red-700 mb-1.5">关键风险提示</p>
             {audit.criticalRisks.map((r, i) => (
               <p key={i} className="text-[11px] text-red-700 ml-4">
                 • {r}
@@ -1371,7 +1371,7 @@ function ReproductionAuditPage() {
         {/* 底部风险复述 */}
         {audit.criticalRisks.length > 0 && (
           <div className="rounded-lg bg-secondary/30 p-3 text-[11px] text-muted-foreground">
-            <p className="font-semibold text-foreground mb-1">⚠️ 开始实验前请确认：</p>
+            <p className="font-semibold text-foreground mb-1">开始实验前请确认：</p>
             {audit.criticalRisks.map((r, i) => (
               <p key={i} className="ml-4">
                 • {r}
@@ -1463,10 +1463,10 @@ function ReproductionAuditPage() {
                           }`}
                         >
                           {h.reproducibilityScore >= 80
-                            ? "🟢"
+                            ? "高"
                             : h.reproducibilityScore >= 60
-                              ? "🟡"
-                              : "🔴"}
+                              ? "中"
+                              : "低"}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{h.paperTitle}</p>
@@ -1619,10 +1619,10 @@ function ReproductionAuditPage() {
                   }`}
                 >
                   {tab === "params"
-                    ? `📋 参数 (${audit.parameters.length})`
+                    ? `参数 (${audit.parameters.length})`
                     : tab === "gaps"
-                      ? `🔍 缺口 (${audit.gaps.length})`
-                      : "📄 协议"}
+                      ? `缺口 (${audit.gaps.length})`
+                      : "协议"}
                 </button>
               ))}
 
@@ -1649,10 +1649,10 @@ function ReproductionAuditPage() {
                     className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px]"
                   >
                     <option value="all">全部确定性</option>
-                    <option value="explicit">✅ 论文明确</option>
-                    <option value="implied">📖 论文隐含</option>
-                    <option value="inferred">🤖 AI 推断</option>
-                    <option value="unknown">❓ 未知</option>
+                    <option value="explicit">论文明确</option>
+                    <option value="implied">论文隐含</option>
+                    <option value="inferred">AI 推断</option>
+                    <option value="unknown">未知</option>
                   </select>
                 </div>
               )}
@@ -1696,9 +1696,9 @@ function SanitizeConfirmDialog({
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const impactConfig = {
-    high: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: "🔴" },
-    medium: { color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", icon: "🟡" },
-    low: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", icon: "🟢" },
+    high: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: "●" },
+    medium: { color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", icon: "●" },
+    low: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", icon: "●" },
   };
 
   return (
@@ -1720,17 +1720,17 @@ function SanitizeConfirmDialog({
           {/* 风险统计 */}
           <div className="grid grid-cols-3 gap-3 text-xs">
             <div className="rounded-lg bg-red-50 p-2 text-center">
-              <p className="text-lg">🔴</p>
+              <p className="text-lg text-red-500">●</p>
               <p className="font-bold text-red-700">{scan.highRiskCount}</p>
               <p className="text-muted-foreground">高风险</p>
             </div>
             <div className="rounded-lg bg-amber-50 p-2 text-center">
-              <p className="text-lg">🟡</p>
+              <p className="text-lg text-amber-500">●</p>
               <p className="font-bold text-amber-700">{scan.mediumRiskCount}</p>
               <p className="text-muted-foreground">中风险</p>
             </div>
             <div className="rounded-lg bg-blue-50 p-2 text-center">
-              <p className="text-lg">🟢</p>
+              <p className="text-lg text-blue-500">●</p>
               <p className="font-bold text-blue-700">
                 {scan.matches.length - scan.highRiskCount - scan.mediumRiskCount}
               </p>
@@ -1772,7 +1772,7 @@ function SanitizeConfirmDialog({
 
           {/* 提示 */}
           <div className="rounded-lg bg-amber-50/50 border border-amber-200 p-3 text-xs text-amber-700 leading-relaxed">
-            <p className="font-semibold mb-1">⚠️ 你的数据将发送到第三方 AI 服务</p>
+            <p className="font-semibold mb-1">你的数据将发送到第三方 AI 服务</p>
             <p>
               检测到论文内容包含敏感信息。选择「脱敏后发送」将自动替换敏感字段后再发送；选择「发送原始数据」表示你知悉风险并同意发送；选择「取消」返回编辑。
             </p>
@@ -1829,12 +1829,12 @@ function MiniStat({ label, value, icon }: { label: string; value: string; icon: 
 // ═══════════════════════════════════════════════════════
 
 const PIPELINE_STEPS: { step: DecompositionStep; icon: string; label: string }[] = [
-  { step: "connecting", icon: "🔗", label: "连接 AI 引擎" },
-  { step: "decomposing", icon: "🧠", label: "AI 拆解论文 Methods" },
-  { step: "enhancing-static", icon: "📚", label: "静态领域知识库匹配" },
-  { step: "enhancing-mp", icon: "🌐", label: "Materials Project 查询" },
-  { step: "enhancing-nist", icon: "🌡️", label: "NIST Chemistry WebBook 查询" },
-  { step: "done", icon: "✅", label: "生成复现审计报告" },
+  { step: "connecting", icon: "●", label: "连接 AI 引擎" },
+  { step: "decomposing", icon: "●", label: "AI 拆解论文 Methods" },
+  { step: "enhancing-static", icon: "●", label: "静态领域知识库匹配" },
+  { step: "enhancing-mp", icon: "●", label: "Materials Project 查询" },
+  { step: "enhancing-nist", icon: "●", label: "NIST Chemistry WebBook 查询" },
+  { step: "done", icon: "●", label: "生成复现审计报告" },
 ];
 
 function DecompositionProgressBar({ progress }: { progress: DecompositionProgress }) {
@@ -1985,7 +1985,7 @@ function HelpModal() {
           </h4>
           <div className="rounded-lg bg-secondary/40 p-3 font-mono text-[11px] text-muted-foreground overflow-x-auto">
             <div>
-              论文 Methods ──→ <span className="text-primary font-semibold">DeepSeek-V3</span> (AI
+              论文 Methods ──→ <span className="text-primary font-semibold">AI 文本模型</span> (AI
               拆解)
             </div>
             <div className="ml-[13ch]">│</div>

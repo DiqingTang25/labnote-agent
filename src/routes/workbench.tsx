@@ -31,7 +31,6 @@ import { useElectron } from "../lib/electron/useElectron";
 import { FolderWatcherPanel } from "../lib/electron/FolderWatcherPanel";
 import {
   runPipeline,
-  detectFileInfo,
   PIPELINE_STAGES,
   classifyFile,
   type PipelineStage,

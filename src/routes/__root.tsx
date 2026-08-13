@@ -298,12 +298,12 @@ function Footer() {
             <ul className="space-y-2.5">
               <li>
                 <Link to="/help" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <FileText size={12} /> 📘 使用指南（Getting Started）
+                  <FileText size={12} /> 使用指南（Getting Started）
                 </Link>
               </li>
               <li>
                 <a href="https://estrella-0903.github.io/labnote-agent/" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <FileText size={12} /> 📄 产品白皮书（White Paper）
+                  <FileText size={12} /> 产品白皮书（White Paper）
                 </a>
               </li>
             </ul>
@@ -317,15 +317,15 @@ function Footer() {
             </h4>
             <ul className="space-y-2.5">
               <li className="text-xs text-muted-foreground flex items-center gap-2">
-                <Mail size={12} /> 📧 负责人邮箱：2662001087@qq.com
+                <Mail size={12} /> 负责人邮箱：2662001087@qq.com
               </li>
               <li>
                 <button onClick={() => setFeedbackOpen(true)} className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <MessageSquare size={12} /> 💬 Feedback（Bug反馈/功能建议）
+                  <MessageSquare size={12} /> Feedback（Bug反馈/功能建议）
                 </button>
               </li>
               <li className="text-xs text-muted-foreground flex items-center gap-2">
-                <Users size={12} /> 👥 用户交流群
+                <Users size={12} /> 用户交流群
               </li>
               <li>
                 <img src="/qr-group.jpg" alt="用户交流群二维码" className="w-32 h-32 rounded-lg border border-border mt-1" />

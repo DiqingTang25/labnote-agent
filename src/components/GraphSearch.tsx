@@ -30,12 +30,12 @@ export function GraphSearch({ nodes, selectedNodeId, onSelect }: Props) {
   }, [nodes, query]);
 
   const TYPE_ICONS: Record<string, string> = {
-    experiment: "📋",
-    sample: "🧪",
-    device: "⚙️",
-    operator: "👤",
-    discipline: "📚",
-    finding: "💡",
+    experiment: "●",
+    sample: "●",
+    device: "●",
+    operator: "●",
+    discipline: "●",
+    finding: "●",
   };
 
   return (

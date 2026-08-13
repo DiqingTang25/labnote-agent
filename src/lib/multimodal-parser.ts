@@ -68,23 +68,23 @@ type RawResult = {
 // 文件类型检测
 // ═══════════════════════════════════════════════════════
 
-export function detectFileInfo(fileName: string): { type: string; icon: string } {
+export function detectFileInfo(fileName: string): { type: string } {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  const map: Record<string, { type: string; icon: string }> = {
-    pdf: { type: "PDF文档", icon: "📄" },
-    docx: { type: "Word文档", icon: "📝" },
-    xlsx: { type: "Excel表格", icon: "📊" },
-    csv: { type: "CSV数据表", icon: "📊" },
-    jpg: { type: "实验图像", icon: "🖼️" },
-    jpeg: { type: "实验图像", icon: "🖼️" },
-    png: { type: "显微图像", icon: "🔬" },
-    txt: { type: "文本笔记", icon: "📃" },
-    md: { type: "实验方案", icon: "📋" },
-    log: { type: "仪器日志", icon: "📜" },
-    json: { type: "JSON数据", icon: "📋" },
-    xml: { type: "XML数据", icon: "📋" },
+  const map: Record<string, { type: string }> = {
+    pdf: { type: "PDF文档" },
+    docx: { type: "Word文档" },
+    xlsx: { type: "Excel表格" },
+    csv: { type: "CSV数据表" },
+    jpg: { type: "实验图像" },
+    jpeg: { type: "实验图像" },
+    png: { type: "显微图像" },
+    txt: { type: "文本笔记" },
+    md: { type: "实验方案" },
+    log: { type: "仪器日志" },
+    json: { type: "JSON数据" },
+    xml: { type: "XML数据" },
   };
-  return map[ext] ?? { type: "文本文件", icon: "📎" };
+  return map[ext] ?? { type: "文本文件" };
 }
 
 export function classifyFile(fileName: string): "image" | "text" | "csv" | "document" {
@@ -135,7 +135,8 @@ async function readFiles(
       }
       onFileProgress(i, { name: file.name, status: "reading", detail: "读取完成" });
     } catch (err) {
-      onFileProgress(i, { name: file.name, status: "error", error: `读取失败: ${err}` });
+      console.error("[Pipeline] file read failed:", err);
+      onFileProgress(i, { name: file.name, status: "error", error: "读取失败，请检查文件后重试" });
       fileContents.push({ textContent: "", isBinary: false });
     }
   }
@@ -270,7 +271,7 @@ async function processBatch(
     const file = batchFiles[i];
     const fc = batchContents[i];
 
-    const modelHint = classifyFile(file.name) === "image" ? "Qwen3-VL-8B" : "DeepSeek V4";
+    const modelHint = classifyFile(file.name) === "image" ? "图像识别" : "文本分析";
 
     onFileProgress(globalIdx, {
       name: file.name,

@@ -48,7 +48,10 @@ export const chatCompletion = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const apiKey = selectApiKey(data.model);
-    if (!apiKey) throw new Error("AI_API_KEY not configured");
+    if (!apiKey) {
+      console.error("[AI API] apiKey not configured");
+      throw new Error("AI 服务暂时不可用，请稍后重试");
+    }
 
     // ── 服务端脱敏二次校验 ──
     if (!data.sanitized) {
@@ -95,7 +98,8 @@ export const chatCompletion = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`AI API ${res.status}: ${errText.slice(0, 300)}`);
+      console.error(`[AI API] ${res.status}: ${errText.slice(0, 500)}`);
+      throw new Error("AI 服务暂时不可用，请稍后重试");
     }
 
     const json = (await res.json()) as {
@@ -134,7 +138,10 @@ export const chatCompletionWithLogprobs = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const apiKey = selectApiKey(data.model);
-    if (!apiKey) throw new Error("AI_API_KEY not configured");
+    if (!apiKey) {
+      console.error("[AI API] apiKey not configured");
+      throw new Error("AI 服务暂时不可用，请稍后重试");
+    }
 
     const res = await apiFetch(`${AI_BASE}/chat/completions`, {
       method: "POST",
@@ -155,7 +162,8 @@ export const chatCompletionWithLogprobs = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`AI API ${res.status}: ${errText.slice(0, 300)}`);
+      console.error(`[AI API] ${res.status}: ${errText.slice(0, 500)}`);
+      throw new Error("AI 服务暂时不可用，请稍后重试");
     }
 
     const json = (await res.json()) as {

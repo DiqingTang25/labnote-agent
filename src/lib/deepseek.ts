@@ -458,7 +458,7 @@ const AUTOFILL_PROMPT = `你是科研实验专家。根据已有字段，推断�
 - 已有有效值的字段保持原样，不要改动
 - 空字符串、"(AI 推断 · 待确认)"、"(AI 推断型号)" 这类占位符表示缺失，需要推断
 - 基于实验名称、目的、设备、样品等已有信息进行合理推断
-- 推断结果后面标注 "🤖推断" 以便人工复核
+- 推断结果后面标注 "AI推断" 以便人工复核
 - 无法推断的字段保持空字符串
 - 注意补充：experimentType、materials（含CAS号/纯度）、instruments（含校准状态）、protocol、hypothesis、conclusion、controls、replicates
 

@@ -1,7 +1,7 @@
 /**
  * Paper Decomposer — 论文 Methods 拆解引擎
  *
- * 使用 DeepSeek-V3 将论文 Methods 段落拆解为结构化复现参数，
+ * 使用西浦网关文本模型（DeepSeek V4 Pro）将论文 Methods 段落拆解为结构化复现参数，
  * 标注每个参数的确定性等级和推断依据。
  *
  * 核心原则：
@@ -11,7 +11,7 @@
  *   - 完全无法确定的 → 标记为 gap
  */
 
-import { chat } from "./deepseek";
+import { chat, MODEL_TEXT } from "./deepseek";
 import { extractJSON } from "./json-parser";
 import type {
   ReproductionParameter,
@@ -117,7 +117,7 @@ export async function decomposePaperMethods(
     onProgress?.({ step, detail });
   };
 
-  report("connecting", `模型: DeepSeek-V3, 领域: ${discipline}`);
+  report("connecting", "正在连接 AI 服务…");
 
   // 1. 构建 Prompt
   const prompt = `请拆解以下论文的实验方法段落，提取所有可复现的结构化参数。
@@ -135,12 +135,12 @@ ${methodsText.slice(0, 15000)}
 - 对复现必需但完全缺失的信息，放入 gaps 数组
 - 每个 gap 必须包含 aiSuggestion（基于领域知识的最佳猜测）`;
 
-  // 2. 调用 DeepSeek-V3
+  // 2. 调用西浦网关文本模型
   let rawOutput: string;
   try {
-    report("decomposing", "DeepSeek-V3 拆解论文 Methods 段落 → 结构化参数…");
+    report("decomposing", "AI 拆解论文 Methods 段落 → 结构化参数…");
     rawOutput = await chat(
-      "deepseek-ai/DeepSeek-V3",
+      MODEL_TEXT,
       [
         { role: "system", content: DECOMPOSE_SYSTEM },
         { role: "user", content: prompt },
@@ -149,7 +149,7 @@ ${methodsText.slice(0, 15000)}
     );
   } catch (err) {
     console.error("[PaperDecomposer] API call failed:", err);
-    throw new Error(`论文拆解 API 调用失败: ${err}`);
+    throw new Error("AI 服务暂时不可用，请稍后重试");
   }
 
   // 3. 解析响应
@@ -420,7 +420,7 @@ function generateDefaultAssessment(
     parts.push(`${inferredCount} 个参数为 AI 推断，需要实验者验证。`);
   }
   if (criticalGaps > 0) {
-    parts.push(`⚠️ 存在 ${criticalGaps} 个关键信息缺口，可能严重影响复现。`);
+    parts.push(`存在 ${criticalGaps} 个关键信息缺口，可能严重影响复现。`);
   }
   if (gaps.length > 0) {
     parts.push(`建议优先填补关键缺口后再开始实验。`);
@@ -460,7 +460,7 @@ export async function quickGapAnalysis(
 }> {
   try {
     const rawOutput = await chat(
-      "deepseek-ai/DeepSeek-V3",
+      MODEL_TEXT,
       [
         { role: "system", content: GAP_ANALYSIS_SYSTEM },
         { role: "user", content: `分析以下实验数据的复现缺口：\n${experimentData.slice(0, 8000)}` },
@@ -482,6 +482,6 @@ export async function quickGapAnalysis(
     };
   } catch (err) {
     console.error("[GapAnalysis] failed:", err);
-    return { gaps: [], assessment: `分析失败: ${err}` };
+    return { gaps: [], assessment: "分析暂时失败，请稍后重试" };
   }
 }

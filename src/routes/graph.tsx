@@ -318,12 +318,12 @@ function DetailPanel({
           点击图谱中任意节点查看详细信息。实验节点显示完整卡片链接，样品/设备节点显示关联实验列表。
         </p>
         <div className="mt-3 space-y-1.5 text-xs">
-          <p>📋 <b>实验</b> — 实验卡片主体</p>
-          <p>🧪 <b>样品</b> — 共用样品的实验</p>
-          <p>⚙️ <b>设备</b> — 共用设备的实验</p>
-          <p>👤 <b>操作人</b> — 相同操作人的实验</p>
-          <p>📚 <b>学科</b> — 学科分类</p>
-          <p>💡 <b>发现</b> — 关键参数与结果</p>
+          <p><span className="text-[#6366f1]">●</span> <b>实验</b> — 实验卡片主体</p>
+          <p><span className="text-[#f59e0b]">●</span> <b>样品</b> — 共用样品的实验</p>
+          <p><span className="text-[#10b981]">●</span> <b>设备</b> — 共用设备的实验</p>
+          <p><span className="text-[#06b6d4]">●</span> <b>操作人</b> — 相同操作人的实验</p>
+          <p><span className="text-[#ec4899]">●</span> <b>学科</b> — 学科分类</p>
+          <p><span className="text-[#8b5cf6]">●</span> <b>发现</b> — 关键参数与结果</p>
         </div>
       </div>
     );
@@ -360,7 +360,7 @@ function DetailPanel({
         {related.length > 0 && (
           <div>
             <div className="text-xs text-muted-foreground font-semibold mb-1.5">
-              🔗 关联实验（{related.length}）：
+              关联实验（{related.length}）：
             </div>
             <ul className="space-y-1">
               {related.slice(0, 6).map((e) => (

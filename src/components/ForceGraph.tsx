@@ -4,6 +4,7 @@
  * d3-force 物理模拟 + SVG 渲染 + d3-zoom 缩放平移
  */
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { ZoomIn, ZoomOut, RotateCcw, RefreshCw } from "lucide-react";
 import { zoom, type ZoomBehavior, type D3ZoomEvent } from "d3-zoom";
 import { select } from "d3-selection";
 import { useForceSimulation, NODE_COLORS, EDGE_COLORS } from "../hooks/useForceSimulation";
@@ -42,12 +43,12 @@ function getNeighbors(nodeId: string | null, edges: GraphEdge[]): Set<string> {
 // ═══════════════════════════════════════════════════════
 
 const TYPE_ICONS: Record<string, string> = {
-  experiment: "📋",
-  sample: "🧪",
-  device: "⚙️",
-  operator: "👤",
-  discipline: "📚",
-  finding: "💡",
+  experiment: "●",
+  sample: "●",
+  device: "●",
+  operator: "●",
+  discipline: "●",
+  finding: "●",
 };
 
 // ═══════════════════════════════════════════════════════
@@ -176,17 +177,17 @@ export function ForceGraph({
     <div className="relative w-full h-full" style={{ minHeight: 600 }}>
       {/* 工具栏浮层 */}
       <div className="absolute top-3 right-3 z-10 flex gap-1">
-        <button onClick={zoomIn} className="rounded-lg border border-border bg-background p-1.5 text-xs hover:bg-secondary" title="放大">
-          🔍+
+        <button onClick={zoomIn} className="rounded-lg border border-border bg-background p-1.5 hover:bg-secondary" title="放大">
+          <ZoomIn size={14} />
         </button>
-        <button onClick={zoomOut} className="rounded-lg border border-border bg-background p-1.5 text-xs hover:bg-secondary" title="缩小">
-          🔍−
+        <button onClick={zoomOut} className="rounded-lg border border-border bg-background p-1.5 hover:bg-secondary" title="缩小">
+          <ZoomOut size={14} />
         </button>
-        <button onClick={zoomReset} className="rounded-lg border border-border bg-background p-1.5 text-xs hover:bg-secondary" title="重置">
-          ↺
+        <button onClick={zoomReset} className="rounded-lg border border-border bg-background p-1.5 hover:bg-secondary" title="重置">
+          <RotateCcw size={14} />
         </button>
-        <button onClick={() => reheat(0.5)} className="rounded-lg border border-border bg-background p-1.5 text-xs hover:bg-secondary" title="重新布局">
-          ✦
+        <button onClick={() => reheat(0.5)} className="rounded-lg border border-border bg-background p-1.5 hover:bg-secondary" title="重新布局">
+          <RefreshCw size={14} />
         </button>
       </div>
 

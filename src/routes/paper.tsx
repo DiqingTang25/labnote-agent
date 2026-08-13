@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { useLab, generateMethods } from "../lib/labStore";
 import { getString } from "../lib/property-utils";
-import { FileText, Sparkles, Download, ArrowRight, CheckCircle2, BookOpen, Edit3 } from "lucide-react";
+import { FileText, Sparkles, Download, ArrowRight, CheckCircle2, BookOpen, Edit3, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { RequireAuth } from "../lib/auth-guard";
 
@@ -128,7 +128,7 @@ function PaperPage() {
               className="w-full min-h-[420px] rounded-lg border border-border bg-background p-4 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30"/>
           )}
           <div className="mt-4 rounded-lg bg-[color:var(--color-warning)]/10 border border-[color:var(--color-warning)]/30 p-3 text-xs text-muted-foreground">
-            <span className="font-semibold text-[color:var(--color-warning)]">⚠ 科研规范提示：</span>
+            <span className="font-semibold text-[color:var(--color-warning)] inline-flex items-center gap-1"><AlertTriangle size={13} /> 科研规范提示：</span>
             AI 仅辅助整理实验方法学描述，不替代科研结论。请研究者在投稿前对内容做严谨核对与署名确认。
           </div>
         </div>

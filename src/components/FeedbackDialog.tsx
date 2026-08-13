@@ -15,9 +15,9 @@ import { submitGeneralFeedback } from "../lib/supabase";
 import { toast } from "sonner";
 
 const FEEDBACK_TYPES = [
-  { value: "bug", label: "🐛 Bug 反馈" },
-  { value: "feature", label: "💡 功能建议" },
-  { value: "other", label: "💬 其他" },
+  { value: "bug", label: "Bug 反馈" },
+  { value: "feature", label: "功能建议" },
+  { value: "other", label: "其他" },
 ] as const;
 
 type FeedbackType = (typeof FEEDBACK_TYPES)[number]["value"];

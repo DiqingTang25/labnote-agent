@@ -3,8 +3,8 @@
  *
  * 数据来源：sanitizer audit log (localStorage + Supabase)
  */
-import { useState, useEffect, useMemo } from "react";
-import { BarChart3, TrendingUp, Zap, Clock, DollarSign, Activity, FileText, Image, Video, Music } from "lucide-react";
+import { useState, useEffect, useMemo, type ComponentType } from "react";
+import { BarChart3, TrendingUp, Zap, Clock, DollarSign, Activity, FileText, Image, Video, Music, Microscope, Folder, Mic, CheckCircle2 } from "lucide-react";
 import { loadAuditFromLocal, queryAuditLogs } from "../lib/sanitizer/audit-log";
 import type { AuditLogEntry } from "../lib/sanitizer";
 
@@ -19,7 +19,16 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 
 /** 数据类型图标映射 */
 const DATA_TYPE_ICONS: Record<string, string> = {
-  paper: "📄", experiment: "🔬", file: "📁", csv: "📊", transcript: "🎤",
+  paper: "FileText", experiment: "Microscope", file: "Folder", csv: "BarChart3", transcript: "Mic",
+};
+
+/** 数据类型中文标签 */
+const DATA_TYPE_LABELS: Record<string, string> = {
+  paper: "论文", experiment: "实验", file: "文件", csv: "表格", transcript: "语音",
+};
+
+const DATA_TYPE_ICON_COMPONENTS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
+  FileText, Microscope, Folder, BarChart3, Mic,
 };
 
 /** 估算 token 数（中文: ~0.5 token/char, 英文: ~0.3 token/char） */
@@ -102,7 +111,7 @@ export function UsageDashboard() {
         <StatCard
           icon={<Clock size={16} className="text-purple-500" />}
           label="最近调用"
-          value={stats.recentLogs[0]?.dataType ? DATA_TYPE_ICONS[stats.recentLogs[0].dataType] ?? "📄" : "—"}
+          value={stats.recentLogs[0]?.dataType ? (DATA_TYPE_LABELS[stats.recentLogs[0].dataType] ?? "其他") : "—"}
           detail={stats.recentLogs[0] ? formatTime(stats.recentLogs[0].timestamp) : "无"}
         />
       </div>
@@ -130,7 +139,7 @@ export function UsageDashboard() {
       <div className="flex gap-2 flex-wrap">
         {Object.entries(stats.callsByType).map(([type, count]) => (
           <span key={type} className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px]">
-            {DATA_TYPE_ICONS[type] ?? "📄"} {type === "paper" ? "论文" : type === "experiment" ? "实验" : type === "file" ? "文件" : type === "csv" ? "CSV" : type === "transcript" ? "转录" : type}
+            {(() => { const Icon = DATA_TYPE_ICON_COMPONENTS[DATA_TYPE_ICONS[type]] ?? FileText; return <Icon size={11} />; })()} {type === "paper" ? "论文" : type === "experiment" ? "实验" : type === "file" ? "文件" : type === "csv" ? "CSV" : type === "transcript" ? "转录" : type}
             <span className="font-mono ml-0.5">{count}</span>
           </span>
         ))}
@@ -144,10 +153,12 @@ export function UsageDashboard() {
         <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
           {stats.recentLogs.slice(0, 10).map((log) => (
             <div key={log.id} className="flex items-center gap-2 py-1 border-b border-border/50 text-[11px]">
-              <span className="w-5">{DATA_TYPE_ICONS[log.dataType] ?? "📄"}</span>
-              <span className="flex-1 truncate text-muted-foreground">{log.model.split("/").pop()}</span>
+              <span className="w-5 text-muted-foreground">
+                {(() => { const Icon = DATA_TYPE_ICON_COMPONENTS[DATA_TYPE_ICONS[log.dataType]] ?? FileText; return <Icon size={12} />; })()}
+              </span>
+              <span className="flex-1 truncate text-muted-foreground">{DATA_TYPE_LABELS[log.dataType] ?? "其他"}</span>
               <span className={log.sanitized ? "text-green-600" : "text-muted-foreground"}>
-                {log.sanitized ? "✅" : "—"}
+                {log.sanitized ? <CheckCircle2 size={12} /> : "—"}
               </span>
               <span className="text-muted-foreground/70 w-16 text-right">{formatTime(log.timestamp)}</span>
             </div>

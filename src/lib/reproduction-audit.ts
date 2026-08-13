@@ -212,7 +212,7 @@ export function generateReproductionProtocol(audit: ReproductionAudit): string {
 
   // 关键风险
   if (audit.criticalRisks.length > 0) {
-    lines.push("## ⚠️ 关键风险");
+    lines.push("## 关键风险");
     for (const risk of audit.criticalRisks) {
       lines.push(`- ${risk}`);
     }
@@ -225,14 +225,14 @@ export function generateReproductionProtocol(audit: ReproductionAudit): string {
     "post-processing", "characterization", "testing", "environment",
   ];
   const categoryLabels: Record<ParameterCategory, string> = {
-    safety: "🦺 安全防护",
-    precursor: "🧪 前驱体与原料",
-    equipment: "🔬 设备与仪器",
-    synthesis: "⚗️ 合成步骤",
-    "post-processing": "🔥 后处理",
-    characterization: "📊 表征条件",
-    testing: "🧪 性能测试",
-    environment: "🌡️ 环境条件",
+    safety: "安全防护",
+    precursor: "前驱体与原料",
+    equipment: "设备与仪器",
+    synthesis: "合成步骤",
+    "post-processing": "后处理",
+    characterization: "表征条件",
+    testing: "性能测试",
+    environment: "环境条件",
   };
 
   for (const cat of categoryOrder) {
@@ -246,9 +246,9 @@ export function generateReproductionProtocol(audit: ReproductionAudit): string {
 
     for (const p of params) {
       const certaintyIcon =
-        p.certainty === "explicit" ? "✅" :
-        p.certainty === "implied" ? "📖" :
-        p.certainty === "inferred" ? "🤖" : "❓";
+        p.certainty === "explicit" ? "【论文明确】" :
+        p.certainty === "implied" ? "【论文隐含】" :
+        p.certainty === "inferred" ? "【AI推断】" : "【未知】";
 
       const sourceLabel =
         p.source === "paper" ? "论文" :
@@ -266,13 +266,13 @@ export function generateReproductionProtocol(audit: ReproductionAudit): string {
 
   // 缺口
   if (audit.gaps.length > 0) {
-    lines.push("## 🔍 待补全信息");
+    lines.push("## 待补全信息");
     lines.push("");
     const sorted = prioritizeGaps(audit.gaps);
     for (const gap of sorted) {
       const impactIcon =
-        gap.impactIfWrong === "critical" ? "🔴" :
-        gap.impactIfWrong === "major" ? "🟡" : "🟢";
+        gap.impactIfWrong === "critical" ? "【严重】" :
+        gap.impactIfWrong === "major" ? "【重要】" : "【一般】";
       lines.push(`### ${impactIcon} ${gap.description}`);
       lines.push(`- **重要性**: ${gap.importanceRationale}`);
       lines.push(`- **AI 建议**: ${gap.aiSuggestion}（置信度 ${gap.confidence}%）`);
