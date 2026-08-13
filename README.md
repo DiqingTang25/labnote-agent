@@ -2,7 +2,7 @@
 
 面向高校实验室与科研课题组的 AI 驱动实验数据治理平台。
 
-**生产环境**: https://labnote-vault-main.vercel.app
+**生产环境**: https://labnote.tech（原 labnote-vault-main.vercel.app 仍可用）
 **仓库**: github.com/DiqingTang25/labnote-agent (private)
 
 ---
@@ -65,7 +65,7 @@
 
 #### MCP 集成
 
-LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验治理能力。端点：`https://labnote-vault-main.vercel.app/mcp`（JSON-RPC 2.0 Streamable HTTP）。
+LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验治理能力。端点：`https://labnote.tech/mcp`（JSON-RPC 2.0 Streamable HTTP）。
 
 8 个 MCP 工具与 Web 前端共享同一套 TypeScript 领域模块：
 
@@ -92,7 +92,7 @@ LabNote 通过 **Model Context Protocol (MCP)** 向外部 AI Agent 暴露实验�
 | P2 | compare/assets/index/graph 适配新 ExperimentDoc 类型 | 待完成 |
 | P3 | extra → 技能库自演化（`field-patterns.ts` + `AddFieldDialog` 已实现） | 待集成 |
 | P4 | 零样本 CSV 列语义识别（LLM 辅助列类型理解） | 待实现 |
-| ✅ | MCP 端点（`https://labnote-vault-main.vercel.app/mcp`，8 个工具） | 已完成 |
+| ✅ | MCP 端点（`https://labnote.tech/mcp`，8 个工具） | 已完成 |
 | ✅ | 物理约束引擎（`constraint-validator.ts`，61+11 条规则） | 已完成 |
 | ✅ | 动态模板 Prompt（`prompt-builder.ts`，从 Template 动态生成） | 已完成 |
 | ✅ | DynamicCardEditor + DynamicField 配置驱动 UI | 已完成 |
@@ -622,7 +622,7 @@ npx vite preview     # 本地预览生产构建
 
 ### 10.1 生产环境
 
-- **URL**: https://labnote-vault-main.vercel.app
+- **URL**: https://labnote.tech（自定义域名，Vercel 托管；原 vercel.app 地址仍可用）
 - **平台**: Vercel（Hobby plan）
 - **Nitro preset**: `vercel`（在 `vite.config.ts` 中配置）
 - **触发**: Push 到 `master` 分支 → 自动构建+部署

@@ -3,7 +3,7 @@
 ## 公网 Streamable HTTP 地址
 
 ```text
-https://labnote-vault-main.vercel.app/mcp
+https://labnote.tech/mcp
 ```
 
 该端点实现 JSON-RPC 2.0 MCP Streamable HTTP 协议：`initialize`、`notifications/initialized`、`tools/list`、`tools/call`。请求使用 `POST` 和 `Content-Type: application/json`，不要求自定义请求头。
