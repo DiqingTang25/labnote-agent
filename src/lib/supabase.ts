@@ -92,16 +92,16 @@ export async function insertExperiment(exp: ExperimentDoc, userId?: string): Pro
   }
   if (!uid) return false;
 
-  // 去重：检查同名实验是否已存在
-  const { data: existing } = await supabase
+  // 科研场景允许同名实验（如不同日期的重复实验），不做去重跳过——
+  // 静默跳过会导致用户数据丢失。仅记录同名提示。
+  const { data: sameName } = await supabase
     .from("experiments")
     .select("id")
     .eq("name", exp.name)
     .eq("user_id", uid)
     .maybeSingle();
-  if (existing) {
-    console.log(`[Supabase] 跳过重复实验: "${exp.name}" (已存在: ${(existing as any).id})`);
-    return true; // 不算失败，只是跳过
+  if (sameName) {
+    console.log(`[Supabase] 提示: 存在同名实验 "${exp.name}"，仍继续插入新记录`);
   }
 
   const row = toRow(exp, uid);
@@ -122,16 +122,18 @@ export async function updateExperimentDB(
   const userId = sessionData.session?.user?.id;
   if (!userId) return false;
   const dbPatch = buildDbPatch(patch);
-  const { error } = await supabase
+  // select("id") 回读受影响行：UPDATE 匹配 0 行时不再假装成功
+  const { data: updatedRows, error } = await supabase
     .from("experiments")
     .update(dbPatch)
     .eq("id", id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id");
   if (error) {
     console.error("[Supabase] updateExperiment error:", error);
     return false;
   }
-  return true;
+  return (updatedRows?.length ?? 0) > 0;
 }
 
 export async function deleteExperimentDB(id: string): Promise<boolean> {

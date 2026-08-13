@@ -5,7 +5,7 @@
  * Supabase 云端存储，不再依赖 localStorage。
  */
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import {
   isSupabaseReady,
   fetchExperiments,
@@ -51,6 +51,10 @@ const LabCtx = createContext<Ctx | null>(null);
 
 export function LabProvider({ children }: { children: ReactNode }) {
   const [experiments, setExperiments] = useState<ExperimentDoc[]>([]);
+  const experimentsRef = useRef<ExperimentDoc[]>([]);
+  useEffect(() => {
+    experimentsRef.current = experiments;
+  }, [experiments]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Ctx["profile"]>({
     name: "研究员",
@@ -93,9 +97,25 @@ export function LabProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateExperiment = useCallback((id: string, patch: Partial<ExperimentDoc>) => {
-    setExperiments((arr) => arr.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setExperiments((arr) => {
+      experimentsRef.current = arr.map((x) => (x.id === id ? { ...x, ...patch } : x));
+      return experimentsRef.current;
+    });
     if (isSupabaseReady()) {
-      updateExperimentDB(id, patch).then(() => embedExperiment(id));
+      updateExperimentDB(id, patch).then((updated) => {
+        if (!updated) {
+          // UPDATE 匹配 0 行：该实验从未成功入库 → 转为插入，避免"假保存"
+          const full = experimentsRef.current.find((x) => x.id === id);
+          if (full) {
+            insertExperiment(full).then((ok) => {
+              console.log(ok ? `[LabStore] 实验 ${id} 未入库，已自动转为插入` : `[LabStore] 实验 ${id} 插入失败`);
+              if (ok) embedExperiment(id);
+            });
+          }
+        } else {
+          embedExperiment(id);
+        }
+      });
     }
   }, []);
 
