@@ -67,6 +67,7 @@ import { useAuth } from "../lib/auth-context";
 import { decomposeOnServer } from "../lib/api/decompose.functions";
 import { saveAudit, fetchAudits, deleteAudit } from "../lib/supabase";
 import { scanSensitivity, applySanitization } from "../lib/sanitizer";
+import { useLab } from "../lib/labStore";
 import type { ScanResult, SensitivityMatch } from "../lib/sanitizer";
 import { UsageDashboard } from "../components/usage-dashboard";
 import {
@@ -115,8 +116,8 @@ function ReproductionAuditPage() {
   const [discipline, setDiscipline] = useState("材料科学");
 
   // 处理状态
-  const [decomposing, setDecomposing] = useState(false);
-  const [progress, setProgress] = useState<DecompositionProgress>({ step: "connecting" });
+  const { decomposing, setDecomposing, decompStep, decompDetail, setDecompProgress } = useLab();
+  const progress: DecompositionProgress = { step: decompStep as DecompositionStep, detail: decompDetail };
   const [decomposeError, setDecomposeError] = useState<string | null>(null);
   const [audit, setAudit] = useState<ReproductionAudit | null>(null);
   const [savedAuditId, setSavedAuditId] = useState<string | null>(null);
@@ -299,7 +300,7 @@ function ReproductionAuditPage() {
 
     setDecomposing(true);
     setDecomposeError(null);
-    setProgress({ step: "connecting" });
+    setDecompProgress("connecting");
 
     // 保存 pending 标记到 localStorage（切换页面后恢复用）
     const pendingKey = `decompose_pending_${Date.now()}`;
@@ -370,7 +371,7 @@ function ReproductionAuditPage() {
     // 如果有 pending 但 activeTaskId 未设置，恢复 decomposing 状态
     if (!decomposing && pendingKeys.length > 0) {
       setDecomposing(true);
-      setProgress({ step: "decomposing", detail: "服务端正拆解中…" });
+      setDecompProgress("decomposing", "服务端正拆解中…");
     }
 
     let stopped = false;

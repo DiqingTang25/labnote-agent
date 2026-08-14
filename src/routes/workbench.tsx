@@ -57,8 +57,9 @@ export const Route = createFileRoute("/workbench")({
 
 function Workbench() {
   const { id } = Route.useSearch();
-  const { experiments, addExperiment, updateExperiment, deleteExperiment } = useLab();
-  const [activeId, setActiveId] = useState<string | undefined>(id ?? experiments[0]?.id);
+  const { experiments, addExperiment, updateExperiment, deleteExperiment, workbenchActiveId, setWorkbenchActiveId } = useLab();
+  const activeId = workbenchActiveId ?? id ?? experiments[0]?.id;
+  const setActiveId = setWorkbenchActiveId;
   const active = experiments.find((e) => e.id === activeId);
 
   return (
@@ -119,14 +120,16 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
   const { experiments, addExperiment } = useLab();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 多模态解析流水线状态
-  const [pipelineRunning, setPipelineRunning] = useState(false);
-  const [pipelineStage, setPipelineStage] = useState<PipelineStage>("idle");
-  const [pipelineDetail, setPipelineDetail] = useState("");
-  const [pipelineCards, setPipelineCards] = useState<ExperimentDoc[]>([]);
+  // 多模态解析流水线状态（全局 Store：切换页面不丢失）
+  const {
+    pipelineRunning, setPipelineRunning,
+    pipelineStage, setPipelineStage,
+    pipelineDetail, setPipelineDetail,
+    pipelineCards, setPipelineCards,
+    pipelineFiles, setPipelineFiles,
+    pipelineSummary: showSummary, setPipelineSummary: setShowSummary,
+  } = useLab();
   const [lastUploadedFiles, setLastUploadedFiles] = useState<string[]>([]);
-  const [fileProgresses, setFileProgresses] = useState<Map<number, FileProgress>>(new Map());
-  const [showSummary, setShowSummary] = useState(false);
 
   // 首页跳转过来的待上传文件
   useEffect(() => {
@@ -166,7 +169,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
     setPipelineRunning(true);
     setPipelineCards([]);
     setPipelineStage("reading");
-    setFileProgresses(new Map());
+    setPipelineFiles({});
 
     try {
       // 1. AI 解析（生成实验卡片，含临时 ID）
@@ -177,7 +180,7 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
           setPipelineDetail(detail);
         },
         (index, progress) => {
-          setFileProgresses((prev) => new Map(prev).set(index, progress));
+          setPipelineFiles((prev) => ({ ...prev, [index]: progress }));
         },
         true,
       );
@@ -262,11 +265,11 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
           </div>
 
           {/* 逐文件进度 */}
-          {fileProgresses.size > 0 && (
+          {Object.keys(pipelineFiles).length > 0 && (
             <div className="mt-3 pt-3 border-t border-border/50">
               <p className="text-[10px] text-muted-foreground mb-2">文件进度</p>
               <div className="space-y-1 max-h-[180px] overflow-auto">
-                {Array.from(fileProgresses.entries()).map(([i, fp]) => (
+                {Object.entries(pipelineFiles).map(([i, fp]) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
                     {fp.status === "complete" ? (
                       <CheckCircle2 size={12} className="text-green-500 shrink-0" />

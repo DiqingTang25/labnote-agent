@@ -5,7 +5,7 @@
  * Supabase 云端存储，不再依赖 localStorage。
  */
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode, type SetStateAction } from "react";
 import {
   isSupabaseReady,
   fetchExperiments,
@@ -39,6 +39,27 @@ type Ctx = {
   getById: (id: string) => ExperimentDoc | undefined;
   profile: { name: string; org: string; discipline: string };
   setProfile: (p: Ctx["profile"]) => void;
+  // ── 全局 UI 状态（切页不丢失）──
+  workbenchActiveId: string | undefined;
+  setWorkbenchActiveId: (id: string | undefined) => void;
+  pipelineRunning: boolean;
+  pipelineStage: string;
+  pipelineDetail: string;
+  pipelineFiles: Record<number, { name: string; status: string; detail?: string; error?: string }>;
+  pipelineCards: ExperimentDoc[];
+  pipelineSummary: boolean;
+  setPipelineRunning: (v: boolean) => void;
+  setPipelineStage: (s: string) => void;
+  setPipelineDetail: (d: string) => void;
+  setPipelineFiles: (f: SetStateAction<Record<number, { name: string; status: string; detail?: string; error?: string }>>) => void;
+  setPipelineCards: (c: ExperimentDoc[]) => void;
+  setPipelineSummary: (v: boolean) => void;
+  resetPipeline: () => void;
+  decomposing: boolean;
+  decompStep: string;
+  decompDetail: string;
+  setDecomposing: (v: boolean) => void;
+  setDecompProgress: (step: string, detail?: string) => void;
   addFileToExperiment: (expId: string, file: AttachedFile) => void;
   removeFileFromExperiment: (expId: string, fileId: string) => void;
 };
@@ -56,6 +77,29 @@ export function LabProvider({ children }: { children: ReactNode }) {
     experimentsRef.current = experiments;
   }, [experiments]);
   const [loading, setLoading] = useState(true);
+  // ── 全局 UI 状态 ──
+  const [workbenchActiveId, setWorkbenchActiveId] = useState<string | undefined>(undefined);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [pipelineStage, setPipelineStage] = useState("idle");
+  const [pipelineDetail, setPipelineDetail] = useState("");
+  const [pipelineFiles, setPipelineFiles] = useState<Record<number, { name: string; status: string; detail?: string; error?: string }>>({});
+  const [pipelineCards, setPipelineCards] = useState<ExperimentDoc[]>([]);
+  const [pipelineSummary, setPipelineSummary] = useState(false);
+  const resetPipeline = useCallback(() => {
+    setPipelineRunning(false);
+    setPipelineStage("idle");
+    setPipelineDetail("");
+    setPipelineFiles({});
+    setPipelineCards([]);
+    setPipelineSummary(false);
+  }, []);
+  const [decomposing, setDecomposing] = useState(false);
+  const [decompStep, setDecompStep] = useState("idle");
+  const [decompDetail, setDecompDetail] = useState("");
+  const setDecompProgress = useCallback((step: string, detail?: string) => {
+    setDecompStep(step);
+    setDecompDetail(detail ?? "");
+  }, []);
   const [profile, setProfile] = useState<Ctx["profile"]>({
     name: "研究员",
     org: "智能材料课题组",
@@ -182,6 +226,26 @@ export function LabProvider({ children }: { children: ReactNode }) {
         setProfile: updateProfile,
         addFileToExperiment,
         removeFileFromExperiment,
+        workbenchActiveId,
+        setWorkbenchActiveId,
+        pipelineRunning,
+        pipelineStage,
+        pipelineDetail,
+        pipelineFiles,
+        pipelineCards,
+        pipelineSummary,
+        setPipelineRunning,
+        setPipelineStage,
+        setPipelineDetail,
+        setPipelineFiles,
+        setPipelineCards,
+        setPipelineSummary,
+        resetPipeline,
+        decomposing,
+        decompStep,
+        decompDetail,
+        setDecomposing,
+        setDecompProgress,
       }}
     >
       {children}
