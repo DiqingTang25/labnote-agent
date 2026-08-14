@@ -1,20 +1,30 @@
 /**
- * 测试账号数据清理脚本（带权限护栏）
+ * 演示账号数据清理脚本（带权限护栏）
  *
  * 权限铁律：
- *  - 本脚本只能删除 test@labnote.tech 测试账号的实验数据与存储内容
+ *  - 本脚本只能删除以下白名单演示账号的实验数据与存储内容：
+ *      test@labnote.tech（开发/截图）
+ *      demo@labnote.tech（客户演示）
  *  - 任何其他用户的数据一律不碰
  *  - 其他用户数据仅可在用户明确下达"清洗系统"指令时，用单独脚本处理
  *
- * 运行：npx tsx --env-file=.env.local scripts/cleanup-test-account.ts
+ * 运行（默认 test）：
+ *   npx tsx --env-file=.env.local scripts/cleanup-test-account.ts
+ * 运行（指定 demo）：
+ *   npx tsx --env-file=.env.local scripts/cleanup-test-account.ts demo@labnote.tech
  */
 import { createClient } from "@supabase/supabase-js";
 
-const TEST_EMAIL = "test@labnote.tech";
+const ALLOWED_EMAILS = new Set(["test@labnote.tech", "demo@labnote.tech"]);
+const TEST_EMAIL = process.argv[2] ?? "test@labnote.tech";
 const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 // ── 护栏 1：只定位测试账号 ──────────────────────────────
 const { data: users } = await admin.auth.admin.listUsers({ page: 1, perPage: 100 });
+if (!ALLOWED_EMAILS.has(TEST_EMAIL)) {
+  console.log(`❌ 护栏拦截：${TEST_EMAIL} 不在可清理白名单内，拒绝执行`);
+  process.exit(1);
+}
 const testUser = (users?.users ?? []).find((u) => u.email === TEST_EMAIL);
 if (!testUser) {
   console.log(`测试账号 ${TEST_EMAIL} 不存在，无需清理`);
