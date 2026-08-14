@@ -33,6 +33,45 @@ function apiFetch(url: string, init: RequestInit): Promise<Response> {
 // Chat Completion（文本 / 多模态）
 // ═══════════════════════════════════════════════════════
 
+/** 服务端直调实现：供「服务端内部」的嵌套调用（复现审计 / MCP 处理器）使用。
+ *  TanStack 服务器函数在服务端内再次调用会丢失 AsyncLocalStorage 上下文，
+ *  因此在已知处于服务端运行时的代码路径中，直接调用本函数访问网关。 */
+export async function chatCompletionDirect(params: {
+  model: string;
+  messages: Array<{ role: string; content: unknown }>;
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<string> {
+  const apiKey = selectApiKey(params.model);
+  if (!apiKey) {
+    console.error("[AI API] apiKey not configured");
+    throw new Error("AI 服务暂时不可用，请稍后重试");
+  }
+  const res = await apiFetch(`${AI_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: params.model,
+      messages: params.messages,
+      max_tokens: params.maxTokens ?? 2048,
+      temperature: params.temperature ?? 0.3,
+      stream: false,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[AI API] ${res.status}: ${errText.slice(0, 500)}`);
+    throw new Error("AI 服务暂时不可用，请稍后重试");
+  }
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return json.choices?.[0]?.message?.content ?? "";
+}
+
 export const chatCompletion = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
