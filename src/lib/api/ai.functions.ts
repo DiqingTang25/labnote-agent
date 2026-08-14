@@ -23,9 +23,11 @@ function selectApiKey(model: string): string | undefined {
   return config.aiApiKey;
 }
 
-/** 原生 fetch — 应用内所有出站 API 均直连（Vercel 生产环境无代理，本地直连可达） */
+/** 原生 fetch — 应用内所有出站 API 均直连（Vercel 生产环境无代理，本地直连可达）
+ *  内置 120s 超时：网关偶发停滞时快速失败，绝不无限挂起 */
+const FETCH_TIMEOUT_MS = 120_000;
 function apiFetch(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init);
+  return fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -46,29 +48,40 @@ export async function chatCompletionDirect(params: {
     console.error("[AI API] apiKey not configured");
     throw new Error("AI 服务暂时不可用，请稍后重试");
   }
-  const res = await apiFetch(`${AI_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: params.model,
-      messages: params.messages,
-      max_tokens: params.maxTokens ?? 2048,
-      temperature: params.temperature ?? 0.3,
-      stream: false,
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[AI API] ${res.status}: ${errText.slice(0, 500)}`);
-    throw new Error("AI 服务暂时不可用，请稍后重试");
+  // 瞬时网关故障自愈：失败自动重试一次
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await apiFetch(`${AI_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: params.model,
+          messages: params.messages,
+          max_tokens: params.maxTokens ?? 2048,
+          temperature: params.temperature ?? 0.3,
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`[AI API] ${res.status}: ${errText.slice(0, 500)}`);
+        lastErr = new Error("AI 服务暂时不可用，请稍后重试");
+      } else {
+        const json = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        return json.choices?.[0]?.message?.content ?? "";
+      }
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[AI API] attempt ${attempt + 1} failed, ${attempt === 0 ? "retrying…" : "giving up"}:`, String(err).slice(0, 120));
+    }
   }
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return json.choices?.[0]?.message?.content ?? "";
+  throw lastErr instanceof Error ? lastErr : new Error("AI 服务暂时不可用，请稍后重试");
 }
 
 export const chatCompletion = createServerFn({ method: "POST" })
