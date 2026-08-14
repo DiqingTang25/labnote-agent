@@ -9,7 +9,6 @@ import { z } from "zod";
 import { getServiceSupabase, requireAuthenticatedUser } from "../supabase-server.server";
 import { generateEmbedding, chatCompletion, rewriteQuery } from "./ai.functions";
 import { getServerConfig } from "../config.server";
-import { getProxiedFetch } from "../proxy-fetch.server";
 import { fromRow } from "../experiment-utils";
 
 // ═══════════════════════════════════════════════════════
@@ -399,7 +398,7 @@ const AI_BASE = "https://aiagent.xjtlu.edu.cn/api/aigw/v1";
 const MODEL_ID = "d8j2d4r9dhtg6s3fevfg";
 
 function apiFetch(url: string, init: RequestInit): Promise<Response> {
-  return getProxiedFetch()(url, init);
+  return fetch(url, init);
 }
 
 export const ragAnswerStream = createServerFn({ method: "POST" })

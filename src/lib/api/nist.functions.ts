@@ -9,7 +9,6 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getProxiedFetch } from "../proxy-fetch.server";
 
 const NIST_BASE = "https://webbook.nist.gov/api";
 
@@ -28,7 +27,7 @@ export interface NISTCompoundResult {
 
 /** Fetch with proxy support */
 function nistFetch(url: string): Promise<Response> {
-  return getProxiedFetch()(url, { headers: { Accept: "application/json" } });
+  return fetch(url, { headers: { Accept: "application/json" } });
 }
 
 /**

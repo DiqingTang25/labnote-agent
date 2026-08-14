@@ -27,6 +27,5 @@ export function getServerConfig() {
     aiVisionKey: process.env.AI_VISION_KEY,
     aiRerankKey: process.env.AI_RERANK_KEY,
     mpApiKey: process.env.MP_API_KEY,
-    httpProxy: process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy,
   };
 }
