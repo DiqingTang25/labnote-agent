@@ -221,6 +221,40 @@ export const chatCompletionWithLogprobs = createServerFn({ method: "POST" })
 // Embedding 生成 — 当前后端不支持，返回空，RAG 降级关键词搜索
 // ═══════════════════════════════════════════════════════
 
+/** 服务端直连版：供服务器函数内部嵌套调用（RAG 等），避免 server-fn 上下文丢失 */
+export async function generateEmbeddingDirect(text: string): Promise<number[]> {
+  const config = getServerConfig();
+  const apiKey = config.aiEmbeddingKey || config.aiApiKey;
+  if (!apiKey) {
+    console.warn("[Embedding] No embedding key configured");
+    return [] as number[];
+  }
+  try {
+    const res = await apiFetch(`${AI_BASE}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL_ID,
+        input: [text.slice(0, 1500)],
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[Embedding] API error ${res.status}`);
+      return [] as number[];
+    }
+    const json = (await res.json()) as {
+      data?: Array<{ embedding: number[] }>;
+    };
+    return json.data?.[0]?.embedding ?? [];
+  } catch (err) {
+    console.error("[Embedding] call failed:", err);
+    return [] as number[];
+  }
+}
+
 export const generateEmbedding = createServerFn({ method: "POST" })
   .inputValidator(z.object({ text: z.string().min(1) }))
   .handler(async ({ data }) => {
@@ -301,6 +335,47 @@ export const generateEmbeddings = createServerFn({ method: "POST" })
 // Reranker — Qwen3-Reranker-8B 交叉编码器精排
 // ═══════════════════════════════════════════════════════
 
+/** 服务端直连版：供服务器函数内部嵌套调用（RAG 等），避免 server-fn 上下文丢失 */
+export async function rerankDirect(params: {
+  query: string;
+  documents: string[];
+  topN?: number;
+}): Promise<Array<{ index: number; score: number }>> {
+  const config = getServerConfig();
+  const apiKey = config.aiRerankKey || config.aiApiKey;
+  if (!apiKey) {
+    console.warn("[Rerank] No rerank key configured");
+    return [] as Array<{ index: number; score: number }>;
+  }
+  try {
+    const res = await apiFetch(`${AI_BASE}/rerank`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL_RERANK,
+        query: params.query,
+        documents: params.documents,
+        top_n: params.topN ?? 3,
+        return_documents: false,
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[Rerank] API error ${res.status}`);
+      return [] as Array<{ index: number; score: number }>;
+    }
+    const json = (await res.json()) as {
+      results?: Array<{ index: number; relevance_score: number }>;
+    };
+    return (json.results ?? []).map((r) => ({ index: r.index, score: r.relevance_score }));
+  } catch (err) {
+    console.error("[Rerank] call failed:", err);
+    return [] as Array<{ index: number; score: number }>;
+  }
+}
+
 export const rerank = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -365,6 +440,52 @@ const QUERY_REWRITE_PROMPT = `你是科研检索专家。将用户的模糊问�
 示例：
 输入："上次那个铁的降解率最佳条件？" + 历史中提到了"Fe₃O₄光催化"
 输出：Fe₃O₄ 光催化 降解率 最佳条件 参数`;
+
+/** 服务端直连版：供服务器函数内部嵌套调用（RAG 等），避免 server-fn 上下文丢失 */
+export async function rewriteQueryDirect(params: {
+  question: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<string> {
+  // 简单问题不需要改写
+  if (params.question.length > 50 && !params.history?.length) {
+    return params.question;
+  }
+  const config = getServerConfig();
+  const apiKey = config.aiApiKey;
+  if (!apiKey) return params.question;
+  let context = "";
+  if (params.history?.length) {
+    context = "\n对话历史：\n" + params.history.slice(-4)
+      .map((h) => `${h.role === "user" ? "用户" : "助手"}: ${h.content.slice(0, 200)}`)
+      .join("\n");
+  }
+  try {
+    const res = await apiFetch(`${AI_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODEL_CHAT,
+        messages: [
+          { role: "system", content: QUERY_REWRITE_PROMPT },
+          { role: "user", content: `用户问题：${params.question}${context}` },
+        ],
+        max_tokens: 100,
+        temperature: 0.1,
+      }),
+    });
+    if (!res.ok) return params.question;
+    const json = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const rewritten = json.choices?.[0]?.message?.content?.trim();
+    return rewritten && rewritten.length > 2 ? rewritten : params.question;
+  } catch {
+    return params.question;
+  }
+}
 
 export const rewriteQuery = createServerFn({ method: "POST" })
   .inputValidator(

@@ -7,7 +7,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getServiceSupabase, requireAuthenticatedUser } from "../supabase-server.server";
-import { generateEmbedding, chatCompletion, rewriteQuery } from "./ai.functions";
+import { generateEmbeddingDirect, chatCompletionDirect, rewriteQueryDirect, rerankDirect } from "./ai.functions";
 import { getServerConfig } from "../config.server";
 import { fromRow } from "../experiment-utils";
 
@@ -37,12 +37,13 @@ export const ragSearch = createServerFn({ method: "POST" })
     const userId = await requireAuthenticatedUser(data.accessToken);
 
     // 1. Query 改写：模糊问题 → 精确检索词（失败静默降级）
-    const searchQuery = await rewriteQuery({
-      data: { question: data.question, history: data.history },
+    const searchQuery = await rewriteQueryDirect({
+      question: data.question,
+      history: data.history,
     });
 
     // 2. 生成改写后问题的 embedding（不可用时降级关键词搜索）
-    const qVec = await generateEmbedding({ data: { text: searchQuery } });
+    const qVec = await generateEmbeddingDirect(searchQuery);
     const hasEmbedding = Array.isArray(qVec) && qVec.length > 0;
 
     let simMap = new Map<
@@ -165,9 +166,10 @@ export const ragSearch = createServerFn({ method: "POST" })
         const documents = entries.map(([, info]) =>
           `${info.name}: ${info.bestChunk || ""}`.slice(0, 1000),
         );
-        const { rerank } = await import("./ai.functions");
-        const reranked = await rerank({
-          data: { query: data.question, documents, topN: data.limit },
+        const reranked = await rerankDirect({
+          query: data.question,
+          documents,
+          topN: data.limit,
         });
 
         if (Array.isArray(reranked) && reranked.length > 0) {
@@ -342,16 +344,16 @@ export const ragAnswer = createServerFn({ method: "POST" })
       if (cached) {
         answer = cached.answer;
       } else {
-        answer = await chatCompletion({
-          data: {
-            model: MODEL_ID,
-            messages: [
-              { role: "system", content: RAG_SYSTEM_PROMPT },
-              ...historyMessages,
-              { role: "user", content: prompt },
-            ],
-            maxTokens: 512,
-          },
+        // 直连网关：ragAnswerReal/Stream 本身是服务器函数，
+        // 嵌套调用 chatCompletion（server fn）会丢失 AsyncLocalStorage 上下文
+        answer = await chatCompletionDirect({
+          model: MODEL_ID,
+          messages: [
+            { role: "system", content: RAG_SYSTEM_PROMPT },
+            ...historyMessages,
+            { role: "user", content: prompt },
+          ],
+          maxTokens: 512,
         });
         // 写入缓存
         const sourcesForCache = contexts.map((c) => {
