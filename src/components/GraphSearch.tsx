@@ -34,8 +34,9 @@ export function GraphSearch({ nodes, selectedNodeId, onSelect }: Props) {
     sample: "●",
     device: "●",
     operator: "●",
-    discipline: "●",
-    finding: "●",
+    reagent: "●",
+    method: "●",
+    project: "●",
   };
 
   return (

@@ -1,5 +1,5 @@
 /**
- * 知识图谱 — 统一类型定义
+ * 关系图谱 — 统一类型定义
  */
 
 // ═══════════════════════════════════════════════════════
@@ -11,8 +11,9 @@ export type GraphNodeType =
   | "sample"
   | "device"
   | "operator"
-  | "discipline"
-  | "finding";
+  | "reagent"
+  | "method"
+  | "project";
 
 export type GraphNode = {
   id: string;
@@ -45,9 +46,9 @@ export type GraphEdgeType =
   | "semantic_similar"
   | "temporal"
   | "custom"
-  | "has_param"
-  | "has_result"
-  | "belongs_to";
+  | "uses_reagent"
+  | "uses_method"
+  | "belongs_to_project";
 
 export type GraphEdge = {
   id: string;

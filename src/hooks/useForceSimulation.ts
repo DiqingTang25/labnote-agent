@@ -43,8 +43,9 @@ export const NODE_COLORS: Record<string, string> = {
   sample: "#f59e0b",
   device: "#10b981",
   operator: "#06b6d4",
-  discipline: "#ec4899",
-  finding: "#8b5cf6",
+  reagent: "#ec4899",
+  method: "#8b5cf6",
+  project: "#0ea5e9",
 };
 
 export const EDGE_COLORS: Record<string, string> = {
@@ -56,9 +57,9 @@ export const EDGE_COLORS: Record<string, string> = {
   semantic_similar: "#22c55e",
   temporal: "#94a3b8",
   custom: "#6366f1",
-  has_param: "#8b5cf6",
-  has_result: "#8b5cf6",
-  belongs_to: "#ec4899",
+  uses_reagent: "#ec4899",
+  uses_method: "#8b5cf6",
+  belongs_to_project: "#0ea5e9",
 };
 
 // ═══════════════════════════════════════════════════════

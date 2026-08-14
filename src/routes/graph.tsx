@@ -1,5 +1,5 @@
 /**
- * 知识图谱 — Obsidian 风格力导向可视化
+ * 关系图谱 — Obsidian 风格力导向可视化
  * d3-force 物理引擎 + 实体去重 + Supabase 关系接入
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -23,7 +23,7 @@ import type { GraphNode, GraphData, GraphEdge } from "../lib/graph-types";
 export const Route = createFileRoute("/graph")({
   head: () => ({
     meta: [
-      { title: "实验知识图谱 – LabNote Agent" },
+      { title: "实验关系图谱 – LabNote Agent" },
       { name: "description", content: "力导向可视化展示实验、样品、设备之间的关联关系。" },
     ],
   }),
@@ -39,8 +39,9 @@ const NODE_COLORS: Record<string, string> = {
   sample: "#f59e0b",
   device: "#10b981",
   operator: "#06b6d4",
-  discipline: "#ec4899",
-  finding: "#8b5cf6",
+  reagent: "#ec4899",
+  method: "#8b5cf6",
+  project: "#0ea5e9",
 };
 
 const NODE_LABELS: Record<string, string> = {
@@ -48,8 +49,9 @@ const NODE_LABELS: Record<string, string> = {
   sample: "样品",
   device: "设备",
   operator: "操作人",
-  discipline: "学科",
-  finding: "发现",
+  reagent: "试剂/原料",
+  method: "方法/协议",
+  project: "项目/课题",
 };
 
 // ═══════════════════════════════════════════════════════
@@ -145,7 +147,7 @@ function GraphPage() {
     return (
       <div className="mx-auto max-w-4xl px-4 py-20 text-center text-muted-foreground">
         <Network size={48} className="mx-auto opacity-30" />
-        <h1 className="mt-4 text-2xl font-bold">知识图谱</h1>
+        <h1 className="mt-4 text-2xl font-bold">关系图谱</h1>
         <p className="mt-2">尚无实验数据，请先到工作台上传实验记录。</p>
         <Link
           to="/workbench"
@@ -167,7 +169,7 @@ function GraphPage() {
               <Network size={20} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">实验知识图谱</h1>
+              <h1 className="text-2xl font-bold">实验关系图谱</h1>
               <p className="text-sm text-muted-foreground">加载关系中…</p>
             </div>
           </div>
@@ -175,7 +177,7 @@ function GraphPage() {
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="mx-auto h-12 w-12 rounded-full bg-primary/20 animate-pulse" />
-                <p className="mt-4 text-sm text-muted-foreground">正在构建知识图谱…</p>
+                <p className="mt-4 text-sm text-muted-foreground">正在构建关系图谱…</p>
               </div>
             </div>
           </div>
@@ -193,7 +195,7 @@ function GraphPage() {
             <Network size={20} />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">实验知识图谱</h1>
+            <h1 className="text-2xl font-bold">实验关系图谱</h1>
             <p className="text-sm text-muted-foreground">
               {displayData.nodes.length} 个节点 · {displayData.edges.length} 条关联
               {localGraphMode && <span className="ml-1 text-primary">（本地图，{localHops} 跳）</span>}
@@ -322,8 +324,9 @@ function DetailPanel({
           <p><span className="text-[#f59e0b]">●</span> <b>样品</b> — 共用样品的实验</p>
           <p><span className="text-[#10b981]">●</span> <b>设备</b> — 共用设备的实验</p>
           <p><span className="text-[#06b6d4]">●</span> <b>操作人</b> — 相同操作人的实验</p>
-          <p><span className="text-[#ec4899]">●</span> <b>学科</b> — 学科分类</p>
-          <p><span className="text-[#8b5cf6]">●</span> <b>发现</b> — 关键参数与结果</p>
+          <p><span className="text-[#ec4899]">●</span> <b>试剂/原料</b> — 共用试剂或前驱体的实验</p>
+          <p><span className="text-[#8b5cf6]">●</span> <b>方法/协议</b> — 使用相同方法或算法的实验</p>
+          <p><span className="text-[#0ea5e9]">●</span> <b>项目/课题</b> — 同一课题下的实验</p>
         </div>
       </div>
     );

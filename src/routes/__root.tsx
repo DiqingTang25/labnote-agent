@@ -11,7 +11,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, BookOpen, Layers, FileText, Book, Mail, MessageSquare, Users, Package, User, LogOut, LogIn } from "lucide-react";
+import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, BookOpen, Layers, FileText, Mail, Package, User, LogOut, LogIn, ArrowRight } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -20,7 +20,6 @@ import { getString } from "../lib/property-utils";
 import { AuthProvider, useAuth } from "../lib/auth-context";
 import { Toaster } from "sonner";
 import { AIAgent } from "../components/AIAgent";
-import { FeedbackDialog } from "../components/FeedbackDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -138,7 +137,7 @@ function TopNav() {
           <NavItem to="/workbench" icon={<Beaker size={14} />}>工作台</NavItem>
           <NavItem to="/compare" icon={<Layers size={14} />}>治理对比</NavItem>
           <NavItem to="/checklist" icon={<ListChecks size={14} />}>Checklist</NavItem>
-          <NavItem to="/graph" icon={<Network size={14} />}>知识图谱</NavItem>
+          <NavItem to="/graph" icon={<Network size={14} />}>关系图谱</NavItem>
           <NavItem to="/assets" icon={<Package size={14} />}>资产包</NavItem>
           <NavItem to="/paper" icon={<BookOpen size={14} />}>论文辅助</NavItem>
           <NavItem to="/help" icon={<HelpCircle size={14} />}>帮助</NavItem>
@@ -259,85 +258,37 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
 }
 
 function Footer() {
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
   return (
-    <footer className="no-print border-t border-border mt-12">
-      <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
-      <div className="mx-auto max-w-7xl px-4 py-10">
-        {/* 合作邀请语 */}
-        <div className="text-center mb-8">
-          <p className="text-sm text-muted-foreground">
-            欢迎科研团队、实验课程及创新创业团队与我们交流合作
-          </p>
-        </div>
+    <footer className="no-print relative mt-12 overflow-hidden border-t border-border/30">
+      {/* 顶部极淡过渡：从主页背景自然融入，不突兀 */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-16 bg-gradient-to-b from-background via-background/70 to-transparent" />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* 品牌信息 */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="brand-gradient flex h-8 w-8 items-center justify-center rounded-lg text-white">
-                <FlaskConical size={16} />
-              </span>
-              <span className="text-sm font-semibold">LabNote Agent</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              科研数据治理与实验复现 AI Agent<br />
-              让每一次实验都成为可复用的科研资产
-            </p>
-            <div className="mt-3 text-[10px] text-muted-foreground/60">
-              技术生态伙伴：思必驰（AISpeech）智能终端 · 多模态大模型
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-5 px-4 py-8 sm:flex-row sm:justify-between">
+        {/* 品牌信息 */}
+        <div className="flex items-center gap-2">
+          <span className="brand-gradient flex h-6 w-6 items-center justify-center rounded-md text-white">
+            <FlaskConical size={12} />
+          </span>
+          <div className="leading-tight">
+            <div className="text-xs font-semibold">LabNote Agent</div>
+            <div className="text-[10px] text-muted-foreground">
+              © 2026 · 让每一次实验都成为可复用的科研资产
             </div>
           </div>
-
-          {/* Resources */}
-          <div>
-            <h4 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Book size={14} className="text-primary" />
-              Resources
-            </h4>
-            <ul className="space-y-2.5">
-              <li>
-                <Link to="/help" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <FileText size={12} /> 使用指南（Getting Started）
-                </Link>
-              </li>
-              <li>
-                <a href="https://estrella-0903.github.io/labnote-agent/" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <FileText size={12} /> 产品白皮书（White Paper）
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Contact */}
-          <div>
-            <h4 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Mail size={14} className="text-primary" />
-              Contact
-            </h4>
-            <ul className="space-y-2.5">
-              <li className="text-xs text-muted-foreground flex items-center gap-2">
-                <Mail size={12} /> 负责人邮箱：2662001087@qq.com
-              </li>
-              <li>
-                <button onClick={() => setFeedbackOpen(true)} className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-2">
-                  <MessageSquare size={12} /> Feedback（Bug反馈/功能建议）
-                </button>
-              </li>
-              <li className="text-xs text-muted-foreground flex items-center gap-2">
-                <Users size={12} /> 用户交流群
-              </li>
-              <li>
-                <img src="/qr-group.jpg" alt="用户交流群二维码" className="w-32 h-32 rounded-lg border border-border mt-1" />
-              </li>
-            </ul>
-          </div>
         </div>
 
-        {/* 底部版权 */}
-        <div className="mt-10 pt-6 border-t border-border text-center text-[10px] text-muted-foreground/60">
-          © 2026 LabNote Agent. All rights reserved.
-        </div>
+        {/* 小按钮：联系我们 */}
+        <Link
+          to="/contact"
+          className="group inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft/40 px-4 py-1.5 text-xs font-medium text-primary transition-all hover:border-primary hover:bg-primary-soft hover:shadow-sm hover:shadow-primary/15"
+        >
+          <Mail size={12} />
+          联系我们
+          <ArrowRight
+            size={12}
+            className="transition-transform duration-200 group-hover:translate-x-0.5"
+          />
+        </Link>
       </div>
     </footer>
   );

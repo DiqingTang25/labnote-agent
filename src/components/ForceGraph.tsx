@@ -1,5 +1,5 @@
 /**
- * ForceGraph — Obsidian 风格力导向知识图谱
+ * ForceGraph — Obsidian 风格力导向关系图谱
  *
  * d3-force 物理模拟 + SVG 渲染 + d3-zoom 缩放平移
  */
@@ -47,8 +47,9 @@ const TYPE_ICONS: Record<string, string> = {
   sample: "●",
   device: "●",
   operator: "●",
-  discipline: "●",
-  finding: "●",
+  reagent: "●",
+  method: "●",
+  project: "●",
 };
 
 // ═══════════════════════════════════════════════════════

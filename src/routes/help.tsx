@@ -28,7 +28,7 @@ function HelpPage() {
           <ArchCard icon={<Layers size={18}/>} title="智能清洗与标注" desc="自动识别缺失字段、异常值并提示人工复核"/>
           <ArchCard icon={<ShieldCheck size={18}/>} title="完整性检查" desc="按学科模板验证实验记录是否可复现"/>
           <ArchCard icon={<MessageSquare size={18}/>} title="RAG 问答" desc="基于实验向量库的自然语言追溯与对比"/>
-          <ArchCard icon={<GitBranch size={18}/>} title="知识图谱" desc="实验-样品-设备-参数-结果的关联可视化"/>
+          <ArchCard icon={<GitBranch size={18}/>} title="关系图谱" desc="实验-样品-设备-参数-结果的关联可视化"/>
         </div>
       </section>
 
@@ -39,7 +39,7 @@ function HelpPage() {
           <li>在中栏对自动生成的实验卡片进行复核、补全。</li>
           <li>在右栏查看完整性检查结果，生成复现清单与 Methods 草稿。</li>
           <li>需要追溯历史实验时，使用 RAG 知识问答快速检索。</li>
-          <li>在「知识图谱」查看实验间的关联关系。</li>
+          <li>在「关系图谱」查看实验间的关联关系。</li>
         </ol>
       </section>
 
