@@ -79,6 +79,45 @@ export function extractJSON<T = unknown>(text: string): T {
     /* continue */
   }
 
+  // 策略 7: 截断修复 — 输出被 max_tokens 截断时，在结构边界处截断并尝试多种闭合
+  //（同时覆盖对象内部与数组内部被截断的情形）
+  try {
+    const starts: number[] = [];
+    const objS = trimmed.indexOf("{");
+    const arrS = trimmed.indexOf("[");
+    if (objS !== -1) starts.push(objS);
+    if (arrS !== -1) starts.push(arrS);
+    if (starts.length) {
+      const boundary = new Set<number>();
+      // 完整的 "字符串", 边界
+      for (const m of trimmed.matchAll(/",\s*,/g)) boundary.add((m.index ?? 0) + 2);
+      // 完整的 } , 或 ] , 边界
+      for (const m of trimmed.matchAll(/([}\]])\s*,/g)) boundary.add((m.index ?? 0) + 1);
+      // 字符串值后紧跟截断点（值刚闭合即被截断）
+      for (const m of trimmed.matchAll(/"[^"]*"\s*$/g)) boundary.add((m.index ?? 0) + m[0].trim().length);
+
+      const suffixes = ["}", "]}", "]", "}]", '"}', '"]'];
+      for (const start of starts) {
+        const cuts = [...boundary]
+          .filter((c) => c > start + 5)
+          .sort((a, b) => b - a)
+          .slice(0, 150);
+        for (const cut of cuts) {
+          const prefix = trimmed.slice(start, cut).replace(/,\s*$/, "");
+          for (const suf of suffixes) {
+            try {
+              return JSON.parse(prefix + suf) as T;
+            } catch {
+              /* try next */
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    /* continue */
+  }
+
   throw new Error(
     `Could not extract JSON from AI response. First 200 chars: ${trimmed.slice(0, 200)}`,
   );

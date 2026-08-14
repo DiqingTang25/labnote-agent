@@ -133,7 +133,14 @@ ${methodsText.slice(0, 15000)}
 - 可从上下文合理推断的标记为 implied，并在 inferenceRationale 中说明推断逻辑
 - 无法从论文确定、需要外部知识的标记为 inferred
 - 对复现必需但完全缺失的信息，放入 gaps 数组
-- 每个 gap 必须包含 aiSuggestion（基于领域知识的最佳猜测）`;
+- 每个 gap 必须包含 aiSuggestion（基于领域知识的最佳猜测）
+
+【输出硬性要求】
+- 直接输出纯 JSON，严禁 markdown 代码块围栏（不要使用 \`\`\`）
+- paperQuote 截取原文关键片段即可（≤80字），无原文时用空字符串
+- inferenceRationale 与 importanceRationale 每条压缩到 40 字以内
+- 参数总数控制在 20 个以内，优先输出对复现影响最大的参数
+- 全文必须完整闭合，宁可少列参数也不得截断`;
 
   // 2. 调用西浦网关文本模型
   let rawOutput: string;
@@ -145,37 +152,63 @@ ${methodsText.slice(0, 15000)}
         { role: "system", content: DECOMPOSE_SYSTEM },
         { role: "user", content: prompt },
       ],
-      8192,
+      12000,
     );
   } catch (err) {
     console.error("[PaperDecomposer] API call failed:", err);
     throw new Error("AI 服务暂时不可用，请稍后重试");
   }
 
-  // 3. 解析响应
+  // 3. 解析响应（失败时重试一次：要求完整纯 JSON 输出）
   let data: Record<string, unknown>;
   try {
     data = extractJSON<Record<string, unknown>>(rawOutput);
+    if (!Array.isArray(data.parameters) && !Array.isArray(data.gaps)) {
+      throw new Error("Parsed JSON missing parameters/gaps");
+    }
   } catch (err) {
-    console.error("[PaperDecomposer] JSON parse failed:", err);
-    // 回退：创建基础 Audit
-    return buildAuditFromAI(
-      paperTitle,
-      paperSource,
-      [],
-      [{
-        description: "AI 解析论文失败，请手动输入实验参数",
-        category: "synthesis",
-        importanceRationale: "无法自动提取参数",
-        aiSuggestion: "",
-        confidence: 0,
-        inferenceBasis: "",
-        dbReference: "",
-        dbSourceUrl: "",
-        impactIfWrong: "critical",
-      }],
-      `解析失败: ${String(err).slice(0, 200)}`,
-    );
+    console.error("[PaperDecomposer] JSON parse failed, retrying:", err);
+    try {
+      report("decomposing", "响应不完整，请求重新输出…");
+      rawOutput = await chat(
+        MODEL_TEXT,
+        [
+          { role: "system", content: DECOMPOSE_SYSTEM },
+          { role: "user", content: prompt },
+          {
+            role: "user",
+            content:
+              "你上一次的输出不完整或格式有误。请重新输出完整 JSON：不要 markdown 代码块围栏，压缩每条推断理由到 60 字以内，务必闭合所有括号。",
+          },
+        ],
+        12000,
+      );
+      data = extractJSON<Record<string, unknown>>(rawOutput);
+      // 解析出的内容必须包含参数或缺口，否则视为失败触发重试
+      if (!Array.isArray(data.parameters) && !Array.isArray(data.gaps)) {
+        throw new Error("Parsed JSON missing parameters/gaps");
+      }
+    } catch (retryErr) {
+      console.error("[PaperDecomposer] JSON parse failed after retry:", retryErr);
+      // 回退：创建基础 Audit
+      return buildAuditFromAI(
+        paperTitle,
+        paperSource,
+        [],
+        [{
+          description: "AI 解析论文失败，请手动输入实验参数",
+          category: "synthesis",
+          importanceRationale: "无法自动提取参数",
+          aiSuggestion: "",
+          confidence: 0,
+          inferenceBasis: "",
+          dbReference: "",
+          dbSourceUrl: "",
+          impactIfWrong: "critical",
+        }],
+        `解析失败: ${String(err).slice(0, 200)}`,
+      );
+    }
   }
 
   // 4. 提取参数和缺口

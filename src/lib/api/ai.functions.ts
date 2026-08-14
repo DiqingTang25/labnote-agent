@@ -26,6 +26,11 @@ function selectApiKey(model: string): string | undefined {
 
 /** Fetch with optional HTTP proxy support */
 function apiFetch(url: string, init: RequestInit): Promise<Response> {
+  // AI 网关为国内直连端点，绝不走 HTTP_PROXY 代理
+  //（代理是为 GitHub 等外网资源配置的，经代理访问网关会失败）
+  if (url.includes("xjtlu.edu.cn")) {
+    return fetch(url, init);
+  }
   return getProxiedFetch()(url, init);
 }
 
