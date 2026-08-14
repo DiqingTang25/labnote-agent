@@ -119,17 +119,28 @@ export const ragSearch = createServerFn({ method: "POST" })
     } else {
       // 无 Embedding — 纯关键词 ILIKE 搜索
       console.warn("[RAG] Embedding unavailable, using keyword-only search");
-      const terms = searchQuery.split(/\s+/).filter((t) => t.length > 0);
-      if (terms.length > 0) {
+      // 中文无空格分词：白空格拆分 + CJK 2-gram 切词，保证「归一化方法」能命中「归一化」
+      const rawTerms = searchQuery.split(/\s+/).filter((t) => t.length > 0);
+      const terms = new Set<string>();
+      for (const t of rawTerms) {
+        terms.add(t);
+        for (const part of t.split(/[，。？?！!、:：,.]/)) {
+          if (/[一-龥]/.test(part) && part.length >= 2) {
+            for (let i = 0; i <= part.length - 2; i++) terms.add(part.slice(i, i + 2));
+          }
+        }
+      }
+      if (terms.size > 0) {
+        const termList = [...terms].slice(0, 30);
         const { data: keywordResults } = await supabase
           .from("experiments")
           .select("id, name, properties")
           .eq("user_id", userId)
           .or(
-            terms
+            termList
               .map(
                 (term) =>
-                  `name.ilike.%${term}%,properties->>purpose.ilike.%${term}%,properties->>results.ilike.%${term}%`,
+                  `name.ilike.%${term}%,properties->>purpose.ilike.%${term}%,properties->>results.ilike.%${term}%,search_text.ilike.%${term}%`,
               )
               .join(","),
           )
