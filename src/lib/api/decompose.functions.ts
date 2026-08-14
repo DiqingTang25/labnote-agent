@@ -36,8 +36,11 @@ export const decomposeOnServer = createServerFn({ method: "POST" })
       const { getServiceSupabase } = await import("../supabase-server.server");
       const sb = getServiceSupabase();
 
+      // 表 id 列为 UUID 类型：插入合法 UUID（result.id 为字符串，直接插入会报
+      // invalid input syntax for type uuid 导致保存失败）
+      const auditRowId = crypto.randomUUID();
       const { error } = await sb.from("reproduction_audits").insert({
-        id: result.id,
+        id: auditRowId,
         user_id: userId,
         paper_title: result.paperTitle,
         paper_source: result.paperSource,
@@ -53,7 +56,7 @@ export const decomposeOnServer = createServerFn({ method: "POST" })
       if (error) {
         console.error("[Decompose] Supabase save error:", error);
         return {
-          auditId: result.id,
+          auditId: auditRowId,
           paramCount: result.parameters.length,
           gapCount: result.gaps.length,
           saved: false,
@@ -62,7 +65,7 @@ export const decomposeOnServer = createServerFn({ method: "POST" })
       }
 
       return {
-        auditId: result.id,
+        auditId: auditRowId,
         paramCount: result.parameters.length,
         gapCount: result.gaps.length,
         saved: true,
@@ -70,7 +73,7 @@ export const decomposeOnServer = createServerFn({ method: "POST" })
     } catch (err) {
       console.error("[Decompose] save exception:", err);
       return {
-        auditId: result.id,
+        auditId: result.id, // 保存未执行，回退原始 id 供前端 pending 键使用
         paramCount: result.parameters.length,
         gapCount: result.gaps.length,
         saved: false,
