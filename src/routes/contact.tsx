@@ -286,17 +286,10 @@ function ContactPage() {
           <div className="mt-8 border-t border-border pt-6">
             <div className="rounded-xl bg-card/60 p-4">
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <img
-                    src="/qr-group.jpg"
-                    alt="用户交流群二维码"
-                    className="h-20 w-20 border border-border"
-                  />
-                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 text-sm font-medium">
-                    <Users size={14} className="text-primary" />
-                    加入用户交流群
+                    <MessageSquare size={14} className="text-primary" />
+                    联系我们
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     扫码加入 LabNote Agent 用户交流群，与团队直接沟通
