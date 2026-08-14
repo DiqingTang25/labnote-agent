@@ -794,7 +794,7 @@ function RagPanel() {
     const history = chat
       .slice(-6)
       .map((m) => ({
-        role: m.role as "user" | "assistant",
+        role: (m.role === "agent" ? "assistant" : m.role) as "user" | "assistant",
         content: m.text,
       }));
 
