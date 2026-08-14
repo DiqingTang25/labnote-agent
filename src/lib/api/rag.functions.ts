@@ -116,9 +116,11 @@ export const ragSearch = createServerFn({ method: "POST" })
           }
         }
       }
-    } else {
-      // 无 Embedding — 纯关键词 ILIKE 搜索
-      console.warn("[RAG] Embedding unavailable, using keyword-only search");
+    }
+
+    // 关键词兜底：无 Embedding 或向量搜索无结果时启用（2-gram + 命中数重排序）
+    if (simMap.size === 0) {
+      console.warn("[RAG] Vector search empty, falling back to keyword search");
       // 中文无空格分词：白空格拆分 + CJK 2-gram 切词，保证「归一化方法」能命中「归一化」
       const rawTerms = searchQuery.split(/\s+/).filter((t) => t.length > 0);
       const terms = new Set<string>();
