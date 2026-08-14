@@ -1,5 +1,5 @@
 /**
- * Reproduction Audit — 复现审计页面
+ * Reproduction Audit — 实验复现页面
  *
  * 核心功能：
  *   1. 论文 Methods 输入 → AI 拆解为结构化参数
@@ -81,7 +81,7 @@ import {
 export const Route = createFileRoute("/checklist")({
   head: () => ({
     meta: [
-      { title: "复现审计 – LabNote Agent" },
+      { title: "实验复现 – LabNote Agent" },
       {
         name: "description",
         content: "论文实验方法拆解、复现参数提取、缺口分析、置信度评估——让实验真正可复现。",
@@ -1203,7 +1203,7 @@ function ReproductionAuditPage() {
   };
 
   // ═══════════════════════════════
-  // Protocol Tab — 动态实验 Checklist
+  // Protocol Tab — 动态实验 实验复现
   // ═══════════════════════════════
 
   // 协议 checklist 勾选状态
@@ -1404,7 +1404,7 @@ function ReproductionAuditPage() {
               <ListChecks size={20} />
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">复现审计</h1>
+              <h1 className="text-2xl font-bold">实验复现</h1>
               <p className="text-sm text-muted-foreground">
                 论文实验方法拆解 · 参数确定性标注 · 缺口智能推断 · 复现协议生成
               </p>
@@ -1534,7 +1534,7 @@ function ReproductionAuditPage() {
             <ListChecks size={20} />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">复现审计</h1>
+            <h1 className="text-2xl font-bold">实验复现</h1>
             <p className="text-sm text-muted-foreground">
               论文实验方法拆解 · 参数确定性标注 · 缺口智能推断
             </p>
@@ -1835,7 +1835,7 @@ const PIPELINE_STEPS: { step: DecompositionStep; icon: string; label: string }[]
   { step: "enhancing-static", icon: "●", label: "静态领域知识库匹配" },
   { step: "enhancing-mp", icon: "●", label: "Materials Project 查询" },
   { step: "enhancing-nist", icon: "●", label: "NIST Chemistry WebBook 查询" },
-  { step: "done", icon: "●", label: "生成复现审计报告" },
+  { step: "done", icon: "●", label: "生成实验复现报告" },
 ];
 
 function DecompositionProgressBar({ progress }: { progress: DecompositionProgress }) {
@@ -1914,7 +1914,7 @@ function HelpButton() {
       <DialogTrigger asChild>
         <button
           className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary-soft/10 transition"
-          title="了解复现审计如何工作"
+          title="了解实验复现如何工作"
         >
           <HelpCircle size={14} />
           <span className="hidden sm:inline">帮助</span>
@@ -1930,7 +1930,7 @@ function HelpModal() {
     <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle className="text-lg font-bold flex items-center gap-2">
-          <HelpCircle size={18} className="text-primary" /> 复现审计 — 帮助指南
+          <HelpCircle size={18} className="text-primary" /> 实验复现 — 帮助指南
         </DialogTitle>
       </DialogHeader>
 
@@ -2017,7 +2017,7 @@ function HelpModal() {
             <div className="ml-[13ch]">│ · 热力学相关参数置信度提升至 82-90%</div>
             <div className="ml-[13ch]">│</div>
             <div>
-              ──────────→ <span className="text-primary font-semibold">复现审计报告</span>{" "}
+              ──────────→ <span className="text-primary font-semibold">实验复现报告</span>{" "}
               (ReproductionAudit)
             </div>
           </div>

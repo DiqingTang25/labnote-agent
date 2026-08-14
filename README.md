@@ -251,7 +251,7 @@ AI_RERANK_KEY       → Qwen3-Reranker
 | 历史文件重新解析 | 按钮存在但仅显示 toast 提示，不实际处理已存储文件 | 占位 |
 | Electron 文件夹监听 | `useElectron.ts` 检测 `window.labnote` API。浏览器中该 API 不存在（此仓库无 Electron main process），面板始终显示浏览器回退提示 | 浏览器中无效 |
 
-### 4.2 `/checklist` — 复现审计
+### 4.2 `/checklist` — 实验复现
 
 **功能完整度：88%**
 
@@ -454,7 +454,7 @@ labnote-vault-main/
 |   |   |-- __root.tsx             # 根布局、导航栏、认证包裹
 |   |   |-- index.tsx              # /          首页
 |   |   |-- workbench.tsx          # /workbench  工作台
-|   |   |-- checklist.tsx          # /checklist  复现审计
+|   |   |-- checklist.tsx          # /checklist  实验复现
 |   |   |-- graph.tsx              # /graph      知识图谱
 |   |   |-- paper.tsx              # /paper      论文辅助
 |   |   |-- compare.tsx            # /compare    治理对比
@@ -692,4 +692,4 @@ Vercel 构建使用 Nitro Vercel preset。TanStack Start 将 server functions �
 - `knowledge-graph-architecture.md` — d3-force + 实体去重 + Supabase 关系
 - `reproduction-audit.md` — 论文拆解 + 置信度推断 + 复现协议
 - `ai-analysis-refactor.md` — Token-level 置信度校准引擎
-- `实验复现工作台.md` — 复现审计入口（说"实验复现"自动加载）
+- `实验复现工作台.md` — 实验复现入口（说"实验复现"自动加载）

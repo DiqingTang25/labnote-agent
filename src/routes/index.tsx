@@ -1,6 +1,6 @@
 /**
  * 首页：Magic UI SaaS 风格
- * Hero(网格背景+流光) + Logos(滚动) + AI工作流 + 核心功能深度展示 + 数据统计 + CTA
+ * Hero(网格背景+流光) + Logos(滚动) + 工作流(光束连接) + BentoGrid功能 + 视频演示 + 数据统计 + CTA
  */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
@@ -8,9 +8,9 @@ import { useLab } from "../lib/labStore";
 import { getString } from "../lib/property-utils";
 import { setPendingUpload } from "../lib/upload-bridge";
 import {
-  Sparkles, ArrowRight, Upload,
+  FileSearch, Sparkles, GitBranch, ArrowRight, Upload,
   CheckCircle2, ListChecks, Database, Brain, FileText,
-  MessageSquare, AlertTriangle, Layers, Zap,
+  MessageSquare, AlertTriangle, BookOpen, Layers, Zap,
 } from "lucide-react";
 import { BlurFade } from "../components/magicui/blur-fade";
 import { GridPattern } from "../components/magicui/grid-pattern";
@@ -18,7 +18,8 @@ import { BorderBeam } from "../components/magicui/border-beam";
 import { Marquee } from "../components/magicui/marquee";
 import { NumberTicker } from "../components/magicui/number-ticker";
 import { ShineBorder } from "../components/magicui/shine-border";
-import { ProductShowcase } from "../components/ProductShowcase";
+import { AutoPlayVideo } from "../components/magicui/auto-play-video";
+import { BentoGrid, BentoCard } from "../components/magicui/bento-grid";
 import { motion } from "motion/react";
 
 export const Route = createFileRoute("/")({
@@ -36,7 +37,7 @@ const flowSteps = [
   { icon: Brain, label: "AI 解析中…", hint: "多模态抽取", color: "oklch(0.6 0.2 220)" },
   { icon: FileText, label: "生成结构化卡片", hint: "模板驱动字段", color: "oklch(0.55 0.16 260)" },
   { icon: AlertTriangle, label: "发现缺失字段", hint: "2 项待补全", color: "oklch(0.78 0.15 75)" },
-  { icon: ListChecks, label: "生成 Checklist", hint: "复现清单", color: "oklch(0.65 0.16 155)" },
+  { icon: ListChecks, label: "生成 实验复现", hint: "复现清单", color: "oklch(0.65 0.16 155)" },
   { icon: Database, label: "写入知识库", hint: "向量化沉淀", color: "oklch(0.52 0.18 250)" },
   { icon: MessageSquare, label: "AI 科研问答", hint: "随时追溯", color: "oklch(0.6 0.2 220)" },
 ];
@@ -154,10 +155,13 @@ function Home() {
       {/* ===== 3. AI 工作流（光束连接） ===== */}
       <WorkflowAnimation />
 
-      {/* ===== 4. 核心功能深度展示 ===== */}
-      <ProductShowcase />
+      {/* ===== 4. 功能 BentoGrid + 视频 ===== */}
+      <FeaturesSection />
 
-      {/* ===== 5. 数据统计 ===== */}
+      {/* ===== 5. 视频演示 ===== */}
+      <VideoDemoSection />
+
+      {/* ===== 6. 数据统计 ===== */}
       <StatsSection
         totalCards={totalCards}
         completeCards={completeCards}
@@ -165,7 +169,7 @@ function Home() {
         experiments={experiments}
       />
 
-      {/* ===== 6. CTA ===== */}
+      {/* ===== 7. CTA ===== */}
       <CTASection />
     </div>
   );
@@ -230,6 +234,85 @@ function WorkflowAnimation() {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function FeaturesSection() {
+  return (
+    <section className="mx-auto max-w-7xl px-4 py-12">
+      <BlurFade inView inViewMargin="-50px">
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <h2 className="text-3xl md:text-4xl font-bold">三大核心能力</h2>
+          <p className="mt-3 text-muted-foreground">从原始记录到可复现的科研资产，全流程 AI 赋能</p>
+        </div>
+      </BlurFade>
+
+      <BentoGrid className="auto-rows-[20rem]">
+        <BentoCard
+          name="多源数据采集与解析"
+          description="一键导入 PDF / Word / Excel / 图片 / 仪器日志 / 语音，多模态大模型自动抽取实验信息。"
+          Icon={FileSearch}
+          href="/workbench"
+          cta="开始使用"
+          index={0}
+          background={
+            <GridPattern width={32} height={32} strokeDasharray="2 6" className="[mask-image:radial-gradient(ellipse_at_top_right,black_20%,transparent_70%)]" />
+          }
+        />
+        <BentoCard
+          name="智能清洗与完整性检查"
+          description="自动补全缺失字段、统一术语与单位、识别异常参数，输出可信可复核的结构化卡片。"
+          Icon={Sparkles}
+          href="/workbench"
+          cta="查看详情"
+          index={1}
+          background={
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-soft/20 to-transparent" />
+          }
+        />
+        <BentoCard
+          name="复现实验与知识库问答"
+          description="自动生成复现清单与论文 Methods 草稿，基于 RAG 知识库支持自然语言追溯。"
+          Icon={GitBranch}
+          href="/graph"
+          cta="进入知识图谱"
+          index={2}
+          background={
+            <GridPattern width={24} height={24} className="[mask-image:radial-gradient(ellipse_at_bottom_left,black_20%,transparent_70%)] opacity-50" />
+          }
+        />
+      </BentoGrid>
+    </section>
+  );
+}
+
+function VideoDemoSection() {
+  return (
+    <section className="mx-auto max-w-7xl px-4 py-12">
+      <BlurFade inView inViewMargin="-80px">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold">产品演示</h2>
+          <p className="text-sm text-muted-foreground mt-1">30 秒了解 LabNote Agent 完整工作流</p>
+        </div>
+      </BlurFade>
+
+      <BlurFade delay={0.1} inView inViewMargin="-80px">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-xl">
+          <BorderBeam size={250} duration={10} />
+          <AutoPlayVideo
+            src="https://cdn.magicui.design/saas-demo.mp4"
+            rounded="rounded-xl"
+            className="max-h-[480px] object-cover"
+          />
+        </div>
+      </BlurFade>
+
+      <BlurFade delay={0.15} inView inViewMargin="-50px">
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          演示视频为占位素材 · 实际使用时替换为 LabNote Agent 功能录屏
+        </p>
+      </BlurFade>
     </section>
   );
 }
@@ -382,6 +465,11 @@ function CTASection() {
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary-soft/10 via-background to-background" />
       <GridPattern width={48} height={48} strokeDasharray="4 4" className="[mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_75%)] opacity-30" />
 
+      {/* 彩色光斑（玻璃拟态的可感知来源：磨砂卡片背后透出的色彩） */}
+      <div className="pointer-events-none absolute left-[6%] top-[28%] h-72 w-72 rounded-full bg-blue-400/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-[8%] top-[18%] h-80 w-80 rounded-full bg-cyan-400/30 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-[8%] left-[40%] h-64 w-64 rounded-full bg-indigo-400/25 blur-3xl" />
+
       <div className="relative mx-auto max-w-5xl px-4 py-20">
         <BlurFade inView inViewMargin="-50px">
           <h2 className="text-center text-2xl font-bold md:text-3xl">为什么选择 LabNote Agent</h2>
@@ -390,23 +478,23 @@ function CTASection() {
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {reasons.map((r, i) => (
             <BlurFade key={r.title} delay={0.08 * i} inView inViewMargin="-30px">
-              {/* 浅色玻璃拟态：磨砂白底 + 顶部内高光 + 柔和外发光 + 噪点纹理 */}
+              {/* 浅色玻璃拟态：半透明白磨砂 + 顶部内高光 + 蓝色外发光 + 噪点纹理 */}
               <div
-                className="group relative h-full overflow-hidden rounded-xl border border-border/50 bg-white/60 p-6 backdrop-blur-md transition-all duration-300 hover:border-primary/30"
+                className="group relative h-full overflow-hidden rounded-xl border border-white/70 bg-white/50 p-6 backdrop-blur-lg transition-all duration-300 hover:border-primary/40"
                 style={{
                   boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 24px -10px rgba(59,130,246,0.12)",
+                    "inset 0 1px 0 rgba(255,255,255,0.95), 0 8px 32px -10px rgba(59,130,246,0.22)",
                 }}
               >
-                {/* 噪点纹理（极淡，消除数码塑料感） */}
+                {/* 噪点纹理（消除数码塑料感） */}
                 <div
-                  className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay"
+                  className="pointer-events-none absolute inset-0 opacity-[0.05] mix-blend-overlay"
                   style={{ backgroundImage: noiseTexture, backgroundSize: "200px 200px" }}
                 />
                 {/* 悬停外发光 */}
                 <div
                   className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                  style={{ boxShadow: `0 8px 40px -12px ${r.glow}` }}
+                  style={{ boxShadow: `0 12px 48px -12px ${r.glow}` }}
                 />
                 <div className="relative">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">

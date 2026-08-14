@@ -101,7 +101,7 @@ export async function chat(
     }
   }
 
-  // 浏览器 → server function 代理；服务端内部（复现审计/MCP）→ 直调网关
+  // 浏览器 → server function 代理；服务端内部（实验复现/MCP）→ 直调网关
   // （嵌套调用 server function 会丢失 AsyncLocalStorage 上下文导致解析失败）
   if (typeof window === "undefined") {
     const { chatCompletionDirect } = await import("./api/ai.functions");

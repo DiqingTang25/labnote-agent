@@ -32,7 +32,7 @@ function apiFetch(url: string, init: RequestInit): Promise<Response> {
 // Chat Completion（文本 / 多模态）
 // ═══════════════════════════════════════════════════════
 
-/** 服务端直调实现：供「服务端内部」的嵌套调用（复现审计 / MCP 处理器）使用。
+/** 服务端直调实现：供「服务端内部」的嵌套调用（实验复现 / MCP 处理器）使用。
  *  TanStack 服务器函数在服务端内再次调用会丢失 AsyncLocalStorage 上下文，
  *  因此在已知处于服务端运行时的代码路径中，直接调用本函数访问网关。 */
 export async function chatCompletionDirect(params: {

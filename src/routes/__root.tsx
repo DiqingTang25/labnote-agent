@@ -136,7 +136,7 @@ function TopNav() {
           <NavItem to="/" icon={<Home size={14} />}>首页</NavItem>
           <NavItem to="/workbench" icon={<Beaker size={14} />}>工作台</NavItem>
           <NavItem to="/compare" icon={<Layers size={14} />}>治理对比</NavItem>
-          <NavItem to="/checklist" icon={<ListChecks size={14} />}>Checklist</NavItem>
+          <NavItem to="/checklist" icon={<ListChecks size={14} />}>实验复现</NavItem>
           <NavItem to="/graph" icon={<Network size={14} />}>关系图谱</NavItem>
           <NavItem to="/assets" icon={<Package size={14} />}>实验资产</NavItem>
           <NavItem to="/paper" icon={<BookOpen size={14} />}>论文辅助</NavItem>
