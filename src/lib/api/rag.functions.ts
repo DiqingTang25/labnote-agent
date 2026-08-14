@@ -134,7 +134,7 @@ export const ragSearch = createServerFn({ method: "POST" })
         const termList = [...terms].slice(0, 30);
         const { data: keywordResults } = await supabase
           .from("experiments")
-          .select("id, name, properties")
+          .select("id, name, properties, search_text")
           .eq("user_id", userId)
           .or(
             termList
@@ -144,22 +144,26 @@ export const ragSearch = createServerFn({ method: "POST" })
               )
               .join(","),
           )
-          .limit(data.limit * 3);
+          .order("created_at", { ascending: false })
+          .limit(data.limit * 5);
 
         if (Array.isArray(keywordResults)) {
-          for (const r of keywordResults as Array<{
-            id: string;
-            name: string;
-            properties?: Record<string, unknown>;
-          }>) {
+          // 客户端重排序：命中词数越多越靠前（避免通用词挤掉真正相关的结果）
+          const scored = keywordResults.map((r) => {
+            const text = `${r.name ?? ""} ${r.search_text ?? ""}`.toLowerCase();
+            const hits = termList.filter((t) => text.includes(t.toLowerCase())).length;
+            return { r, hits };
+          }).sort((a, b) => b.hits - a.hits).slice(0, data.limit * 3);
+
+          for (const { r, hits } of scored) {
             const props = r.properties ?? {};
             const purpose = (props["purpose"] as string) ?? "";
             const results = (props["results"] as string) ?? "";
             const snippet = [purpose, results].filter(Boolean).join(" | ").slice(0, 200);
             simMap.set(r.id, {
               name: r.name,
-              similarity: 0.5,
-              bestChunk: snippet || JSON.stringify(props).slice(0, 200),
+              similarity: 0.5 + Math.min(0.3, hits * 0.1),
+              bestChunk: snippet || String(r.search_text ?? "").slice(0, 200),
               chunkType: "keyword",
             });
           }
