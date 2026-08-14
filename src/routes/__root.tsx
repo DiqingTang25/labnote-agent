@@ -138,7 +138,7 @@ function TopNav() {
           <NavItem to="/compare" icon={<Layers size={14} />}>治理对比</NavItem>
           <NavItem to="/checklist" icon={<ListChecks size={14} />}>Checklist</NavItem>
           <NavItem to="/graph" icon={<Network size={14} />}>关系图谱</NavItem>
-          <NavItem to="/assets" icon={<Package size={14} />}>资产包</NavItem>
+          <NavItem to="/assets" icon={<Package size={14} />}>实验资产</NavItem>
           <NavItem to="/paper" icon={<BookOpen size={14} />}>论文辅助</NavItem>
           <NavItem to="/help" icon={<HelpCircle size={14} />}>帮助</NavItem>
         </nav>

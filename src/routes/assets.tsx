@@ -12,7 +12,7 @@ import { RequireAuth } from "../lib/auth-guard";
 export const Route = createFileRoute("/assets")({
   head: () => ({
     meta: [
-      { title: "实验资产包 – LabNote Agent" },
+      { title: "实验资产 – LabNote Agent" },
       { name: "description", content: "所有实验卡片的结构化资产视图，支持批量导出与溯源。" },
     ],
   }),
@@ -46,18 +46,18 @@ function AssetsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `LabNote-资产包-${new Date().toISOString().slice(0, 10)}.${format}`;
+    link.download = `LabNote-实验资产-${new Date().toISOString().slice(0, 10)}.${format}`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success(`已导出 ${experiments.length} 张卡片`);
   };
 
   if (experiments.length === 0) {
-    return <div className="mx-auto max-w-4xl px-4 py-20 text-center"><Package size={48} className="mx-auto text-muted-foreground"/><h1 className="mt-4 text-2xl font-bold">实验资产包</h1><p className="mt-2 text-muted-foreground">尚无实验卡片，请先到工作台上传实验数据。</p><Link to="/workbench" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm text-primary-foreground">前往工作台 <ArrowUpRight size={14}/></Link></div>;
+    return <div className="mx-auto max-w-4xl px-4 py-20 text-center"><Package size={48} className="mx-auto text-muted-foreground"/><h1 className="mt-4 text-2xl font-bold">实验资产</h1><p className="mt-2 text-muted-foreground">尚无实验卡片，请先到工作台上传实验数据。</p><Link to="/workbench" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm text-primary-foreground">前往工作台 <ArrowUpRight size={14}/></Link></div>;
   }
 
   return <RequireAuth><div className="mx-auto max-w-7xl px-4 py-8">
-    <div className="flex items-start justify-between flex-wrap gap-4 mb-8"><div><h1 className="text-2xl font-bold flex items-center gap-3"><span className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white"><Layers size={20}/></span>实验资产包</h1><p className="mt-2 text-sm text-muted-foreground">结构化实验数据资产，可追溯、可导出、可直接用于论文</p></div><div className="flex gap-2"><button onClick={() => exportAll("md")} className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm hover:border-primary/40 transition"><FileText size={14}/> 导出 Markdown</button><button onClick={() => exportAll("json")} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 transition"><FileJson size={14}/> 导出 JSON</button></div></div>
+    <div className="flex items-start justify-between flex-wrap gap-4 mb-8"><div><h1 className="text-2xl font-bold flex items-center gap-3"><span className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white"><Layers size={20}/></span>实验资产</h1><p className="mt-2 text-sm text-muted-foreground">结构化实验数据资产，可追溯、可导出、可直接用于论文</p></div><div className="flex gap-2"><button onClick={() => exportAll("md")} className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm hover:border-primary/40 transition"><FileText size={14}/> 导出 Markdown</button><button onClick={() => exportAll("json")} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 transition"><FileJson size={14}/> 导出 JSON</button></div></div>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8"><StatBox icon={<Package size={18}/>} label="实验卡片" value={experiments.length} color="blue"/><StatBox icon={<CheckCircle2 size={18}/>} label="完整卡片" value={completedCards} sub={`/${experiments.length}`} color="green"/><StatBox icon={<TrendingUp size={18}/>} label="参数字段" value={totalParams} color="amber"/><StatBox icon={<BookOpen size={18}/>} label="学科领域" value={disciplines.length} color="violet"/></div>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{experiments.map((experiment) => <AssetCard key={experiment.id} experiment={experiment}/>)}</div>
   </div></RequireAuth>;

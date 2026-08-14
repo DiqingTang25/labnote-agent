@@ -122,3 +122,62 @@
 .graph-skeleton {
   animation: graph-skeleton-pulse 2s ease-in-out infinite;
 }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Magic UI 动画
+   ═══════════════════════════════════════════════════════ */
+
+/* BorderBeam 流光边框 */
+@property --border-beam-x {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@keyframes border-beam {
+  to { --border-beam-x: 100%; }
+}
+.animate-border-beam {
+  animation: border-beam var(--duration, 12s) linear infinite;
+  offset-anchor: calc(var(--size, 200) * -0.5px) 50%;
+}
+
+/* Marquee 无限滚动 */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100% - var(--gap, 1rem))); }
+}
+.animate-marquee {
+  animation: marquee var(--duration, 30s) linear infinite;
+}
+
+@keyframes marquee-vertical {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(-100% - var(--gap, 1rem))); }
+}
+.animate-marquee-vertical {
+  animation: marquee-vertical var(--duration, 30s) linear infinite;
+}
+
+/* ShineBorder 闪光边框 */
+@keyframes shine-border {
+  to { transform: rotate(360deg); }
+}
+.animate-shine-border {
+  background: var(--mask-linear-gradient),
+    var(--background-radial-gradient);
+  background-size: 100% 100%, auto;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  -webkit-mask: var(--mask-linear-gradient);
+  mask: var(--mask-linear-gradient);
+  animation: shine-border var(--duration, 14s) linear infinite;
+}

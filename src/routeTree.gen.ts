@@ -16,6 +16,7 @@ import { Route as PaperRouteImport } from './routes/paper'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as GraphRouteImport } from './routes/graph'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CompareRouteImport } from './routes/compare'
 import { Route as ChecklistRouteImport } from './routes/checklist'
 import { Route as AssetsRouteImport } from './routes/assets'
@@ -57,6 +58,11 @@ const GraphRoute = GraphRouteImport.update({
   path: '/graph',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompareRoute = CompareRouteImport.update({
   id: '/compare',
   path: '/compare',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/assets': typeof AssetsRoute
   '/checklist': typeof ChecklistRoute
   '/compare': typeof CompareRoute
+  '/contact': typeof ContactRoute
   '/graph': typeof GraphRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/assets': typeof AssetsRoute
   '/checklist': typeof ChecklistRoute
   '/compare': typeof CompareRoute
+  '/contact': typeof ContactRoute
   '/graph': typeof GraphRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/assets': typeof AssetsRoute
   '/checklist': typeof ChecklistRoute
   '/compare': typeof CompareRoute
+  '/contact': typeof ContactRoute
   '/graph': typeof GraphRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/assets'
     | '/checklist'
     | '/compare'
+    | '/contact'
     | '/graph'
     | '/help'
     | '/login'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/assets'
     | '/checklist'
     | '/compare'
+    | '/contact'
     | '/graph'
     | '/help'
     | '/login'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/assets'
     | '/checklist'
     | '/compare'
+    | '/contact'
     | '/graph'
     | '/help'
     | '/login'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   AssetsRoute: typeof AssetsRoute
   ChecklistRoute: typeof ChecklistRoute
   CompareRoute: typeof CompareRoute
+  ContactRoute: typeof ContactRoute
   GraphRoute: typeof GraphRoute
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
@@ -237,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GraphRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/compare': {
       id: '/compare'
       path: '/compare'
@@ -280,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssetsRoute: AssetsRoute,
   ChecklistRoute: ChecklistRoute,
   CompareRoute: CompareRoute,
+  ContactRoute: ContactRoute,
   GraphRoute: GraphRoute,
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
