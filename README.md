@@ -2,8 +2,8 @@
 
 面向高校实验室与科研课题组的 AI 实验数据治理与论文复现平台。
 
-> **生产环境**：https://labnote.tech（Vercel 托管）
-> **仓库**：[DiqingTang25/labnote-agent](https://github.com/DiqingTang25/labnote-agent)（private）
+> **生产环境**：https://labnote.tech
+> **仓库**：[DiqingTang25/labnote-agent](https://github.com/DiqingTang25/labnote-agent)
 
 ---
 
