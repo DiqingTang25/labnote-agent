@@ -16,6 +16,7 @@ import {
   Lock, Download, ShieldCheck, Database, MousePointer,
   GitBranch, Cpu, LogIn, Settings, FileJson, Code2, Copy,
   ThumbsUp, ThumbsDown, Send, Image as ImageIcon, Camera,
+  Users, Building2,
 } from "lucide-react";
 import { BlurFade } from "../components/magicui/blur-fade";
 
@@ -174,6 +175,16 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "graph-intro", label: "节点与关联类型", icon: Network },
       { id: "graph-interact", label: "交互与过滤", icon: MousePointer },
       { id: "graph-export", label: "搜索与 SVG 导出", icon: Download },
+    ],
+  },
+  {
+    title: "团队协作",
+    items: [
+      { id: "team-overview", label: "团队协作概览", icon: Users },
+      { id: "team-create", label: "创建与加入团队", icon: Building2 },
+      { id: "team-members", label: "成员与权限", icon: ShieldCheck },
+      { id: "team-templates", label: "团队模板库", icon: Settings },
+      { id: "team-assets", label: "团队资产与问答", icon: MessageSquare },
     ],
   },
   {
@@ -346,7 +357,6 @@ function HelpPage() {
             <span className="truncate font-medium">{activeItem?.label ?? "LabNote Agent 操作指南"}</span>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <span className="hidden text-[10px] text-muted-foreground sm:block">v1.0 · 更新于 2026-08</span>
             <Link to="/" className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs transition hover:bg-secondary">
               返回首页 <ArrowRight size={12} />
             </Link>
@@ -378,6 +388,13 @@ function HelpPage() {
           <GraphIntroSection />
           <GraphInteractSection />
           <GraphExportSection />
+
+          <Divider label="团队协作" />
+          <TeamOverviewSection />
+          <TeamCreateSection />
+          <TeamMembersSection />
+          <TeamTemplatesSection />
+          <TeamAssetsSection />
 
           <Divider label="学术写作" />
           <PaperGenerateSection />
@@ -1442,6 +1459,184 @@ function GraphExportSection() {
 // ═══════════════════════════════════════════════════
 // 学术写作
 // ═══════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+// 团队协作
+// ═══════════════════════════════════════════════════════
+
+function TeamOverviewSection() {
+  return (
+    <section id="section-team-overview" className="scroll-mt-24">
+      <BlurFade inView inViewMargin="-50px">
+        <SectionHeader
+          tag="团队协作"
+          title="团队协作概览"
+          desc="把课题组变成一个有组织的知识共同体：实验资产共享、知识沉淀复用、分工各司其职。"
+        />
+        <div className={`${GLASS_CARD} mt-5 p-5`}>
+          <NoiseTexture />
+          <div className="relative z-10 space-y-4">
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
+              团队协作模式为课题组/实验室提供独立的工作空间。加入团队后，所有页面（工作台、图谱、资产、问答）自动按团队范围运行：你既能看到自己的实验，也能看到团队共享的实验。
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FeatureRow label="资产共享" desc="实验卡片与附件对全团队可见，新成员无需逐个私发文件" />
+              <FeatureRow label="知识复用" desc="团队知识问答、共享模板库与关系图谱，让经验沉淀为团队资产" />
+              <FeatureRow label="权限清晰" desc="创建者/管理员/成员三级角色，各司其职不越界" />
+              <FeatureRow label="交接无忧" desc="个人资产可一键转入团队，学生毕业、人员更替不断档" />
+            </div>
+            <TipsCard title="个人空间与团队空间">
+              个人数据与团队数据分开管理，左侧边栏顶部可随时切换工作空间；切换后各页面的可见范围立即变化。
+            </TipsCard>
+          </div>
+        </div>
+      </BlurFade>
+    </section>
+  );
+}
+
+function TeamCreateSection() {
+  return (
+    <section id="section-team-create" className="scroll-mt-24">
+      <BlurFade inView inViewMargin="-50px">
+        <SectionHeader
+          tag="团队协作"
+          title="创建与加入团队"
+          desc="创建只需一个名称；加入只需一个邀请码。"
+        />
+        <div className={`${GLASS_CARD} mt-5 p-5`}>
+          <NoiseTexture />
+          <div className="relative z-10">
+            <Step num={1} title="创建团队">
+              <p>在「团队」页点击「创建团队」，按向导逐屏填写（一屏一个字段，可随时跳过剩余步骤）：</p>
+              <ul className="list-disc list-inside space-y-0.5 ml-1">
+                <li>团队名称：展示名称，可与其他团队重名</li>
+                <li>唯一标识：团队的唯一身份标识（类似 GitHub 组织名），全局不重名，创建后不可修改</li>
+                <li>所属机构 / 挂靠学院 / 学科 / 研究方向 / 成立年份 / 简介 / 联系邮箱</li>
+              </ul>
+              <p className="mt-1.5 text-[11px] text-muted-foreground/70">
+                创建后你自动成为「创建者」，可在团队页随时补充其余信息。
+              </p>
+            </Step>
+            <Step num={2} title="生成邀请码">
+              <p>团队页 →「成员」→ 点击「生成邀请码」。邀请码 8 位、7 天内有效，可复制分享给同事。</p>
+            </Step>
+            <Step num={3} title="输入邀请码加入">
+              <p>在「团队」页点击「输入邀请码加入」，粘贴邀请码即可。加入后自动切换到团队工作空间。</p>
+            </Step>
+          </div>
+        </div>
+      </BlurFade>
+    </section>
+  );
+}
+
+function TeamMembersSection() {
+  return (
+    <section id="section-team-members" className="scroll-mt-24">
+      <BlurFade inView inViewMargin="-50px">
+        <SectionHeader
+          tag="团队协作"
+          title="成员与权限"
+          desc="三级角色，职责清晰：大家都能看，各管各的写，删除只有管理员。"
+        />
+        <div className={`${GLASS_CARD} mt-5 p-5`}>
+          <NoiseTexture />
+          <div className="relative z-10 space-y-4">
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-[12px]">
+                <thead className="bg-secondary/60">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">能力</th>
+                    <th className="px-3 py-2 text-left font-semibold">成员</th>
+                    <th className="px-3 py-2 text-left font-semibold">管理员</th>
+                    <th className="px-3 py-2 text-left font-semibold">创建者</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {[
+                    ["查看团队全部资产", "✓", "✓", "✓"],
+                    ["上传/编辑自己的实验", "✓", "✓", "✓"],
+                    ["编辑他人实验", "—", "✓", "✓"],
+                    ["管理成员与邀请码", "—", "✓", "✓"],
+                    ["删除任何团队资产", "—", "—", "✓"],
+                    ["维护成果墙/项目/公告/模板", "—", "✓", "✓"],
+                  ].map((row) => (
+                    <tr key={row[0]}>
+                      <td className="px-3 py-2">{row[0]}</td>
+                      {row.slice(1).map((cell, i) => (
+                        <td key={i} className={`px-3 py-2 ${cell === "✓" ? "text-success" : "text-muted-foreground"}`}>
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Step num={1} title="填写成员身份">
+              <p>成员名单中点击自己的「身份」栏，可填写 PI / 博士后 / 博士生 / 硕士生等身份标签，展示在团队名单中。</p>
+            </Step>
+            <Step num={2} title="调整角色与移除">
+              <p>管理员可在成员行设置「设为管理员」或移除成员；创建者不可被移除，成员可主动退出团队。</p>
+            </Step>
+          </div>
+        </div>
+      </BlurFade>
+    </section>
+  );
+}
+
+function TeamTemplatesSection() {
+  return (
+    <section id="section-team-templates" className="scroll-mt-24">
+      <BlurFade inView inViewMargin="-50px">
+        <SectionHeader
+          tag="团队协作"
+          title="团队模板库"
+          desc="统一团队的实验记录规范：一个模板，全组一致。"
+        />
+        <div className={`${GLASS_CARD} mt-5 p-5`}>
+          <NoiseTexture />
+          <div className="relative z-10">
+            <Step num={1} title="管理员创建团队模板">
+              <p>团队页 →「模板」→「新建模板」：从 27 个预置模板复制字段结构，或从空白开始，随后在字段编辑器中增删改字段组与字段（类型、单位、选项、必填、表格列）。</p>
+            </Step>
+            <Step num={2} title="成员选用团队模板">
+              <p>工作台点击「新建实验（选模板）」，在团队模板分组中选择模板；实验卡片将按模板字段渲染，记录结构全组统一。</p>
+            </Step>
+            <TipsCard title="模板与个人字段的关系">
+              模板只是起点——创建后成员仍可自由增删自己的字段；团队模板保证的是「默认结构一致」，不限制个性化。
+            </TipsCard>
+          </div>
+        </div>
+      </BlurFade>
+    </section>
+  );
+}
+
+function TeamAssetsSection() {
+  return (
+    <section id="section-team-assets" className="scroll-mt-24">
+      <BlurFade inView inViewMargin="-50px">
+        <SectionHeader
+          tag="团队协作"
+          title="团队资产与问答"
+          desc="工作空间切换后，检索、图谱与问答自动以团队为边界。"
+        />
+        <div className={`${GLASS_CARD} mt-5 p-5`}>
+          <NoiseTexture />
+          <div className="relative z-10 space-y-4">
+            <FeatureRow label="团队知识问答" desc="右侧 AI 助手在团队空间下检索全组实验，回答附来源卡片与引用位置" />
+            <FeatureRow label="团队关系图谱" desc="图谱聚合全组实验的设备、样品、方法与操作人，跨人跨实验找关联" />
+            <FeatureRow label="个人资产转团队" desc="工作台个人模式下，实验卡上方选择目标团队一键转入（用于学生交接、成果归档）" />
+            <FeatureRow label="成果墙 / 项目 / 公告 / 动态" desc="团队主页沉淀论文、专利、获奖、在研项目与近期通知，动态流自动记录成员与实验事件" />
+          </div>
+        </div>
+      </BlurFade>
+    </section>
+  );
+}
 
 function PaperGenerateSection() {
   return (
