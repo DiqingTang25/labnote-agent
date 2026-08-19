@@ -600,8 +600,16 @@ function WorkspaceGate() {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 backdrop-blur-sm px-4">
-      <div className="card-soft relative w-full max-w-2xl p-8">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/40 backdrop-blur-sm px-4"
+      onClick={() => chosen && closeGate()} // 已选择过工作空间时，点背景可关闭
+    >
+      <div
+        className="card-soft relative w-full max-w-2xl p-8"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === "Escape" && chosen) closeGate(); }}
+        tabIndex={-1}
+      >
         {chosen && (
           <button
             onClick={closeGate}
