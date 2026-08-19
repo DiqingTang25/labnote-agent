@@ -30,7 +30,7 @@ function getParameters(experiment: ExperimentDoc): Parameter[] {
 }
 
 function AssetsPage() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments } = useLab();
   const totalParams = experiments.reduce((sum, experiment) => sum + getParameters(experiment).length, 0);
   const completedCards = experiments.filter((experiment) => (
     Boolean(getString(experiment.properties, "results")) && Boolean(getString(experiment.properties, "purpose"))

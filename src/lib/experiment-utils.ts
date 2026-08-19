@@ -19,6 +19,7 @@ export type ExperimentRow = {
   date: string;
   operator: string;
   user_id: string;
+  team_id?: string | null;
   created_at: string;
   updated_at: string;
   version: number;
@@ -81,6 +82,7 @@ export function toRow(e: ExperimentDoc, userId?: string): ExperimentRow {
     date: sanitizeText(e.date) || "",
     operator: sanitizeText(e.operator) || "",
     user_id: userId ?? e.userId ?? null,
+    team_id: e.teamId ?? null,
     created_at: e.createdAt || new Date().toISOString(),
     updated_at: e.updatedAt || new Date().toISOString(),
     version: e.version ?? 1,
@@ -121,6 +123,7 @@ export function fromRow(r: Record<string, unknown>): ExperimentDoc {
     date: (r.date as string) ?? "",
     operator: (r.operator as string) ?? "",
     userId: (r.user_id as string) ?? "",
+    teamId: (r.team_id as string) ?? null,
     createdAt: (r.created_at as string) ?? new Date().toISOString(),
     updatedAt: (r.updated_at as string) ?? new Date().toISOString(),
     version: (r.version as number) ?? 1,

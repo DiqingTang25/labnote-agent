@@ -69,11 +69,11 @@ export async function fetchExperiments(): Promise<ExperimentDoc[]> {
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) return [];
-  // RLS + 代码双重过滤
+  // 不按 user_id 过滤：RLS 返回「个人 + 所在团队」的全部可见实验，
+  // 由 labStore 按当前工作空间（个人/团队）在内存中过滤展示。
   const { data, error } = await supabase
     .from("experiments")
     .select("*")
-    .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) {
     console.error("[Supabase] fetchExperiments error:", error);
@@ -122,12 +122,12 @@ export async function updateExperimentDB(
   const userId = sessionData.session?.user?.id;
   if (!userId) return false;
   const dbPatch = buildDbPatch(patch);
+  // 不按 user_id 过滤：RLS 决定权限（本人可改自己的；团队管理员可改团队内全部）
   // select("id") 回读受影响行：UPDATE 匹配 0 行时不再假装成功
   const { data: updatedRows, error } = await supabase
     .from("experiments")
     .update(dbPatch)
     .eq("id", id)
-    .eq("user_id", userId)
     .select("id");
   if (error) {
     console.error("[Supabase] updateExperiment error:", error);
@@ -141,7 +141,8 @@ export async function deleteExperimentDB(id: string): Promise<boolean> {
   const { data: sessionData } = await supabase.auth.getSession();
   const userId = sessionData.session?.user?.id;
   if (!userId) return false;
-  const { error } = await supabase.from("experiments").delete().eq("id", id).eq("user_id", userId);
+  // RLS 决定权限：本人可删自己的；团队管理员可删团队内全部
+  const { error } = await supabase.from("experiments").delete().eq("id", id);
   if (error) {
     console.error("[Supabase] deleteExperiment error:", error);
     return false;
@@ -625,13 +626,14 @@ export async function ragAnswerReal(
   question: string,
   selectedIds?: string[],
   history?: Array<{ role: "user" | "assistant"; content: string }>,
+  teamId?: string | null,
 ): Promise<{ answer: string; sources: RagSource[] }> {
-  // 获取当前用户 — RAG 只搜索该用户的实验
+  // 获取当前用户 — 个人模式搜本人实验；团队模式搜团队范围
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) throw new Error("未登录或登录已过期");
   const { ragAnswer } = await import("./api/rag.functions");
-  return ragAnswer({ data: { question, accessToken, selectedIds, history } });
+  return ragAnswer({ data: { question, accessToken, teamId: teamId ?? null, selectedIds, history } });
 }
 
 /**
@@ -643,6 +645,7 @@ export async function ragAnswerRealStream(
   question: string,
   selectedIds?: string[],
   history?: Array<{ role: "user" | "assistant"; content: string }>,
+  teamId?: string | null,
 ): Promise<Response> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
@@ -650,7 +653,7 @@ export async function ragAnswerRealStream(
   const { ragAnswerStream } = await import("./api/rag.functions");
   // TanStack createServerFn 类型推断不知道返回值是 Response（运行时通过 x-tss-raw header 透传）
   return ragAnswerStream({
-    data: { question, accessToken, selectedIds, history },
+    data: { question, accessToken, teamId: teamId ?? null, selectedIds, history },
   }) as unknown as Response;
 }
 
@@ -875,4 +878,331 @@ export async function submitGeneralFeedback(params: {
   } catch {
     return false;
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// 团队模式 — 客户端查询（读走 RLS，写受管理员策略约束）
+// ═══════════════════════════════════════════════════════
+
+export type TeamRow = {
+  id: string;
+  name: string;
+  slug: string | null;
+  institution: string | null;
+  department: string | null;
+  discipline: string | null;
+  research_areas: string[] | null;
+  intro: string | null;
+  homepage: string | null;
+  contact_email: string | null;
+  founded_year: number | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TeamMemberRow = {
+  team_id: string;
+  user_id: string;
+  role: "owner" | "admin" | "member";
+  role_title: string | null;
+  joined_at: string;
+  email?: string | null;
+};
+
+export type TeamAchievement = {
+  id: string;
+  team_id: string;
+  type: "publication" | "patent" | "award" | "conference";
+  title: string;
+  venue: string | null;
+  detail: string | null;
+  year: number | null;
+  link: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type TeamProject = {
+  id: string;
+  team_id: string;
+  title: string;
+  status: "ongoing" | "completed";
+  funding_source: string | null;
+  grant_no: string | null;
+  lead_user_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type TeamAnnouncement = {
+  id: string;
+  team_id: string;
+  title: string;
+  content: string;
+  pinned: boolean;
+  created_by: string;
+  created_at: string;
+};
+
+/** 我加入的所有团队（含我的角色与身份） */
+export async function fetchMyTeams(): Promise<{ team: TeamRow; role: string; roleTitle: string | null }[]> {
+  if (!isSupabaseReady()) return [];
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("team_id, role, role_title, teams(*)")
+    .eq("user_id", userId);
+  if (error) {
+    console.error("[Supabase] fetchMyTeams error:", error);
+    return [];
+  }
+  return ((data as unknown[]) ?? []).map((row: any) => ({
+    team: row.teams as TeamRow,
+    role: row.role as string,
+    roleTitle: row.role_title as string | null,
+  }));
+}
+
+/** 团队成员名单（含 profile 姓名） */
+export async function fetchTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("team_id, user_id, role, role_title, joined_at")
+    .eq("team_id", teamId)
+    .order("joined_at", { ascending: true });
+  if (error) {
+    console.error("[Supabase] fetchTeamMembers error:", error);
+    return [];
+  }
+  return (data as TeamMemberRow[]) ?? [];
+}
+
+/** 成员的登录邮箱（用于名单展示；通过 profiles 兜底） */
+export async function fetchMemberEmails(userIds: string[]): Promise<Record<string, string>> {
+  if (!isSupabaseReady() || userIds.length === 0) return {};
+  // profiles 表存有登录邮箱快照；无则回退 user id 前缀
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, email")
+    .in("user_id", userIds);
+  if (error || !data) return {};
+  const map: Record<string, string> = {};
+  for (const row of data as { user_id: string; email: string | null }[]) {
+    if (row.email) map[row.user_id] = row.email;
+  }
+  return map;
+}
+
+export async function fetchTeamAchievements(teamId: string): Promise<TeamAchievement[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("team_achievements")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("year", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchTeamAchievements error:", error);
+    return [];
+  }
+  return (data as TeamAchievement[]) ?? [];
+}
+
+export async function insertTeamAchievement(a: Omit<TeamAchievement, "id" | "created_at" | "created_by">): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
+  const { error } = await supabase.from("team_achievements").insert({ ...a, created_by: userId });
+  if (error) {
+    console.error("[Supabase] insertTeamAchievement error:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteTeamAchievement(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("team_achievements").delete().eq("id", id);
+  if (error) {
+    console.error("[Supabase] deleteTeamAchievement error:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchTeamProjects(teamId: string): Promise<TeamProject[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("team_projects")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchTeamProjects error:", error);
+    return [];
+  }
+  return (data as TeamProject[]) ?? [];
+}
+
+export async function insertTeamProject(p: Omit<TeamProject, "id" | "created_at" | "created_by">): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
+  const { error } = await supabase.from("team_projects").insert({ ...p, created_by: userId });
+  if (error) {
+    console.error("[Supabase] insertTeamProject error:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteTeamProject(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("team_projects").delete().eq("id", id);
+  if (error) {
+    console.error("[Supabase] deleteTeamProject error:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function fetchTeamAnnouncements(teamId: string): Promise<TeamAnnouncement[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("team_announcements")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("pinned", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchTeamAnnouncements error:", error);
+    return [];
+  }
+  return (data as TeamAnnouncement[]) ?? [];
+}
+
+export async function insertTeamAnnouncement(a: Omit<TeamAnnouncement, "id" | "created_at" | "created_by">): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return false;
+  const { error } = await supabase.from("team_announcements").insert({ ...a, created_by: userId });
+  if (error) {
+    console.error("[Supabase] insertTeamAnnouncement error:", error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteTeamAnnouncement(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("team_announcements").delete().eq("id", id);
+  if (error) {
+    console.error("[Supabase] deleteTeamAnnouncement error:", error);
+    return false;
+  }
+  return true;
+}
+
+/* ═══════════════ 团队模板 ═══════════════ */
+
+export type TeamTemplateRow = {
+  id: string;
+  name: string;
+  experiment_type: string;
+  domain: string;
+  version: number;
+  field_groups: unknown;
+  is_preset: boolean;
+  team_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** 团队模板列表（RLS：templates_read 策略，仅团队成员可见） */
+export async function fetchTeamTemplates(teamId: string): Promise<TeamTemplateRow[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("templates")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("updated_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchTeamTemplates error:", error);
+    return [];
+  }
+  return (data as TeamTemplateRow[]) ?? [];
+}
+
+/** 新建团队模板（RLS：templates_team_admin，仅团队管理员可写） */
+export async function insertTeamTemplate(t: {
+  team_id: string;
+  name: string;
+  experiment_type: string;
+  domain: string;
+  field_groups: unknown;
+}): Promise<TeamTemplateRow | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return null;
+  const id = "tpl_team_" + Math.random().toString(36).slice(2, 10);
+  const { data, error } = await supabase
+    .from("templates")
+    .insert({
+      id,
+      name: t.name,
+      experiment_type: t.experiment_type,
+      domain: t.domain,
+      version: 1,
+      field_groups: t.field_groups,
+      is_preset: false,
+      created_by: userId,
+      team_id: t.team_id,
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error("[Supabase] insertTeamTemplate error:", error);
+    return null;
+  }
+  return data as TeamTemplateRow;
+}
+
+/** 更新团队模板（RLS：templates_team_admin，仅团队管理员可写） */
+export async function updateTeamTemplate(
+  id: string,
+  patch: { name?: string; experiment_type?: string; domain?: string; field_groups?: unknown },
+): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase
+    .from("templates")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) {
+    console.error("[Supabase] updateTeamTemplate error:", error);
+    return false;
+  }
+  return true;
+}
+
+/** 删除团队模板（RLS：templates_team_admin，仅团队管理员可写） */
+export async function deleteTeamTemplate(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("templates").delete().eq("id", id);
+  if (error) {
+    console.error("[Supabase] deleteTeamTemplate error:", error);
+    return false;
+  }
+  return true;
 }

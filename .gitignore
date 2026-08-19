@@ -41,3 +41,8 @@ dist-ssr
 test-results/
 playwright-report/
 screenshots/
+
+# E2E 产物
+test-results
+test-harness/e2e-screenshots
+test-harness/ui-review

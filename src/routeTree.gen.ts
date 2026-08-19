@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkbenchRouteImport } from './routes/workbench'
+import { Route as TeamRouteImport } from './routes/team'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PaperRouteImport } from './routes/paper'
@@ -26,6 +27,11 @@ import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 const WorkbenchRoute = WorkbenchRouteImport.update({
   id: '/workbench',
   path: '/workbench',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamRoute = TeamRouteImport.update({
+  id: '/team',
+  path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/paper': typeof PaperRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/team': typeof TeamRoute
   '/workbench': typeof WorkbenchRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/paper': typeof PaperRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/team': typeof TeamRoute
   '/workbench': typeof WorkbenchRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/paper': typeof PaperRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/team': typeof TeamRoute
   '/workbench': typeof WorkbenchRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/paper'
     | '/settings'
     | '/signup'
+    | '/team'
     | '/workbench'
     | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/paper'
     | '/settings'
     | '/signup'
+    | '/team'
     | '/workbench'
     | '/auth/callback'
   id:
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/paper'
     | '/settings'
     | '/signup'
+    | '/team'
     | '/workbench'
     | '/auth/callback'
   fileRoutesById: FileRoutesById
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   PaperRoute: typeof PaperRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
+  TeamRoute: typeof TeamRoute
   WorkbenchRoute: typeof WorkbenchRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/workbench'
       fullPath: '/workbench'
       preLoaderRoute: typeof WorkbenchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/team': {
+      id: '/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   PaperRoute: PaperRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
+  TeamRoute: TeamRoute,
   WorkbenchRoute: WorkbenchRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }

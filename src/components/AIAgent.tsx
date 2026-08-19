@@ -23,7 +23,8 @@ const WORKFLOW_STEPS = [
 ];
 
 export function AIAgent() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments, workspace } = useLab();
+  const wsTeamId = workspace.mode === "team" ? workspace.teamId : null;
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -116,7 +117,7 @@ export function AIAgent() {
     setChat((c) => [...c, { role: "agent", text: "", sources: [] }]);
 
     try {
-      const response = await ragAnswerRealStream(question, ids, history);
+      const response = await ragAnswerRealStream(question, ids, history, wsTeamId);
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -134,8 +135,9 @@ export function AIAgent() {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
+          // 兼容 data:{json} 与 data: {json} 两种 SSE 格式
+          if (!line.startsWith("data:")) continue;
+          const jsonStr = line.slice(5).trim();
           if (!jsonStr) continue;
           try {
             const event = JSON.parse(jsonStr);
@@ -190,7 +192,7 @@ export function AIAgent() {
       // 降级：移除占位 entry，改用非流式
       setChat((c) => c.slice(0, -1));
       try {
-        const { answer, sources } = await ragAnswerReal(question, ids, history);
+        const { answer, sources } = await ragAnswerReal(question, ids, history, wsTeamId);
         setChat((c) => [...c, {
           role: "agent",
           text: answer,

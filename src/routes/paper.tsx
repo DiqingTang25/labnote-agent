@@ -20,7 +20,7 @@ export const Route = createFileRoute("/paper")({
 });
 
 function PaperPage() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments } = useLab();
   const [picked, setPicked] = useState<Set<string>>(new Set(experiments.slice(0,2).map(e=>e.id)));
   const [draft, setDraft] = useState("");
   const [step, setStep] = useState<0|1|2|3|4>(0);

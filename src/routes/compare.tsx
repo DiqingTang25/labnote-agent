@@ -41,7 +41,7 @@ function selectBestExperiment(experiments: ExperimentDoc[]): ExperimentDoc | nul
 }
 
 function ComparePage() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments } = useLab();
   const navigate = useNavigate();
   const [experiment, setExperiment] = useState<ExperimentDoc | null>(null);
 

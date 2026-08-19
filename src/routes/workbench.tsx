@@ -20,13 +20,17 @@ import {
 import { createBlankDoc } from "../lib/exp-core";
 import { mergeProperties, getString } from "../lib/property-utils";
 import { DynamicCardEditor } from "../components/fields/DynamicCardEditor";
+import { TemplatePickerDialog } from "../components/TemplatePickerDialog";
 import { DEFAULT_TEMPLATE } from "../lib/templates/presets";
+import type { Template } from "../lib/exp-core";
 import {
   ragAnswerReal, ragAnswerRealStream, submitFeedback, fetchExperimentRelations, addExperimentRelation,
   deleteExperimentRelation, suggestRelations,
   RELATION_LABELS, type ExperimentRelation,
 } from "../lib/supabase";
 import { RequireAuth } from "../lib/auth-guard";
+import { useAuth } from "../lib/auth-context";
+import { moveExperimentToTeam } from "../lib/api/teams.functions";
 import { useElectron } from "../lib/electron/useElectron";
 import { FolderWatcherPanel } from "../lib/electron/FolderWatcherPanel";
 import {
@@ -57,10 +61,39 @@ export const Route = createFileRoute("/workbench")({
 
 function Workbench() {
   const { id } = Route.useSearch();
-  const { experiments, addExperiment, updateExperiment, deleteExperiment, workbenchActiveId, setWorkbenchActiveId } = useLab();
+  const { visibleExperiments: experiments, addExperiment, updateExperiment, deleteExperiment, workbenchActiveId, setWorkbenchActiveId, workspace, myRole, myTeams } = useLab();
+  const { user, session } = useAuth();
+  const [transferTeam, setTransferTeam] = useState("");
+  const [transferring, setTransferring] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const activeId = workbenchActiveId ?? id ?? experiments[0]?.id;
   const setActiveId = setWorkbenchActiveId;
   const active = experiments.find((e) => e.id === activeId);
+  const isAdmin = myRole === "owner" || myRole === "admin";
+  // 团队模式下：仅上传者本人或管理员可编辑/删除；个人模式全部可编辑。
+  // userId 为空 = 本浏览器刚新建、尚未入库的文档（只可能属于创建者本人）→ 可编辑
+  const canEdit =
+    !active || workspace.mode === "personal" || !active.userId || active.userId === user?.id || isAdmin;
+  const isTeamView = workspace.mode === "team" && !!workspace.teamId;
+
+  const doTransfer = async () => {
+    if (!active || !transferTeam) return;
+    setTransferring(true);
+    try {
+      await moveExperimentToTeam({
+        data: {
+          experimentId: active.id,
+          teamId: transferTeam,
+          accessToken: session?.access_token ?? "",
+        },
+      });
+      toast.success("已转入团队，页面即将刷新");
+      setTimeout(() => window.location.reload(), 800);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "转移失败");
+      setTransferring(false);
+    }
+  };
 
   return (
     <RequireAuth>
@@ -70,14 +103,45 @@ function Workbench() {
         <p className="text-sm text-muted-foreground mt-1">采集 · 结构化 · 复现 · 追溯</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <div className="lg:col-span-3"><LeftPanel onSelect={setActiveId} activeId={activeId}/></div>
+        <div className="lg:col-span-3"><LeftPanel onSelect={setActiveId} activeId={activeId} onCreate={() => setPickerOpen(true)}/></div>
         <div className="lg:col-span-6">
+          {active && !canEdit && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+              该实验由团队成员 {active.operator || "其他成员"} 上传——只有上传者本人或管理员可以编辑与删除。
+            </div>
+          )}
+          {active && workspace.mode === "personal" && myTeams.length > 0 && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary-soft/40 px-4 py-2.5">
+              <span className="text-xs text-muted-foreground">个人资产，可转入团队：</span>
+              <select
+                value={transferTeam}
+                onChange={(e) => setTransferTeam(e.target.value)}
+                className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none"
+              >
+                <option value="">选择团队…</option>
+                {myTeams.map((t) => (
+                  <option key={t.team.id} value={t.team.id}>{t.team.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={doTransfer}
+                disabled={!transferTeam || transferring}
+                className="rounded-lg bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90 transition disabled:opacity-50"
+              >
+                {transferring ? "转移中…" : "转入团队"}
+              </button>
+            </div>
+          )}
           {active ? (
             <DynamicCardEditor
               key={active.id}
               doc={active}
-              onSave={(doc) => { updateExperiment(active.id, doc); toast.success("已保存"); }}
+              onSave={(doc) => {
+                if (!canEdit) { toast.error("只有上传者本人或管理员可以编辑该实验"); return; }
+                updateExperiment(active.id, doc); toast.success("已保存");
+              }}
               onDelete={() => {
+                if (!canEdit) { toast.error("只有上传者本人或管理员可以删除该实验"); return; }
                 deleteExperiment(active.id);
                 setActiveId(experiments.find((e) => e.id !== active.id)?.id);
                 toast.success("已删除");
@@ -85,21 +149,27 @@ function Workbench() {
               allExperiments={experiments}
             />
           ) : (
-            <EmptyState onCreate={() => {
-              const id = createBlank(addExperiment);
-              setActiveId(id);
-            }}/>
+            <EmptyState onCreate={() => setPickerOpen(true)} />
           )}
         </div>
         <div className="lg:col-span-3"><RightPanel experiment={active}/></div>
       </div>
+      <TemplatePickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(tpl) => {
+          const id = createFromTemplate(tpl, addExperiment);
+          setActiveId(id);
+        }}
+      />
     </div>
     </RequireAuth>
   );
 }
 
-function createBlank(add: (e: ExperimentDoc) => void): string {
-  const blank = createBlankDoc(DEFAULT_TEMPLATE);
+/** 按所选模板新建实验（undefined = 通用模板） */
+function createFromTemplate(template: Template | undefined, add: (e: ExperimentDoc) => void): string {
+  const blank = createBlankDoc(template ?? DEFAULT_TEMPLATE);
   blank.name = "新建实验";
   add(blank);
   return blank.id;
@@ -116,8 +186,8 @@ const statusLabels: Record<string, string> = {
 
 /* ---------- 左栏 ---------- */
 
-function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; activeId?: string }) {
-  const { experiments, addExperiment } = useLab();
+function LeftPanel({ onSelect, activeId, onCreate }: { onSelect: (id: string) => void; activeId?: string; onCreate: () => void }) {
+  const { visibleExperiments: experiments, addExperiment } = useLab();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 多模态解析流水线状态（全局 Store：切换页面不丢失）
@@ -374,10 +444,10 @@ function LeftPanel({ onSelect, activeId }: { onSelect: (id: string) => void; act
           />
         </div>
         <button
-          onClick={() => { const id = createBlank(addExperiment); onSelect(id); }}
+          onClick={onCreate}
           className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground hover:bg-primary/90 transition"
         >
-          <FilePlus2 size={14}/> 新建实验
+          <FilePlus2 size={14}/> 新建实验（选模板）
         </button>
       </div>
 
@@ -454,8 +524,9 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
   const [evalResult, setEvalResult] = useState<EvalResult | null>(null);
   const [evalLoading, setEvalLoading] = useState(false);
   const [evalError, setEvalError] = useState("");
+  const [evalRunId, setEvalRunId] = useState(0);
 
-  // 实验切换时重新评估（带 logprobs 校准）
+  // 实验切换时重新评估（带 logprobs 校准；45s 超时兜底避免无限转圈）
   useEffect(() => {
     let cancelled = false;
     async function run() {
@@ -467,16 +538,21 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
           .filter((f) => f.textContent)
           .map((f) => ({ name: f.name, textContent: f.textContent! }));
 
-        const calibrated = await calibrateExperimentFields(
-          {
-            name: experiment.name,
-            date: experiment.date,
-            operator: experiment.operator,
-            experimentType: experiment.experimentType,
-            properties: experiment.properties,
-          },
-          sourceFiles.length > 0 ? sourceFiles : undefined,
-        );
+        const calibrated = await Promise.race([
+          calibrateExperimentFields(
+            {
+              name: experiment.name,
+              date: experiment.date,
+              operator: experiment.operator,
+              experimentType: experiment.experimentType,
+              properties: experiment.properties,
+            },
+            sourceFiles.length > 0 ? sourceFiles : undefined,
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("校准超时（AI 网关响应慢）")), 45000),
+          ),
+        ]);
 
         if (!cancelled) {
           // 从 calibrateExperimentFields 的返回中提取 summary
@@ -496,7 +572,7 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
     }
     run();
     return () => { cancelled = true; };
-  }, [experiment.id]);
+  }, [experiment.id, evalRunId]);
 
   // 置信度：优先 logprobs 校准，否则回退到公式
   const overallConfidence = evalResult?.overallConfidence ?? Math.max(60, 100 - missing.length * 2);
@@ -663,7 +739,15 @@ function AiAnalysis({ experiment }: { experiment: ExperimentDoc }) {
       )}
 
       {evalError && (
-        <div className="mt-2 text-[10px] text-muted-foreground">{evalError}</div>
+        <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span>{evalError}</span>
+          <button
+            onClick={() => setEvalRunId((r) => r + 1)}
+            className="rounded-md border border-border px-2 py-0.5 transition hover:bg-secondary hover:text-foreground"
+          >
+            重试
+          </button>
+        </div>
       )}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -773,7 +857,7 @@ function ReproAssistant({ experiment }: { experiment: ExperimentDoc }) {
 type Source ={ doc: string; page: string; confidence: string; link: string; chunkType?: string; snippet?: string };
 
 function RagPanel() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments, workspace } = useLab();
   const navigate = useNavigate();
   const [chat, setChat] = useState<{ role: "user" | "agent"; text: string; sources?: Source[] }[]>([
     { role: "agent", text: "你好，我是 LabNote Agent。已加载 " + experiments.length + " 条实验记录，可基于知识库问答与追溯。", sources: [] },
@@ -802,7 +886,7 @@ function RagPanel() {
     setChat((c) => [...c, { role: "agent", text: "", sources: [] }]);
 
     try {
-      const response = await ragAnswerRealStream(t, undefined, history);
+      const response = await ragAnswerRealStream(t, undefined, history, workspace.mode === "team" ? workspace.teamId : null);
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -820,8 +904,9 @@ function RagPanel() {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
+          // 兼容 data:{json} 与 data: {json} 两种 SSE 格式
+          if (!line.startsWith("data:")) continue;
+          const jsonStr = line.slice(5).trim();
           if (!jsonStr) continue;
           try {
             const event = JSON.parse(jsonStr);
@@ -856,7 +941,7 @@ function RagPanel() {
       console.warn("[RAG] 流式失败，降级到非流式:", err);
       setChat((c) => c.slice(0, -1)); // 移除占位 entry
       try {
-        const { answer, sources } = await ragAnswerReal(t, undefined, history);
+        const { answer, sources } = await ragAnswerReal(t, undefined, history, workspace.mode === "team" ? workspace.teamId : null);
         setChat((c) => [...c, { role: "agent", text: answer, sources }]);
       } catch {
         setChat((c) => [...c, {

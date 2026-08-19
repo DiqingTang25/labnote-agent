@@ -99,7 +99,7 @@ function exportSVG() {
 }
 
 function GraphPage() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments } = useLab();
   const { graphData, loading, error } = useGraphData();
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);

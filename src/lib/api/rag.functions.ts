@@ -21,6 +21,7 @@ export const ragSearch = createServerFn({ method: "POST" })
       question: z.string().min(1),
       limit: z.number().optional().default(3),
       accessToken: z.string().min(1),
+      teamId: z.string().nullable().optional(),
       selectedIds: z.array(z.string()).optional(),
       history: z
         .array(
@@ -35,6 +36,8 @@ export const ragSearch = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const supabase = getServiceSupabase();
     const userId = await requireAuthenticatedUser(data.accessToken);
+    // 团队模式：按团队范围检索（不按 user_id）；个人模式：仅本人实验
+    const teamId = data.teamId ?? null;
 
     // 1. Query 改写：模糊问题 → 精确检索词（失败静默降级）
     const searchQuery = await rewriteQueryDirect({
@@ -59,7 +62,8 @@ export const ragSearch = createServerFn({ method: "POST" })
           query_embedding: qVec,
           match_threshold: 0.55,
           match_count: 20,
-          filter_user_id: userId,
+          filter_user_id: teamId ? null : userId,
+          filter_team_id: teamId,
           filter_ids: data.selectedIds ?? null,
         },
       );
@@ -94,7 +98,8 @@ export const ragSearch = createServerFn({ method: "POST" })
           match_count: data.limit * 4,
           semantic_weight: 0.7,
           keyword_weight: 0.3,
-          filter_user_id: userId,
+          filter_user_id: teamId ? null : userId,
+          filter_team_id: teamId,
           filter_ids: data.selectedIds ?? null,
         });
 
@@ -134,10 +139,11 @@ export const ragSearch = createServerFn({ method: "POST" })
       }
       if (terms.size > 0) {
         const termList = [...terms].slice(0, 30);
-        const { data: keywordResults } = await supabase
+        let kwQuery = supabase
           .from("experiments")
-          .select("id, name, properties, search_text")
-          .eq("user_id", userId)
+          .select("id, name, properties, search_text");
+        kwQuery = teamId ? kwQuery.eq("team_id", teamId) : kwQuery.eq("user_id", userId);
+        const { data: keywordResults } = await kwQuery
           .or(
             termList
               .map(
@@ -300,6 +306,7 @@ export const ragAnswer = createServerFn({ method: "POST" })
     z.object({
       question: z.string().min(1),
       accessToken: z.string().min(1),
+      teamId: z.string().nullable().optional(),
       selectedIds: z.array(z.string()).optional(),
       history: z
         .array(
@@ -312,12 +319,13 @@ export const ragAnswer = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    // 1. 向量检索 Top-3 相关实验（按用户隔离 + 可选卡片边界）
+    // 1. 向量检索 Top-3 相关实验（个人/团队范围 + 可选卡片边界）
     const contexts = await ragSearch({
       data: {
         question: data.question,
         limit: 3,
         accessToken: data.accessToken,
+        teamId: data.teamId,
         selectedIds: data.selectedIds,
         history: data.history,
       },
@@ -425,6 +433,7 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
     z.object({
       question: z.string().min(1),
       accessToken: z.string().min(1),
+      teamId: z.string().nullable().optional(),
       selectedIds: z.array(z.string()).optional(),
       history: z
         .array(
@@ -437,12 +446,13 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    // 1. RAG 检索（复用 ragSearch）
+    // 1. RAG 检索（复用 ragSearch，个人/团队范围）
     const contexts = await ragSearch({
       data: {
         question: data.question,
         limit: 3,
         accessToken: data.accessToken,
+        teamId: data.teamId,
         selectedIds: data.selectedIds,
         history: data.history,
       },
@@ -587,8 +597,10 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const jsonStr = line.slice(6).trim();
+            // 兼容 data:{json} 与 data: {json} 两种 SSE 格式
+            // （XJTLU 网关实际返回无空格格式，此前按带空格解析导致所有 token 被跳过）
+            if (line.startsWith("data:")) {
+              const jsonStr = line.slice(5).trim();
               if (!jsonStr || jsonStr === "[DONE]") continue;
               try {
                 const parsed = JSON.parse(jsonStr);
@@ -605,13 +617,9 @@ export const ragAnswerStream = createServerFn({ method: "POST" })
           }
         }
         // 处理 buffer 中剩余的行
-        if (
-          buffer.startsWith("data: ") &&
-          buffer.slice(6).trim() &&
-          buffer.slice(6).trim() !== "[DONE]"
-        ) {
+        if (buffer.startsWith("data:") && buffer.slice(5).trim() && buffer.slice(5).trim() !== "[DONE]") {
           try {
-            const parsed = JSON.parse(buffer.slice(6).trim());
+            const parsed = JSON.parse(buffer.slice(5).trim());
             const content = parsed?.choices?.[0]?.delta?.content;
             if (content) {
               writer.write(

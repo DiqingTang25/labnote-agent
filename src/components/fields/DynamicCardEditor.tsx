@@ -9,7 +9,8 @@
 
 import { useState, useEffect } from "react";
 import type { ExperimentDoc, FieldDef } from "../../lib/exp-core";
-import { DEFAULT_TEMPLATE, getTemplate } from "../../lib/templates/presets";
+import { DEFAULT_TEMPLATE } from "../../lib/templates/presets";
+import { useLab } from "../../lib/labStore";
 import { setProperty, getProperty, flattenProperties } from "../../lib/property-utils";
 import { DynamicField, FieldWrapper } from "./DynamicField";
 import { Plus, Save, FileText, FileJson, Printer, Trash2, Package, Sparkles, X } from "lucide-react";
@@ -68,10 +69,11 @@ export function DynamicCardEditor({
   const [newFieldGroupId, setNewFieldGroupId] = useState<string | undefined>();
   const [showTemplateBanner, setShowTemplateBanner] = useState(false);
 
-  // Resolve template
+  // Resolve template（预置 + 团队模板，经 labStore 解析）
+  const { resolveTemplate } = useLab();
   const meta = (draft.properties as Record<string, unknown>)?.["_meta"] as Record<string, unknown> | undefined;
   const templateId = meta?.templateId as string | undefined;
-  const template = templateId ? getTemplate(templateId) : undefined;
+  const template = templateId ? resolveTemplate(templateId) : undefined;
 
   // Sync when doc changes externally
   useEffect(() => {

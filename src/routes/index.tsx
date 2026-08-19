@@ -46,7 +46,7 @@ const supportedFormats = [
 ];
 
 function Home() {
-  const { experiments } = useLab();
+  const { visibleExperiments: experiments } = useLab();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);

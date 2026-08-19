@@ -670,7 +670,7 @@ function ReproductionAuditPage() {
                         ? MTT_ASSAY_PAPER.doi
                         : PATCH_CLAMP_PAPER.doi}
           </p>
-          <p className="mt-1">Methods 段落已预加载（真实论文内容），点击上方按钮开始 AI 拆解。</p>
+          <p className="mt-1">Methods 段落为真实论文内容，点击下方按钮开始 AI 拆解。</p>
         </div>
       )}
 

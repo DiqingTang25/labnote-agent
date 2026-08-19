@@ -49,6 +49,8 @@ export type ExperimentDoc = {
   operator: string;
   /** Supabase auth.uid() */
   userId: string;
+  /** 所属团队（NULL = 个人资产） */
+  teamId?: string | null;
   /** 创建时间 */
   createdAt: string;
   /** 更新时间 */
@@ -225,6 +227,8 @@ export type Template = {
   fieldGroups: FieldGroup[];
   /** 是否为系统预设 */
   isPreset: boolean;
+  /** 归属团队（团队模板；个人/预置为空） */
+  teamId?: string | null;
   /** 关键词列表 — 用于自动分类匹配。新增模板时只需加关键词，无需改代码 */
   keywords?: string[];
 };

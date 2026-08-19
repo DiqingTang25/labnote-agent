@@ -5,7 +5,7 @@
  * Supabase 云端存储，不再依赖 localStorage。
  */
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode, type SetStateAction } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, type ReactNode, type SetStateAction } from "react";
 import {
   isSupabaseReady,
   fetchExperiments,
@@ -16,7 +16,11 @@ import {
   upsertProfile,
   embedExperiment,
   autoGenerateRelations,
+  fetchMyTeams,
+  fetchTeamTemplates,
+  type TeamRow,
 } from "./supabase";
+import { getTemplate } from "./templates/presets";
 import type { ExperimentDoc, AttachedFile, DocProperties } from "./exp-core";
 import { createBlankDoc } from "./exp-core";
 import type { Template } from "./exp-core";
@@ -33,6 +37,22 @@ export { createBlankDoc } from "./exp-core";
 type Ctx = {
   experiments: ExperimentDoc[];
   loading: boolean;
+  // ── 工作空间（个人 / 团队）──
+  workspace: { mode: "personal" | "team"; teamId: string | null };
+  setWorkspace: (w: { mode: "personal" | "team"; teamId: string | null }) => void;
+  myTeams: { team: TeamRow; role: string; roleTitle: string | null }[];
+  myRole: string;
+  visibleExperiments: ExperimentDoc[];
+  refreshTeams: () => Promise<void>;
+  // ── 团队模板（团队工作空间时加载）──
+  teamTemplates: Template[];
+  refreshTeamTemplates: () => Promise<void>;
+  // ── 工作空间弹窗唤起（无团队时从团队页主动打开创建/加入流程）──
+  gate: { open: boolean; view: "pick" | "create" | "join" };
+  requestGate: (view: "pick" | "create" | "join") => void;
+  closeGate: () => void;
+  /** 按 id 解析模板：先查预置，再查团队模板（DynamicCardEditor 渲染字段用） */
+  resolveTemplate: (id: string | undefined) => Template | undefined;
   addExperiment: (e: ExperimentDoc) => void;
   updateExperiment: (id: string, patch: Partial<ExperimentDoc>) => void;
   deleteExperiment: (id: string) => void;
@@ -76,6 +96,107 @@ export function LabProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     experimentsRef.current = experiments;
   }, [experiments]);
+  // 进行中的初始插入（expId → Promise）：保存前等待，避免与回退插入竞态
+  const pendingInsertsRef = useRef(new Map<string, Promise<boolean>>());
+  // ── 工作空间状态（localStorage 记忆上次选择）──
+  const [workspace, setWorkspaceState] = useState<{ mode: "personal" | "team"; teamId: string | null }>(() => {
+    try {
+      const raw = localStorage.getItem("labnote:workspace");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.mode === "personal" || parsed.mode === "team")) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return { mode: "personal", teamId: null };
+  });
+  const [myTeams, setMyTeams] = useState<{ team: TeamRow; role: string; roleTitle: string | null }[]>([]);
+  const [teamTemplates, setTeamTemplates] = useState<Template[]>([]);
+  const [gate, setGate] = useState<{ open: boolean; view: "pick" | "create" | "join" }>({ open: false, view: "pick" });
+  const requestGate = useCallback((view: "pick" | "create" | "join") => {
+    setGate({ open: true, view });
+  }, []);
+  const closeGate = useCallback(() => {
+    setGate((g) => ({ ...g, open: false }));
+  }, []);
+
+  const refreshTeams = useCallback(async () => {
+    if (!isSupabaseReady()) return;
+    try {
+      const teams = await fetchMyTeams();
+      setMyTeams(teams);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setWorkspace = useCallback((w: { mode: "personal" | "team"; teamId: string | null }) => {
+    setWorkspaceState(w);
+    try {
+      localStorage.setItem("labnote:workspace", JSON.stringify(w));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // ── 团队模板：团队工作空间时加载（RLS 仅团队成员可读）──
+  const refreshTeamTemplates = useCallback(async () => {
+    if (!isSupabaseReady()) return;
+    if (workspace.mode !== "team" || !workspace.teamId) {
+      setTeamTemplates([]);
+      return;
+    }
+    try {
+      const rows = await fetchTeamTemplates(workspace.teamId);
+      setTeamTemplates(
+        rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          experimentType: r.experiment_type,
+          domain: r.domain,
+          version: r.version,
+          fieldGroups: r.field_groups as Template["fieldGroups"],
+          isPreset: false,
+          teamId: r.team_id,
+        })),
+      );
+    } catch {
+      // ignore
+    }
+  }, [workspace]);
+
+  useEffect(() => {
+    refreshTeamTemplates();
+  }, [refreshTeamTemplates]);
+
+  // 模板解析：预置优先，团队模板兜底（含团队模板的字段渲染）
+  const resolveTemplate = useCallback(
+    (id: string | undefined): Template | undefined => {
+      if (!id) return undefined;
+      return getTemplate(id) ?? teamTemplates.find((t) => t.id === id);
+    },
+    [teamTemplates],
+  );
+
+  // 当前工作空间内的角色（个人模式为空）
+  const myRole = useMemo(
+    () =>
+      workspace.mode === "team" && workspace.teamId
+        ? myTeams.find((t) => t.team.id === workspace.teamId)?.role ?? ""
+        : "",
+    [workspace, myTeams],
+  );
+
+  // 按工作空间过滤的实验列表（个人模式 = teamId 为空；团队模式 = 本团队）
+  const visibleExperiments = useMemo(
+    () =>
+      workspace.mode === "team" && workspace.teamId
+        ? experiments.filter((e) => e.teamId === workspace.teamId)
+        : experiments.filter((e) => !e.teamId),
+    [experiments, workspace],
+  );
+
   const [loading, setLoading] = useState(true);
   // ── 全局 UI 状态 ──
   const [workbenchActiveId, setWorkbenchActiveId] = useState<string | undefined>(undefined);
@@ -113,6 +234,8 @@ export function LabProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    refreshTeams();
+
     Promise.all([fetchExperiments(), fetchProfile()])
       .then(([dbExps, p]) => {
         if (dbExps.length > 0) setExperiments(dbExps);
@@ -129,16 +252,27 @@ export function LabProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addExperiment = useCallback((e: ExperimentDoc) => {
-    setExperiments((arr) => [e, ...arr]);
+    // 团队工作空间下新建的实验自动归属当前团队
+    const doc =
+      workspace.mode === "team" && workspace.teamId
+        ? { ...e, teamId: workspace.teamId }
+        : { ...e, teamId: e.teamId ?? null };
+    setExperiments((arr) => [doc, ...arr]);
     if (isSupabaseReady()) {
-      insertExperiment(e).then((ok) => {
+      const p = insertExperiment(doc).then((ok) => {
         if (ok) {
-          embedExperiment(e.id);
-          autoGenerateRelations(e);
+          embedExperiment(doc.id);
+          autoGenerateRelations(doc);
         }
+        return ok;
+      });
+      // 记录进行中的插入：保存时先等它落库，避免 UPDATE 0 行回退插入撞主键（409）
+      pendingInsertsRef.current.set(doc.id, p);
+      p.finally(() => {
+        if (pendingInsertsRef.current.get(doc.id) === p) pendingInsertsRef.current.delete(doc.id);
       });
     }
-  }, []);
+  }, [workspace]);
 
   const updateExperiment = useCallback((id: string, patch: Partial<ExperimentDoc>) => {
     setExperiments((arr) => {
@@ -146,20 +280,24 @@ export function LabProvider({ children }: { children: ReactNode }) {
       return experimentsRef.current;
     });
     if (isSupabaseReady()) {
-      updateExperimentDB(id, patch).then((updated) => {
+      const pending = pendingInsertsRef.current.get(id);
+      const run = async () => {
+        // 等初始插入落库后再更新，避免竞态（插入在途时 UPDATE 匹配 0 行）
+        if (pending) await pending.catch(() => {});
+        const updated = await updateExperimentDB(id, patch);
         if (!updated) {
-          // UPDATE 匹配 0 行：该实验从未成功入库 → 转为插入，避免"假保存"
+          // UPDATE 匹配 0 行：该实验确实从未入库 → 转为插入，避免"假保存"
           const full = experimentsRef.current.find((x) => x.id === id);
           if (full) {
-            insertExperiment(full).then((ok) => {
-              console.log(ok ? `[LabStore] 实验 ${id} 未入库，已自动转为插入` : `[LabStore] 实验 ${id} 插入失败`);
-              if (ok) embedExperiment(id);
-            });
+            const ok = await insertExperiment(full);
+            console.log(ok ? `[LabStore] 实验 ${id} 未入库，已自动转为插入` : `[LabStore] 实验 ${id} 插入失败`);
+            if (ok) embedExperiment(id);
           }
         } else {
           embedExperiment(id);
         }
-      });
+      };
+      run();
     }
   }, []);
 
@@ -218,6 +356,18 @@ export function LabProvider({ children }: { children: ReactNode }) {
       value={{
         experiments,
         loading,
+        workspace,
+        setWorkspace,
+        myTeams,
+        myRole,
+        visibleExperiments,
+        refreshTeams,
+        teamTemplates,
+        refreshTeamTemplates,
+        resolveTemplate,
+        gate,
+        requestGate,
+        closeGate,
         addExperiment,
         updateExperiment,
         deleteExperiment,
