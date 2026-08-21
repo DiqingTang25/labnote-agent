@@ -82,7 +82,11 @@ export async function fetchExperiments(): Promise<ExperimentDoc[]> {
   return (data as Record<string, unknown>[]).map(fromRow);
 }
 
-export async function insertExperiment(exp: ExperimentDoc, userId?: string): Promise<boolean> {
+export async function insertExperiment(
+  exp: ExperimentDoc,
+  userId?: string,
+  approvalStatus: "approved" | "pending" = "approved",
+): Promise<boolean> {
   if (!isSupabaseReady()) return false;
   // 如果没有提供 userId，尝试从 session 获取
   let uid = userId;
@@ -104,7 +108,7 @@ export async function insertExperiment(exp: ExperimentDoc, userId?: string): Pro
     console.log(`[Supabase] 提示: 存在同名实验 "${exp.name}"，仍继续插入新记录`);
   }
 
-  const row = toRow(exp, uid);
+  const row = { ...toRow(exp, uid), approval_status: approvalStatus };
   const { error } = await supabase.from("experiments").insert(row);
   if (error) {
     console.error("[Supabase] insertExperiment error:", error);
@@ -1205,4 +1209,148 @@ export async function deleteTeamTemplate(id: string): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+/* ═══════════════ 邀请记录 ═══════════════ */
+
+export type TeamInviteRow = {
+  id: string;
+  team_id: string;
+  code: string;
+  created_by: string;
+  expires_at: string | null;
+  created_at: string;
+};
+
+/** 团队邀请记录（RLS：成员可见） */
+export async function fetchTeamInvites(teamId: string): Promise<TeamInviteRow[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("team_invites")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchTeamInvites error:", error);
+    return [];
+  }
+  return (data as TeamInviteRow[]) ?? [];
+}
+
+/** 撤销邀请（RLS：仅管理员） */
+export async function revokeTeamInvite(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("team_invites").delete().eq("id", id);
+  if (error) {
+    console.error("[Supabase] revokeTeamInvite error:", error);
+    return false;
+  }
+  return true;
+}
+
+/* ═══════════════ 实验评论 ═══════════════ */
+
+export type ExperimentCommentRow = {
+  id: string;
+  experiment_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+};
+
+/** 实验评论（RLS：能看实验就能看评论） */
+export async function fetchComments(experimentId: string): Promise<ExperimentCommentRow[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("experiment_comments")
+    .select("*")
+    .eq("experiment_id", experimentId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("[Supabase] fetchComments error:", error);
+    return [];
+  }
+  return (data as ExperimentCommentRow[]) ?? [];
+}
+
+export async function insertComment(experimentId: string, content: string): Promise<ExperimentCommentRow | null> {
+  if (!isSupabaseReady()) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from("experiment_comments")
+    .insert({ experiment_id: experimentId, user_id: userId, content })
+    .select()
+    .single();
+  if (error) {
+    console.error("[Supabase] insertComment error:", error);
+    return null;
+  }
+  return data as ExperimentCommentRow;
+}
+
+export async function deleteComment(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("experiment_comments").delete().eq("id", id);
+  if (error) {
+    console.error("[Supabase] deleteComment error:", error);
+    return false;
+  }
+  return true;
+}
+
+/* ═══════════════ 通知 ═══════════════ */
+
+export type NotificationRow = {
+  id: string;
+  user_id: string;
+  team_id: string | null;
+  type: string;
+  title: string;
+  body: string;
+  read: boolean;
+  created_at: string;
+};
+
+export async function fetchNotifications(): Promise<NotificationRow[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error) {
+    console.error("[Supabase] fetchNotifications error:", error);
+    return [];
+  }
+  return (data as NotificationRow[]) ?? [];
+}
+
+export async function markNotificationRead(id: string): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id);
+  return !error;
+}
+
+export async function markAllNotificationsRead(): Promise<boolean> {
+  if (!isSupabaseReady()) return false;
+  const { error } = await supabase.from("notifications").update({ read: true }).eq("read", false);
+  return !error;
+}
+
+/** 待审核实验（RLS：管理员见全队待审核；成员见自己待审核） */
+export async function fetchPendingTeamExperiments(teamId: string): Promise<{ id: string; name: string; operator: string; created_at: string }[]> {
+  if (!isSupabaseReady()) return [];
+  const { data, error } = await supabase
+    .from("experiments")
+    .select("id, name, operator, created_at")
+    .eq("team_id", teamId)
+    .eq("approval_status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[Supabase] fetchPendingTeamExperiments error:", error);
+    return [];
+  }
+  return (data as { id: string; name: string; operator: string; created_at: string }[]) ?? [];
 }

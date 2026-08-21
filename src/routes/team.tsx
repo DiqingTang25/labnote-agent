@@ -10,7 +10,7 @@ import {
 } from "react";
 import {
   Building2, Users, Trophy, FolderKanban, Megaphone, Activity, LayoutTemplate,
-  Plus, Trash2, Shield, ShieldCheck, Copy, KeyRound, LogOut,
+  Plus, Trash2, Shield, ShieldCheck, Copy, KeyRound, LogOut, ClipboardList,
   FileText, Award, ScrollText, Presentation, GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +21,9 @@ import {
   updateTeamProfile,
   updateMyTeamProfile,
   leaveTeam,
+  transferTeamOwnership,
+  dissolveTeam,
+  setExperimentApproval,
 } from "../lib/api/teams.functions";
 import {
   fetchTeamMembers,
@@ -34,9 +37,13 @@ import {
   insertTeamAnnouncement,
   deleteTeamAnnouncement,
   supabase,
+  fetchTeamInvites,
+  revokeTeamInvite,
+  fetchPendingTeamExperiments,
   type TeamAchievement,
   type TeamProject,
   type TeamAnnouncement,
+  type TeamInviteRow,
 } from "../lib/supabase";
 import { TeamTemplatesTab } from "../components/TeamTemplatesTab";
 
@@ -227,10 +234,14 @@ function TeamPage() {
               teamExps={teamExps}
             />
           )}
+          {tab === "overview" && isAdmin && (
+            <PendingApprovals teamId={teamId} accessToken={accessToken} />
+          )}
           {tab === "members" && (
             <MembersTab
               members={members}
               isAdmin={isAdmin}
+              isOwner={myRole === "owner"}
               accessToken={accessToken}
               teamId={teamId}
               myUserId={session?.user?.id ?? ""}
@@ -407,15 +418,27 @@ function OverviewTab(props: {
 function MembersTab(props: {
   members: { user_id: string; role: string; role_title: string | null; joined_at: string; name: string; email: string | null }[];
   isAdmin: boolean;
+  isOwner: boolean;
   accessToken: string;
   teamId: string;
   myUserId: string;
   onChanged: () => void;
 }) {
-  const { members, isAdmin, accessToken, teamId, myUserId, onChanged } = props;
+  const { members, isAdmin, isOwner, accessToken, teamId, myUserId, onChanged } = props;
+  const { refreshTeams, setWorkspace } = useLab();
   const [invite, setInvite] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [invites, setInvites] = useState<TeamInviteRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [myTitle, setMyTitle] = useState("");
+  const [transferTarget, setTransferTarget] = useState("");
+
+  const loadInvites = async () => {
+    setInvites(await fetchTeamInvites(teamId));
+  };
+
+  useEffect(() => {
+    loadInvites();
+  }, [teamId]);
 
   useEffect(() => {
     const me = members.find((m) => m.user_id === myUserId);
@@ -427,6 +450,7 @@ function MembersTab(props: {
     try {
       const r = await generateInviteCode({ data: { teamId, accessToken } });
       setInvite(r);
+      await loadInvites();
       toast.success("邀请码已生成，7 天内有效");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "生成失败");
@@ -504,6 +528,42 @@ function MembersTab(props: {
               {busy ? "生成中…" : "生成邀请码"}
             </button>
           )}
+        </div>
+      )}
+
+      {/* 邀请记录（可撤销未使用的邀请） */}
+      {invites.length > 0 && (
+        <div className="card-soft p-4">
+          <h2 className="text-sm font-semibold">邀请记录</h2>
+          <div className="mt-3 space-y-1.5">
+            {invites.map((iv) => {
+              const expired = iv.expires_at && new Date(iv.expires_at).getTime() < Date.now();
+              return (
+                <div key={iv.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-secondary/40 px-3 py-2">
+                  <span className="font-mono text-xs tracking-[0.15em]">{iv.code}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    创建于 {new Date(iv.created_at).toLocaleString("zh-CN", { hour12: false })}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${expired ? "bg-secondary text-muted-foreground" : "bg-[color:var(--color-success)]/10 text-[color:var(--color-success)]"}`}>
+                    {expired ? "已过期" : "有效"}
+                  </span>
+                  {isAdmin && !expired && (
+                    <button
+                      onClick={async () => {
+                        if (await revokeTeamInvite(iv.id)) {
+                          toast.success("已撤销该邀请");
+                          await loadInvites();
+                        }
+                      }}
+                      className="ml-auto flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px] transition hover:border-destructive/40 hover:text-destructive"
+                    >
+                      <Trash2 size={10} /> 撤销
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -587,6 +647,137 @@ function MembersTab(props: {
           </button>
         </div>
       )}
+
+      {/* 创建者专区：移交所有权 / 解散团队 */}
+      {isOwner && (
+        <div className="card-soft space-y-4 p-4">
+          <h2 className="text-sm font-semibold">团队所有权</h2>
+          <div>
+            <p className="text-xs text-muted-foreground">移交创建者（目标成员需先设为管理员）</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <select
+                value={transferTarget}
+                onChange={(e) => setTransferTarget(e.target.value)}
+                className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none"
+              >
+                <option value="">选择管理员…</option>
+                {members
+                  .filter((m) => m.role === "admin" && m.user_id !== myUserId)
+                  .map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                onClick={async () => {
+                  if (!transferTarget) { toast.error("请先选择移交对象"); return; }
+                  try {
+                    await transferTeamOwnership({ data: { teamId, newOwnerUserId: transferTarget, accessToken } });
+                    toast.success("所有权已移交");
+                    await refreshTeams();
+                    setWorkspace({ mode: "personal", teamId: null });
+                    window.location.reload();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "移交失败");
+                  }
+                }}
+                disabled={!transferTarget}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+              >
+                移交所有权
+              </button>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">解散后团队实验归还各上传者个人空间，成员收到通知</p>
+            <button
+              onClick={async () => {
+                if (!window.confirm("确定解散该团队？此操作不可撤销。")) return;
+                try {
+                  await dissolveTeam({ data: { teamId, accessToken } });
+                  toast.success("团队已解散");
+                  await refreshTeams();
+                  setWorkspace({ mode: "personal", teamId: null });
+                  window.location.reload();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "解散失败");
+                }
+              }}
+              className="mt-2 flex items-center gap-1.5 rounded-lg border border-destructive/30 px-3 py-1.5 text-xs text-destructive transition hover:bg-destructive/10"
+            >
+              <Trash2 size={12} /> 解散团队
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════ 待审核实验（管理员） ═══════════════ */
+
+function PendingApprovals({ teamId, accessToken }: { teamId: string; accessToken: string }) {
+  const [pending, setPending] = useState<{ id: string; name: string; operator: string; created_at: string }[]>([]);
+  const [busyId, setBusyId] = useState("");
+
+  const load = async () => {
+    setPending(await fetchPendingTeamExperiments(teamId));
+  };
+
+  useEffect(() => {
+    load();
+  }, [teamId]);
+
+  if (pending.length === 0) return null;
+
+  const act = async (id: string, status: "approved" | "rejected") => {
+    setBusyId(id);
+    try {
+      await setExperimentApproval({ data: { experimentId: id, status, accessToken } });
+      toast.success(status === "approved" ? "已通过审核" : "已驳回");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  return (
+    <div className="card-soft mt-4 border-amber-200/60 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <ClipboardList size={14} className="text-amber-600" /> 待审核实验（{pending.length}）
+      </h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        成员上传的实验需管理员通过后才会对全团队可见
+      </p>
+      <div className="mt-3 space-y-1.5">
+        {pending.map((p) => (
+          <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-secondary/40 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium">{p.name}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {p.operator} · {new Date(p.created_at).toLocaleString("zh-CN", { hour12: false })}
+              </p>
+            </div>
+            <button
+              onClick={() => act(p.id, "approved")}
+              disabled={busyId === p.id}
+              className="rounded-lg bg-primary px-2.5 py-1 text-[11px] text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+            >
+              通过
+            </button>
+            <button
+              onClick={() => act(p.id, "rejected")}
+              disabled={busyId === p.id}
+              className="rounded-lg border border-destructive/30 px-2.5 py-1 text-[11px] text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+            >
+              驳回
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { createBlankDoc } from "../lib/exp-core";
 import { mergeProperties, getString } from "../lib/property-utils";
 import { DynamicCardEditor } from "../components/fields/DynamicCardEditor";
 import { TemplatePickerDialog } from "../components/TemplatePickerDialog";
+import { ExperimentComments } from "../components/ExperimentComments";
 import { DEFAULT_TEMPLATE } from "../lib/templates/presets";
 import type { Template } from "../lib/exp-core";
 import {
@@ -151,6 +152,7 @@ function Workbench() {
           ) : (
             <EmptyState onCreate={() => setPickerOpen(true)} />
           )}
+          {active && <ExperimentComments experimentId={active.id} />}
         </div>
         <div className="lg:col-span-3"><RightPanel experiment={active}/></div>
       </div>

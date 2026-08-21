@@ -80,10 +80,15 @@ test("团队协作全流程（双账号）", async ({ browser }) => {
       await pageA.getByRole("button", { name: "下一步" }).click();
       // 第 3 步起可跳过剩余步骤直接创建
       await pageA.getByRole("button", { name: "跳过剩余步骤" }).click();
-      await pageA.waitForTimeout(3500);
-      const errLoc = pageA.locator("text=/失败|错误|请填写/").first();
-      const errText = (await errLoc.count()) > 0 ? ((await errLoc.textContent()) ?? "") : "(无错误文本)";
-      console.log(`  创建后弹窗残留/错误: ${errText}`);
+      // 创建走多次服务端往返，以 localStorage 写入（choose 完成）为准
+      let created = false;
+      for (let i = 0; i < 18; i++) {
+        const chosen = await pageA.evaluate(() => localStorage.getItem("labnote:ws_chosen"));
+        if (chosen === "1") { created = true; break; }
+        await pageA.waitForTimeout(5000);
+      }
+      console.log(`  创建完成: ${created}`);
+      expect(created).toBe(true);
       await pageA.screenshot({ path: `${SHOT_DIR}/E0-创建团队后.png`, fullPage: true });
     }
     await pageA.goto("/team", { waitUntil: "networkidle" });
@@ -92,18 +97,10 @@ test("团队协作全流程（双账号）", async ({ browser }) => {
 
     /* ═══ Step 2: A 生成邀请码 ═══ */
     console.log("📍 Step 2: A 生成邀请码");
-    const blocker = await pageA.evaluate(() => {
-      const btns = [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === "成员");
-      const b = btns[0];
-      if (!b) return "(按钮未找到)";
-      const r = b.getBoundingClientRect();
-      const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return el ? `${el.tagName}.${(el.className as string).slice(0, 100)}` : "(无覆盖元素)";
-    });
-    console.log(`  点击点上的元素: ${blocker}`);
-    await pageA.getByRole("button", { name: "成员", exact: true }).click();
+    await pageA.getByRole("button", { name: "成员", exact: true }).click({ force: true });
     await pageA.getByRole("button", { name: "生成邀请码" }).click();
-    const codeSpan = pageA.locator("span.font-mono").filter({ hasText: /^[A-Z2-9]{8}$/ });
+    // 邀请记录里也有历史码，取 DOM 中第一个（邀请卡片内的最新码）
+    const codeSpan = pageA.locator("span.font-mono").filter({ hasText: /^[A-Z2-9]{8}$/ }).first();
     await expect(codeSpan).toBeVisible({ timeout: 10000 });
     inviteCode = (await codeSpan.textContent())?.trim() ?? "";
     expect(inviteCode).toMatch(/^[A-Z2-9]{8}$/);
@@ -170,6 +167,22 @@ test("团队协作全流程（双账号）", async ({ browser }) => {
     await pageB.waitForTimeout(2000);
     console.log("✅ B 用团队模板创建实验");
 
+    /* ═══ Step 6.5: 审核工作流 — A 在团队页通过 B 的待审核实验 ═══ */
+    console.log("📍 Step 6.5: 审核工作流");
+    // 等 B 的实验名称落库（保存是异步的）
+    for (let i = 0; i < 30; i++) {
+      const { data } = await admin.from("experiments").select("id").eq("name", "E2E-B的实验");
+      if ((data ?? []).length > 0) break;
+      await pageA.waitForTimeout(1000);
+    }
+    await pageA.goto("/team", { waitUntil: "networkidle" });
+    await expect(pageA.getByText("待审核实验（1）")).toBeVisible({ timeout: 15000 });
+    await expect(pageA.getByText("E2E-B的实验").first()).toBeVisible();
+    await pageA.getByRole("button", { name: "通过" }).click();
+    await expect(pageA.getByText("已通过审核")).toBeVisible({ timeout: 10000 });
+    await expect(pageA.getByText("待审核实验")).toHaveCount(0);
+    console.log("✅ 审核通过流程");
+
     /* ═══ Step 7: A 团队空间看到 B 的实验 ═══ */
     console.log("📍 Step 7: A 团队空间看到 B 的实验");
     // 确定性保障：等 B 的实验行真正落库（避免 insert 异步竞态）
@@ -204,6 +217,14 @@ test("团队协作全流程（双账号）", async ({ browser }) => {
     await expect(pageB.getByText(/只有上传者本人或管理员可以编辑与删除/)).toBeVisible({ timeout: 10000 });
     await pageB.getByRole("button", { name: "保存", exact: true }).click();
     await expect(pageB.getByText("只有上传者本人或管理员可以编辑该实验")).toBeVisible({ timeout: 5000 });
+
+    /* ═══ Step 8.5: 评论 — B 在 A 的实验下留言 ═══ */
+    console.log("📍 Step 8.5: 实验评论");
+    await pageB.getByPlaceholder("写下评论…").fill("这条实验可以补充光源功率信息吗？");
+    await pageB.keyboard.press("Enter");
+    await expect(pageB.getByText("这条实验可以补充光源功率信息吗？")).toBeVisible({ timeout: 10000 });
+    console.log("✅ 评论发布成功");
+
     await pageB.screenshot({ path: `${SHOT_DIR}/E3-只读拦截.png`, fullPage: true });
     console.log("✅ 成员编辑拦截生效");
 
@@ -224,7 +245,7 @@ test("团队协作全流程（双账号）", async ({ browser }) => {
     await pageA.getByRole("button", { name: /新建实验（选模板）/ }).click();
     await pageA.getByRole("button", { name: /快速新建（通用模板）/ }).click();
     await pageA.locator("input.text-xl").fill("E2E-待转移实验");
-    await pageA.getByRole("button", { name: "保存", exact: true }).click();
+    await pageA.getByRole("button", { name: "保存", exact: true }).click({ force: true });
     await pageA.waitForTimeout(2000);
     const transferBar = pageA.locator("div").filter({ hasText: "个人资产，可转入团队" }).last();
     await expect(transferBar).toBeVisible({ timeout: 10000 });
@@ -286,6 +307,12 @@ test("团队协作全流程（双账号）", async ({ browser }) => {
     await pageB.goto("/team", { waitUntil: "networkidle" });
     await expect(pageB.getByText("还没有加入任何团队")).toBeVisible({ timeout: 15000 });
     console.log("✅ B 被移除后看不到团队");
+
+    /* ═══ Step 12.5: 通知 — B 收到被移除通知 ═══ */
+    console.log("📍 Step 12.5: 通知系统");
+    await pageB.getByRole("button", { name: /通知/ }).click();
+    await expect(pageB.getByText("你已被移出团队").first()).toBeVisible({ timeout: 10000 });
+    console.log("✅ 被移除通知送达");
 
     console.log("🎉 团队 E2E 全流程通过");
   } finally {

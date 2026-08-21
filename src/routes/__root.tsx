@@ -11,7 +11,13 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, BookOpen, Layers, FileText, Mail, Package, User, LogOut, LogIn, ArrowRight, Users, Building2, X, KeyRound, Info, ChevronDown } from "lucide-react";
+import { FlaskConical, Home, Network, HelpCircle, Settings, Search, Beaker, ListChecks, BookOpen, Layers, FileText, Mail, Package, User, LogOut, LogIn, ArrowRight, Users, Building2, X, KeyRound, Info, ChevronDown, Bell } from "lucide-react";
+import {
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationRow,
+} from "../lib/supabase";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "../components/ui/tooltip";
 import { createTeam, joinTeamByCode, checkTeamSlugAvailable } from "../lib/api/teams.functions";
 import { suggestInstitutions } from "../lib/institutions";
@@ -197,8 +203,9 @@ function Sidebar() {
           <NavItem to="/help" icon={<HelpCircle size={15} />}>帮助</NavItem>
         </nav>
 
-        {/* 搜索 + 用户 */}
+        {/* 搜索 + 通知 + 用户 */}
         <div className="space-y-1 border-t border-border p-2.5">
+          {user && <NotificationBell />}
           <button
             onClick={() => setSearchOpen(true)}
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground/70 transition hover:bg-secondary hover:text-foreground"
@@ -282,6 +289,72 @@ function Sidebar() {
 
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
     </>
+  );
+}
+
+/** 通知铃铛：未读红点 + 下拉列表（打开时加载，标记已读） */
+function NotificationBell() {
+  const { user } = useAuth();
+  const [items, setItems] = useState<NotificationRow[]>([]);
+  const [open, setOpen] = useState(false);
+
+  const load = async () => setItems(await fetchNotifications());
+
+  useEffect(() => {
+    load();
+  }, [user?.id]);
+
+  const unread = items.filter((n) => !n.read).length;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={(v) => { setOpen(v); if (v) load(); }}>
+      <DropdownMenuTrigger asChild>
+        <button className="relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground/70 transition hover:bg-secondary hover:text-foreground" aria-label="通知">
+          <Bell size={15} /> 通知
+          {unread > 0 && (
+            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72">
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <DropdownMenuLabel className="p-0 text-xs text-muted-foreground">通知</DropdownMenuLabel>
+          {unread > 0 && (
+            <button
+              onClick={async () => { await markAllNotificationsRead(); await load(); }}
+              className="rounded-md px-2 py-0.5 text-[10px] text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+            >
+              全部已读
+            </button>
+          )}
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {items.length === 0 && (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">暂无通知</p>
+          )}
+          {items.map((n) => (
+            <button
+              key={n.id}
+              onClick={async () => {
+                if (!n.read) { await markNotificationRead(n.id); await load(); }
+              }}
+              className={`block w-full border-t border-border/60 px-3 py-2 text-left transition hover:bg-secondary/60 ${n.read ? "opacity-60" : ""}`}
+            >
+              <div className="flex items-center gap-1.5">
+                {!n.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                <span className="truncate text-xs font-medium">{n.title}</span>
+              </div>
+              <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{n.body}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground/70">
+                {new Date(n.created_at).toLocaleString("zh-CN", { hour12: false })}
+              </p>
+            </button>
+          ))}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

@@ -231,6 +231,7 @@ export const joinTeamByCode = createServerFn({ method: "POST" })
       .insert({ team_id: invite.team_id, user_id: userId, role: "member" });
     if (joinErr) throw new Error("加入失败：" + joinErr.message);
     const { data: team } = await sb.from("teams").select("*").eq("id", invite.team_id).single();
+    await notifyTeam(invite.team_id, userId, "新成员加入团队", "有新成员通过邀请码加入了「" + (team?.name ?? "") + "」");
     return team;
   });
 
@@ -264,6 +265,7 @@ export const updateMemberRole = createServerFn({ method: "POST" })
       .eq("team_id", data.teamId)
       .eq("user_id", data.memberUserId);
     if (error) throw new Error("更新失败：" + error.message);
+    await notifyUser(data.memberUserId, data.teamId, "团队角色变更", data.role === "admin" ? "你已被设为团队管理员" : "你的角色已调整为成员");
     return { ok: true };
   });
 
@@ -297,6 +299,8 @@ export const removeMember = createServerFn({ method: "POST" })
       .eq("team_id", data.teamId)
       .eq("user_id", data.memberUserId);
     if (error) throw new Error("移除失败：" + error.message);
+    const { data: teamName } = await sb.from("teams").select("name").eq("id", data.teamId).single();
+    await notifyUser(data.memberUserId, null, "你已被移出团队", `你已不再是「${teamName?.name ?? ""}」的成员`);
     return { ok: true };
   });
 
@@ -325,6 +329,107 @@ export const leaveTeam = createServerFn({ method: "POST" })
       .eq("team_id", data.teamId)
       .eq("user_id", userId);
     if (error) throw new Error("退出失败：" + error.message);
+    return { ok: true };
+  });
+
+/** 给团队成员发通知（内部工具：service role 直插，RLS 由 ntf_select 收敛到本人可见） */
+async function notifyTeam(teamId: string, excludeUserId: string | null, title: string, body: string) {
+  const sb = getServiceSupabase();
+  const { data: members } = await sb.from("team_members").select("user_id").eq("team_id", teamId);
+  if (!members || members.length === 0) return;
+  const rows = (members as { user_id: string }[])
+    .filter((m) => m.user_id !== excludeUserId)
+    .map((m) => ({ user_id: m.user_id, team_id: teamId, type: "team", title, body }));
+  if (rows.length > 0) await sb.from("notifications").insert(rows);
+}
+
+async function notifyUser(userId: string, teamId: string | null, title: string, body: string) {
+  const sb = getServiceSupabase();
+  await sb.from("notifications").insert({ user_id: userId, team_id: teamId, type: "team", title, body });
+}
+
+/** 移交创建者（仅 owner；目标须为 admin） */
+export const transferTeamOwnership = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      teamId: z.string().min(1),
+      newOwnerUserId: z.string().min(1),
+      accessToken: z.string().min(1),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const userId = await requireAuthenticatedUser(data.accessToken);
+    const sb = getServiceSupabase();
+    const { data: me } = await sb
+      .from("team_members")
+      .select("role")
+      .eq("team_id", data.teamId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!me || me.role !== "owner") throw new Error("只有创建者可以移交团队");
+    const { data: target } = await sb
+      .from("team_members")
+      .select("role")
+      .eq("team_id", data.teamId)
+      .eq("user_id", data.newOwnerUserId)
+      .maybeSingle();
+    if (!target) throw new Error("目标成员不存在");
+    if (target.role !== "admin") throw new Error("移交对象需先设为管理员");
+    await sb.from("team_members").update({ role: "owner" }).eq("team_id", data.teamId).eq("user_id", data.newOwnerUserId);
+    await sb.from("team_members").update({ role: "admin" }).eq("team_id", data.teamId).eq("user_id", userId);
+    await sb.from("teams").update({ created_by: data.newOwnerUserId }).eq("id", data.teamId);
+    await notifyUser(data.newOwnerUserId, data.teamId, "你已成为团队创建者", "前任创建者已将团队所有权移交给你");
+    return { ok: true };
+  });
+
+/** 解散团队（仅 owner；实验回到个人名下，成员收到通知） */
+export const dissolveTeam = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      teamId: z.string().min(1),
+      accessToken: z.string().min(1),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const userId = await requireAuthenticatedUser(data.accessToken);
+    const sb = getServiceSupabase();
+    const { data: me } = await sb
+      .from("team_members")
+      .select("role")
+      .eq("team_id", data.teamId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!me || me.role !== "owner") throw new Error("只有创建者可以解散团队");
+    const { data: team } = await sb.from("teams").select("name").eq("id", data.teamId).single();
+    // 团队实验归还原上传者个人（team_id 置空；删除时实验会 SET NULL，这里显式处理保持语义清晰）
+    await sb.from("experiments").update({ team_id: null, approval_status: "approved" }).eq("team_id", data.teamId);
+    await notifyTeam(data.teamId, userId, `团队「${team?.name ?? ""}」已解散`, "团队实验已归还各上传者个人空间");
+    await sb.from("teams").delete().eq("id", data.teamId);
+    return { ok: true };
+  });
+
+/** 审核实验（仅团队管理员）：approve / reject */
+export const setExperimentApproval = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      experimentId: z.string().min(1),
+      status: z.enum(["approved", "rejected"]),
+      accessToken: z.string().min(1),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const userId = await requireAuthenticatedUser(data.accessToken);
+    const sb = getServiceSupabase();
+    const { data: exp } = await sb
+      .from("experiments")
+      .select("team_id, user_id, name")
+      .eq("id", data.experimentId)
+      .maybeSingle();
+    if (!exp) throw new Error("实验不存在");
+    if (!exp.team_id) throw new Error("该实验不在团队中");
+    if (!(await requireTeamAdmin(exp.team_id, userId))) throw new Error("只有团队管理员可以审核");
+    await sb.from("experiments").update({ approval_status: data.status }).eq("id", data.experimentId);
+    await notifyUser(exp.user_id, exp.team_id, data.status === "approved" ? "实验审核已通过" : "实验审核被驳回", `「${exp.name}」${data.status === "approved" ? "已对全团队可见" : "未通过审核，可修改后重新提交"}`);
     return { ok: true };
   });
 

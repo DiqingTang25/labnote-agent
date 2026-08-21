@@ -259,7 +259,13 @@ export function LabProvider({ children }: { children: ReactNode }) {
         : { ...e, teamId: e.teamId ?? null };
     setExperiments((arr) => [doc, ...arr]);
     if (isSupabaseReady()) {
-      const p = insertExperiment(doc).then((ok) => {
+      // 审核工作流：团队模式下普通成员上传 → 待审核（管理员通过后才对全队可见）
+      const role = workspace.mode === "team" && workspace.teamId
+        ? myTeams.find((t) => t.team.id === workspace.teamId)?.role ?? ""
+        : "";
+      const approval: "approved" | "pending" =
+        workspace.mode === "team" && role === "member" ? "pending" : "approved";
+      const p = insertExperiment(doc, undefined, approval).then((ok) => {
         if (ok) {
           embedExperiment(doc.id);
           autoGenerateRelations(doc);
@@ -272,7 +278,7 @@ export function LabProvider({ children }: { children: ReactNode }) {
         if (pendingInsertsRef.current.get(doc.id) === p) pendingInsertsRef.current.delete(doc.id);
       });
     }
-  }, [workspace]);
+  }, [workspace, myTeams]);
 
   const updateExperiment = useCallback((id: string, patch: Partial<ExperimentDoc>) => {
     setExperiments((arr) => {
